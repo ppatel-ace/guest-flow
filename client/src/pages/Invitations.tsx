@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Send, Phone, UserPlus, Upload } from "lucide-react";
+import { Mail, Send, Phone, UserPlus, Upload, Download } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -206,6 +206,30 @@ export default function Invitations() {
     return d.toLocaleDateString();
   };
 
+  const exportToExcel = () => {
+    const exportData = customers.map(customer => ({
+      Name: customer.name,
+      Email: customer.email,
+      Phone: customer.phone,
+      Status: customer.status,
+      'QR Code': customer.qrCode || '',
+      'Invited At': customer.invitedAt ? new Date(customer.invitedAt).toLocaleString() : '',
+      'Checked In At': customer.checkedInAt ? new Date(customer.checkedInAt).toLocaleString() : '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Invitations');
+
+    const fileName = `invitations-${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+
+    toast({
+      title: "Export Successful",
+      description: `${customers.length} customer(s) exported to Excel.`,
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -344,6 +368,16 @@ Jane Smith,jane@example.com,+0987654321`}
               </div>
             </DialogContent>
           </Dialog>
+
+          <Button 
+            variant="outline" 
+            onClick={exportToExcel}
+            disabled={customers.length === 0}
+            data-testid="button-export-excel"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export to Excel
+          </Button>
 
           <Button data-testid="button-send-bulk-invites">
             <Send className="mr-2 h-4 w-4" />
