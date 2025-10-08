@@ -12,6 +12,7 @@ import CheckIn from "@/pages/CheckIn";
 import Invitations from "@/pages/Invitations";
 import Import from "@/pages/Import";
 import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
+import GuestCheckIn from "@/pages/GuestCheckIn";
 import NotFound from "@/pages/not-found";
 
 function MainRouter() {
@@ -33,6 +34,11 @@ function AppContent() {
   // Standalone check-in page without sidebar
   if (location === "/scan") {
     return <StandaloneCheckIn />;
+  }
+
+  // Guest check-in form without sidebar
+  if (location === "/guest-check-in") {
+    return <GuestCheckIn />;
   }
 
   // Main app with sidebar

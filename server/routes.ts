@@ -3,9 +3,24 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCustomerSchema } from "@shared/schema";
 import { z } from "zod";
+import QRCode from "qrcode";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Generate QR code
+  app.get("/api/generate-qr", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+      const qrCode = await QRCode.toDataURL(url, { width: 400 });
+      res.json({ qrCode });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate QR code" });
+    }
+  });
+
   // Get all customers
   app.get("/api/customers", async (req, res) => {
     try {
