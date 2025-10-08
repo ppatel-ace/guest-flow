@@ -1,18 +1,87 @@
+import { useState, useRef, type ChangeEvent } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CustomerStatusBadge } from "@/components/CustomerStatusBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Mail, Send, Phone } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Mail, Send, Phone, UserPlus, Upload } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Customer } from "@shared/schema";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertCustomerSchema } from "@shared/schema";
+import type { Customer, InsertCustomer } from "@shared/schema";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
 
 export default function Invitations() {
   const { toast } = useToast();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
+  });
+
+  const form = useForm<InsertCustomer>({
+    resolver: zodResolver(insertCustomerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      status: "pending",
+    },
+  });
+
+  const addCustomerMutation = useMutation({
+    mutationFn: async (data: InsertCustomer) => {
+      return apiRequest('POST', '/api/customers', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Customer Added",
+        description: "Customer has been added successfully.",
+      });
+      setIsAddDialogOpen(false);
+      form.reset();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add customer.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const importCustomersMutation = useMutation({
+    mutationFn: async (customers: InsertCustomer[]) => {
+      const promises = customers.map(customer => 
+        apiRequest('POST', '/api/customers', customer)
+      );
+      return Promise.all(promises);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Import Successful",
+        description: `${variables.length} customer(s) have been imported.`,
+      });
+      setIsImportDialogOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Import Failed",
+        description: "Some customers could not be imported.",
+        variant: "destructive",
+      });
+    },
   });
 
   const sendInviteMutation = useMutation({
@@ -37,6 +106,82 @@ export default function Invitations() {
 
   const handleSendInvite = (id: string) => {
     sendInviteMutation.mutate(id);
+  };
+
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+    if (fileExtension === 'csv') {
+      Papa.parse(file, {
+        header: true,
+        complete: (results) => {
+          const parsedCustomers = results.data
+            .filter((row: any) => row.name && row.email && row.phone)
+            .map((row: any) => ({
+              name: row.name,
+              email: row.email,
+              phone: row.phone,
+              status: "pending" as const,
+            }));
+          
+          if (parsedCustomers.length > 0) {
+            importCustomersMutation.mutate(parsedCustomers);
+          } else {
+            toast({
+              title: "No Valid Data",
+              description: "The CSV file contains no valid customer data.",
+              variant: "destructive",
+            });
+          }
+        },
+        error: () => {
+          toast({
+            title: "Parse Error",
+            description: "Failed to parse CSV file.",
+            variant: "destructive",
+          });
+        },
+      });
+    } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+        
+        const parsedCustomers = jsonData
+          .filter((row: any) => row.name && row.email && row.phone)
+          .map((row: any) => ({
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            status: "pending" as const,
+          }));
+        
+        if (parsedCustomers.length > 0) {
+          importCustomersMutation.mutate(parsedCustomers);
+        } else {
+          toast({
+            title: "No Valid Data",
+            description: "The Excel file contains no valid customer data.",
+            variant: "destructive",
+          });
+        }
+      };
+      reader.readAsBinaryString(file);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const onSubmit = (data: InsertCustomer) => {
+    addCustomerMutation.mutate(data);
   };
 
   const getInitials = (name: string) => {
@@ -80,10 +225,131 @@ export default function Invitations() {
           <h1 className="text-3xl font-bold">Invitations</h1>
           <p className="text-muted-foreground">Manage email invitations and QR codes</p>
         </div>
-        <Button data-testid="button-send-bulk-invites">
-          <Send className="mr-2 h-4 w-4" />
-          Send Bulk Invites
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-add-customer">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add Customer
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Customer</DialogTitle>
+                <DialogDescription>
+                  Enter customer details to add them to the invitation list.
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John Doe" {...field} data-testid="input-customer-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="john@example.com" {...field} data-testid="input-customer-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input type="tel" placeholder="+1 (555) 000-0000" {...field} data-testid="input-customer-phone" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <Button type="submit" disabled={addCustomerMutation.isPending} data-testid="button-submit-customer">
+                      {addCustomerMutation.isPending ? "Adding..." : "Add Customer"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-import-file">
+                <Upload className="mr-2 h-4 w-4" />
+                Import File
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Import Customers</DialogTitle>
+                <DialogDescription>
+                  Upload a CSV or Excel file with customer data. The file should have columns: name, email, phone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Click to upload or drag and drop
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    CSV or Excel (.xlsx, .xls) files
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    data-testid="input-file-upload"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importCustomersMutation.isPending}
+                    data-testid="button-select-file"
+                  >
+                    {importCustomersMutation.isPending ? "Importing..." : "Select File"}
+                  </Button>
+                </div>
+                <div className="bg-muted rounded-lg p-4">
+                  <p className="text-sm font-medium mb-2">File Format Example:</p>
+                  <pre className="text-xs bg-background p-2 rounded">
+{`name,email,phone
+John Doe,john@example.com,+1234567890
+Jane Smith,jane@example.com,+0987654321`}
+                  </pre>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Button data-testid="button-send-bulk-invites">
+            <Send className="mr-2 h-4 w-4" />
+            Send Bulk Invites
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4">
