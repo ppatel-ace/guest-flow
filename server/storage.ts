@@ -1,38 +1,91 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { customers, type Customer, type InsertCustomer } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, or, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
-
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getCustomer(id: string): Promise<Customer | undefined>;
+  getCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  getCustomerByQRCode(qrCode: string): Promise<Customer | undefined>;
+  getAllCustomers(): Promise<Customer[]>;
+  searchCustomers(term: string): Promise<Customer[]>;
+  createCustomer(customer: InsertCustomer): Promise<Customer>;
+  updateCustomerStatus(id: string, status: 'pending' | 'confirmed' | 'checked-in'): Promise<Customer | undefined>;
+  checkInCustomer(id: string): Promise<Customer | undefined>;
+  sendInvitation(id: string): Promise<Customer | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getCustomer(id: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+    return customer || undefined;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getCustomerByPhone(phone: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(customers).where(eq(customers.phone, phone));
+    return customer || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+  async getCustomerByQRCode(qrCode: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(customers).where(eq(customers.qrCode, qrCode));
+    return customer || undefined;
+  }
+
+  async getAllCustomers(): Promise<Customer[]> {
+    return await db.select().from(customers).orderBy(desc(customers.createdAt));
+  }
+
+  async searchCustomers(term: string): Promise<Customer[]> {
+    return await db.select().from(customers).where(
+      or(
+        ilike(customers.name, `%${term}%`),
+        ilike(customers.email, `%${term}%`),
+        ilike(customers.phone, `%${term}%`)
+      )
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
+    const qrCode = `QR_${randomUUID()}`;
+    const [customer] = await db
+      .insert(customers)
+      .values({ ...insertCustomer, qrCode })
+      .returning();
+    return customer;
+  }
+
+  async updateCustomerStatus(id: string, status: 'pending' | 'confirmed' | 'checked-in'): Promise<Customer | undefined> {
+    const [customer] = await db
+      .update(customers)
+      .set({ status })
+      .where(eq(customers.id, id))
+      .returning();
+    return customer || undefined;
+  }
+
+  async checkInCustomer(id: string): Promise<Customer | undefined> {
+    const [customer] = await db
+      .update(customers)
+      .set({ 
+        status: 'checked-in',
+        checkedInAt: new Date()
+      })
+      .where(eq(customers.id, id))
+      .returning();
+    return customer || undefined;
+  }
+
+  async sendInvitation(id: string): Promise<Customer | undefined> {
+    const [customer] = await db
+      .update(customers)
+      .set({ 
+        invitedAt: new Date(),
+        status: 'confirmed'
+      })
+      .where(eq(customers.id, id))
+      .returning();
+    return customer || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
