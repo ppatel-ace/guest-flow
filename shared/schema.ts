@@ -9,7 +9,7 @@ export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull(),
-  phone: text("phone").notNull(),
+  phone: text("phone"),
   status: customerStatusEnum("status").notNull().default('pending'),
   qrCode: text("qr_code").notNull().unique(),
   invitedAt: timestamp("invited_at"),

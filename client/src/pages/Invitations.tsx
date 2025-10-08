@@ -119,11 +119,11 @@ export default function Invitations() {
         header: true,
         complete: (results) => {
           const parsedCustomers = results.data
-            .filter((row: any) => row.name && row.email && row.phone)
+            .filter((row: any) => row.name && row.email)
             .map((row: any) => ({
               name: row.name,
               email: row.email,
-              phone: row.phone,
+              phone: row.phone || "",
               status: "pending" as const,
             }));
           
@@ -154,11 +154,11 @@ export default function Invitations() {
         const jsonData = XLSX.utils.sheet_to_json(firstSheet);
         
         const parsedCustomers = jsonData
-          .filter((row: any) => row.name && row.email && row.phone)
+          .filter((row: any) => row.name && row.email)
           .map((row: any) => ({
             name: row.name,
             email: row.email,
-            phone: row.phone,
+            phone: row.phone || "",
             status: "pending" as const,
           }));
         
@@ -297,9 +297,15 @@ export default function Invitations() {
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
+                        <FormLabel>Phone Number (Optional)</FormLabel>
                         <FormControl>
-                          <Input type="tel" placeholder="+1 (555) 000-0000" {...field} data-testid="input-customer-phone" />
+                          <Input 
+                            type="tel" 
+                            placeholder="+1 (555) 000-0000" 
+                            {...field} 
+                            value={field.value || ""}
+                            data-testid="input-customer-phone" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -326,7 +332,7 @@ export default function Invitations() {
               <DialogHeader>
                 <DialogTitle>Import Customers</DialogTitle>
                 <DialogDescription>
-                  Upload a CSV or Excel file with customer data. The file should have columns: name, email, phone.
+                  Upload a CSV or Excel file with customer data. Required columns: name, email. Optional: phone.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -362,8 +368,9 @@ export default function Invitations() {
                   <pre className="text-xs bg-background p-2 rounded">
 {`name,email,phone
 John Doe,john@example.com,+1234567890
-Jane Smith,jane@example.com,+0987654321`}
+Jane Smith,jane@example.com,`}
                   </pre>
+                  <p className="text-xs text-muted-foreground mt-2">Phone number is optional</p>
                 </div>
               </div>
             </DialogContent>
