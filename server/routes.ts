@@ -163,6 +163,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get monthly check-in statistics
+  app.get("/api/stats/monthly-checkins", async (req, res) => {
+    try {
+      const stats = await storage.getMonthlyCheckIns();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch monthly check-in stats" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -1,7 +1,12 @@
 import { customers, type Customer, type InsertCustomer } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, or, ilike } from "drizzle-orm";
+import { eq, desc, or, ilike, sql, gte } from "drizzle-orm";
 import { randomUUID } from "crypto";
+
+export interface MonthlyCheckIn {
+  month: string;
+  count: number;
+}
 
 export interface IStorage {
   getCustomer(id: string): Promise<Customer | undefined>;
@@ -13,6 +18,7 @@ export interface IStorage {
   updateCustomerStatus(id: string, status: 'pending' | 'confirmed' | 'checked-in'): Promise<Customer | undefined>;
   checkInCustomer(id: string): Promise<Customer | undefined>;
   sendInvitation(id: string): Promise<Customer | undefined>;
+  getMonthlyCheckIns(): Promise<MonthlyCheckIn[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -85,6 +91,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(customers.id, id))
       .returning();
     return customer || undefined;
+  }
+
+  async getMonthlyCheckIns(): Promise<MonthlyCheckIn[]> {
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+    const results = await db
+      .select({
+        month: sql<string>`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(customers)
+      .where(
+        sql`${customers.checkedInAt} IS NOT NULL AND ${customers.checkedInAt} >= ${twelveMonthsAgo}`
+      )
+      .groupBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`)
+      .orderBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`);
+
+    // Generate last 12 months array
+    const monthsMap = new Map<string, number>();
+    const now = new Date();
+    
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthsMap.set(monthKey, 0);
+    }
+
+    // Fill in actual counts
+    results.forEach(result => {
+      if (result.month) {
+        monthsMap.set(result.month, result.count);
+      }
+    });
+
+    // Convert to array
+    return Array.from(monthsMap.entries()).map(([month, count]) => ({
+      month,
+      count,
+    }));
   }
 }
 
