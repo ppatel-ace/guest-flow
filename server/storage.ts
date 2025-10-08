@@ -11,6 +11,7 @@ export interface MonthlyCheckIn {
 export interface IStorage {
   getCustomer(id: string): Promise<Customer | undefined>;
   getCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  getCustomerByEmail(email: string): Promise<Customer | undefined>;
   getCustomerByQRCode(qrCode: string): Promise<Customer | undefined>;
   getAllCustomers(): Promise<Customer[]>;
   searchCustomers(term: string): Promise<Customer[]>;
@@ -29,6 +30,12 @@ export class DatabaseStorage implements IStorage {
 
   async getCustomerByPhone(phone: string): Promise<Customer | undefined> {
     const [customer] = await db.select().from(customers).where(eq(customers.phone, phone));
+    return customer || undefined;
+  }
+
+  async getCustomerByEmail(email: string): Promise<Customer | undefined> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const [customer] = await db.select().from(customers).where(eq(customers.email, normalizedEmail));
     return customer || undefined;
   }
 
@@ -53,9 +60,14 @@ export class DatabaseStorage implements IStorage {
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
     const qrCode = `QR_${randomUUID()}`;
+    const normalizedData = {
+      ...insertCustomer,
+      email: insertCustomer.email.trim().toLowerCase(),
+      qrCode
+    };
     const [customer] = await db
       .insert(customers)
-      .values({ ...insertCustomer, qrCode })
+      .values(normalizedData)
       .returning();
     return customer;
   }

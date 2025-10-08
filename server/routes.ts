@@ -138,6 +138,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Check-in by email
+  app.post("/api/check-in/email", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email address is required" });
+      }
+      
+      const normalizedEmail = email.trim().toLowerCase();
+      const customer = await storage.getCustomerByEmail(normalizedEmail);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+
+      const checkedIn = await storage.checkInCustomer(customer.id);
+      res.json(checkedIn);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check-in customer" });
+    }
+  });
+
   // Import customers (bulk create)
   app.post("/api/customers/import", async (req, res) => {
     try {

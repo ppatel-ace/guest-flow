@@ -49,7 +49,7 @@ export default function StandaloneCheckIn() {
                 <li>1. Open your phone's camera</li>
                 <li>2. Point it at the QR code above</li>
                 <li>3. Tap the notification to open the link</li>
-                <li>4. Enter your phone number to check in</li>
+                <li>4. Enter your phone number or email to check in</li>
               </ol>
             </div>
           </CardContent>
