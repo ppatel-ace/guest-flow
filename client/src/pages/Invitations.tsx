@@ -2,28 +2,41 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { CustomerStatusBadge } from "@/components/CustomerStatusBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Mail, Send } from "lucide-react";
-
-interface Invitation {
-  id: string;
-  customerName: string;
-  email: string;
-  status: "pending" | "confirmed" | "checked-in";
-  sentAt?: string;
-  qrCode: string;
-}
-
-const mockInvitations: Invitation[] = [
-  { id: "1", customerName: "Sarah Johnson", email: "sarah.j@example.com", status: "checked-in", sentAt: "2 hours ago", qrCode: "QR_001" },
-  { id: "2", customerName: "Michael Chen", email: "m.chen@example.com", status: "confirmed", sentAt: "1 day ago", qrCode: "QR_002" },
-  { id: "3", customerName: "Emily Rodriguez", email: "emily.r@example.com", status: "pending", sentAt: "3 days ago", qrCode: "QR_003" },
-  { id: "4", customerName: "David Kim", email: "david.kim@example.com", status: "checked-in", sentAt: "5 hours ago", qrCode: "QR_004" },
-  { id: "5", customerName: "Jessica Martinez", email: "j.martinez@example.com", status: "confirmed", sentAt: "12 hours ago", qrCode: "QR_005" },
-];
+import { Mail, Send, Phone } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Customer } from "@shared/schema";
 
 export default function Invitations() {
+  const { toast } = useToast();
+
+  const { data: customers = [], isLoading } = useQuery<Customer[]>({
+    queryKey: ['/api/customers'],
+  });
+
+  const sendInviteMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      return apiRequest('POST', `/api/customers/${customerId}/invite`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Invitation Sent",
+        description: "The invitation has been sent successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to send invitation.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSendInvite = (id: string) => {
-    console.log('Sending invitation to:', id);
+    sendInviteMutation.mutate(id);
   };
 
   const getInitials = (name: string) => {
@@ -34,6 +47,31 @@ export default function Invitations() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const formatDate = (date: Date | string) => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (hours < 1) return "just now";
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    return d.toLocaleDateString();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Invitations</h1>
+          <p className="text-muted-foreground">Manage email invitations and QR codes</p>
+        </div>
+        <p className="text-muted-foreground">Loading invitations...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="page-invitations">
@@ -49,41 +87,50 @@ export default function Invitations() {
       </div>
 
       <div className="grid gap-4">
-        {mockInvitations.map((invitation) => (
-          <Card key={invitation.id} data-testid={`card-invitation-${invitation.id}`}>
+        {customers.map((customer) => (
+          <Card key={customer.id} data-testid={`card-invitation-${customer.id}`}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
-                    <AvatarFallback>{getInitials(invitation.customerName)}</AvatarFallback>
+                    <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <CardTitle className="text-base" data-testid={`text-invitation-name-${invitation.id}`}>{invitation.customerName}</CardTitle>
-                    <CardDescription data-testid={`text-invitation-email-${invitation.id}`}>{invitation.email}</CardDescription>
+                    <CardTitle className="text-base" data-testid={`text-invitation-name-${customer.id}`}>{customer.name}</CardTitle>
+                    <CardDescription data-testid={`text-invitation-email-${customer.id}`}>{customer.email}</CardDescription>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <CustomerStatusBadge status={invitation.status} />
+                  <CustomerStatusBadge status={customer.status} />
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => handleSendInvite(invitation.id)}
-                    data-testid={`button-resend-${invitation.id}`}
+                    onClick={() => handleSendInvite(customer.id)}
+                    disabled={sendInviteMutation.isPending}
+                    data-testid={`button-resend-${customer.id}`}
                   >
                     <Mail className="mr-2 h-4 w-4" />
-                    Resend
+                    {customer.status === 'pending' ? 'Send' : 'Resend'}
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between gap-4 text-sm flex-wrap">
-                <div className="text-muted-foreground">
-                  Sent: {invitation.sentAt}
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span data-testid={`text-phone-${customer.id}`}>{customer.phone}</span>
                 </div>
-                <div className="text-muted-foreground">
-                  QR Code: <span className="font-mono" data-testid={`text-qr-code-${invitation.id}`}>{invitation.qrCode}</span>
-                </div>
+                {customer.invitedAt && (
+                  <div className="text-muted-foreground">
+                    Sent: {formatDate(customer.invitedAt)}
+                  </div>
+                )}
+                {customer.qrCode && (
+                  <div className="text-muted-foreground">
+                    QR Code: <span className="font-mono" data-testid={`text-qr-code-${customer.id}`}>{customer.qrCode}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
