@@ -14,9 +14,15 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Ensure SESSION_SECRET is set
+if (!process.env.SESSION_SECRET) {
+  console.error("ERROR: SESSION_SECRET environment variable is required");
+  process.exit(1);
+}
+
 // Session middleware
 app.use(session({
-  secret: process.env.SESSION_SECRET || "customer-checkin-secret-key",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
