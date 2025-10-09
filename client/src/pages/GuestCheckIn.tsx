@@ -124,7 +124,7 @@ export default function GuestCheckIn() {
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
         <div className="flex justify-center">
           <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-12 sm:h-16 md:h-20 w-auto" data-testid="img-logo" />
+            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 lg:h-36 w-auto" data-testid="img-logo" />
           </a>
         </div>
         
