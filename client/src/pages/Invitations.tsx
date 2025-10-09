@@ -108,6 +108,26 @@ export default function Invitations() {
     sendInviteMutation.mutate(id);
   };
 
+  const normalizeColumnName = (name: string): string => {
+    return name.toLowerCase().trim();
+  };
+
+  const getFieldValue = (row: any, ...possibleNames: string[]): string => {
+    for (const name of possibleNames) {
+      const normalized = normalizeColumnName(name);
+      // Check exact match first
+      if (row[name] !== undefined && row[name] !== null) {
+        return String(row[name]).trim();
+      }
+      // Check case-insensitive match
+      const key = Object.keys(row).find(k => normalizeColumnName(k) === normalized);
+      if (key && row[key] !== undefined && row[key] !== null) {
+        return String(row[key]).trim();
+      }
+    }
+    return "";
+  };
+
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -117,13 +137,21 @@ export default function Invitations() {
     if (fileExtension === 'csv') {
       Papa.parse(file, {
         header: true,
+        skipEmptyLines: true,
         complete: (results) => {
           const parsedCustomers = results.data
-            .filter((row: any) => row.name && row.email)
-            .map((row: any) => ({
-              name: row.name,
-              email: row.email,
-              phone: row.phone || "",
+            .map((row: any) => {
+              const name = getFieldValue(row, 'name', 'Name', 'NAME', 'Customer Name', 'Full Name');
+              const email = getFieldValue(row, 'email', 'Email', 'EMAIL', 'Email Address', 'E-mail');
+              const phone = getFieldValue(row, 'phone', 'Phone', 'PHONE', 'Phone Number', 'Mobile');
+              
+              return { name, email, phone };
+            })
+            .filter((customer) => customer.name && customer.email)
+            .map((customer) => ({
+              name: customer.name,
+              email: customer.email.toLowerCase(),
+              phone: customer.phone || "",
               status: "pending" as const,
             }));
           
@@ -132,15 +160,15 @@ export default function Invitations() {
           } else {
             toast({
               title: "No Valid Data",
-              description: "The CSV file contains no valid customer data.",
+              description: "The CSV file contains no valid customer data. Please ensure your file has 'name' and 'email' columns with data.",
               variant: "destructive",
             });
           }
         },
-        error: () => {
+        error: (error) => {
           toast({
             title: "Parse Error",
-            description: "Failed to parse CSV file.",
+            description: `Failed to parse CSV file: ${error.message}`,
             variant: "destructive",
           });
         },
@@ -148,26 +176,41 @@ export default function Invitations() {
     } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-        
-        const parsedCustomers = jsonData
-          .filter((row: any) => row.name && row.email)
-          .map((row: any) => ({
-            name: row.name,
-            email: row.email,
-            phone: row.phone || "",
-            status: "pending" as const,
-          }));
-        
-        if (parsedCustomers.length > 0) {
-          importCustomersMutation.mutate(parsedCustomers);
-        } else {
+        try {
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+          
+          const parsedCustomers = jsonData
+            .map((row: any) => {
+              const name = getFieldValue(row, 'name', 'Name', 'NAME', 'Customer Name', 'Full Name');
+              const email = getFieldValue(row, 'email', 'Email', 'EMAIL', 'Email Address', 'E-mail');
+              const phone = getFieldValue(row, 'phone', 'Phone', 'PHONE', 'Phone Number', 'Mobile');
+              
+              return { name, email, phone };
+            })
+            .filter((customer) => customer.name && customer.email)
+            .map((customer) => ({
+              name: customer.name,
+              email: customer.email.toLowerCase(),
+              phone: customer.phone || "",
+              status: "pending" as const,
+            }));
+          
+          if (parsedCustomers.length > 0) {
+            importCustomersMutation.mutate(parsedCustomers);
+          } else {
+            toast({
+              title: "No Valid Data",
+              description: "The Excel file contains no valid customer data. Please ensure your file has 'name' and 'email' columns with data.",
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
           toast({
-            title: "No Valid Data",
-            description: "The Excel file contains no valid customer data.",
+            title: "Parse Error",
+            description: `Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`,
             variant: "destructive",
           });
         }
