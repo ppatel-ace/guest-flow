@@ -76,31 +76,38 @@ export default function GuestCheckIn() {
     
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const createResponse = await fetch('/api/customers', {
+      const response = await fetch('/api/guest-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email: normalizedEmail, phone, status: 'pending' })
+        body: JSON.stringify({ 
+          name, 
+          email: normalizedEmail, 
+          phone: phone || undefined, 
+          status: 'checked-in' 
+        })
       });
 
-      if (createResponse.ok) {
-        const customer = await createResponse.json();
-        
-        await fetch(`/api/customers/${customer.id}/check-in`, {
-          method: 'POST'
-        });
-
+      if (response.ok) {
+        const customer = await response.json();
         setCustomerName(customer.name);
         setStep("success");
         toast({
-          title: "Checked In Successfully!",
+          title: "Registered & Checked In!",
           description: `Welcome, ${customer.name}!`,
+        });
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Error",
+          description: error.error || "Failed to register. Please try again.",
+          variant: "destructive"
         });
       }
     } catch (error) {
-      console.error('Failed to create and check in:', error);
+      console.error('Failed to register and check in:', error);
       toast({
         title: "Error",
-        description: "Failed to check in. Please try again.",
+        description: "Failed to register. Please try again.",
         variant: "destructive"
       });
     }
@@ -220,7 +227,7 @@ export default function GuestCheckIn() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="guest-phone">Phone Number</Label>
+                  <Label htmlFor="guest-phone">Phone Number (Optional)</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -230,7 +237,6 @@ export default function GuestCheckIn() {
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+1 (555) 000-0000"
                       className="pl-10"
-                      required
                       data-testid="input-guest-phone"
                     />
                   </div>

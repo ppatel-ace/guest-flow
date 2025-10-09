@@ -231,6 +231,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Guest registration and check-in (public)
+  app.post("/api/guest-register", async (req, res) => {
+    try {
+      const data = insertCustomerSchema.parse(req.body);
+      
+      // Create the customer
+      const customer = await storage.createCustomer(data);
+      
+      // Automatically check them in
+      const checkedIn = await storage.checkInCustomer(customer.id);
+      
+      res.status(201).json(checkedIn);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid customer data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to register and check in" });
+    }
+  });
+
   // Import customers (bulk create) (protected)
   app.post("/api/customers/import", requireAuth, async (req, res) => {
     try {
