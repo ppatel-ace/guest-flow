@@ -16,6 +16,8 @@ export interface IStorage {
   getAllCustomers(): Promise<Customer[]>;
   searchCustomers(term: string): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
+  updateCustomer(id: string, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
+  deleteCustomer(id: string): Promise<boolean>;
   updateCustomerStatus(id: string, status: 'pending' | 'confirmed' | 'checked-in'): Promise<Customer | undefined>;
   checkInCustomer(id: string): Promise<Customer | undefined>;
   sendInvitation(id: string): Promise<Customer | undefined>;
@@ -103,6 +105,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(customers.id, id))
       .returning();
     return customer || undefined;
+  }
+
+  async updateCustomer(id: string, customerData: Partial<InsertCustomer>): Promise<Customer | undefined> {
+    const updateData: any = { ...customerData };
+    if (customerData.email) {
+      updateData.email = customerData.email.trim().toLowerCase();
+    }
+    const [customer] = await db
+      .update(customers)
+      .set(updateData)
+      .where(eq(customers.id, id))
+      .returning();
+    return customer || undefined;
+  }
+
+  async deleteCustomer(id: string): Promise<boolean> {
+    const result = await db
+      .delete(customers)
+      .where(eq(customers.id, id))
+      .returning();
+    return result.length > 0;
   }
 
   async getMonthlyCheckIns(): Promise<MonthlyCheckIn[]> {
