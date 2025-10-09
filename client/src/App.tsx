@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import CheckIn from "@/pages/CheckIn";
@@ -31,37 +33,44 @@ function MainRouter() {
 function AppContent() {
   const [location] = useLocation();
   
-  // Standalone check-in page without sidebar
+  // Login page (public)
+  if (location === "/login") {
+    return <Login />;
+  }
+
+  // Standalone check-in page without sidebar (public)
   if (location === "/scan") {
     return <StandaloneCheckIn />;
   }
 
-  // Guest check-in form without sidebar
+  // Guest check-in form without sidebar (public)
   if (location === "/guest-check-in") {
     return <GuestCheckIn />;
   }
 
-  // Main app with sidebar
+  // Main app with sidebar (protected)
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between p-4 border-b">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
-          </header>
-          <main className="flex-1 overflow-auto p-6">
-            <MainRouter />
-          </main>
+    <ProtectedRoute>
+      <SidebarProvider style={style as React.CSSProperties}>
+        <div className="flex h-screen w-full">
+          <AppSidebar />
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <header className="flex items-center justify-between p-4 border-b">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <ThemeToggle />
+            </header>
+            <main className="flex-1 overflow-auto p-6">
+              <MainRouter />
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ProtectedRoute>
   );
 }
 

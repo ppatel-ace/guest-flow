@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -9,7 +9,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   {
@@ -41,6 +43,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { logout } = useAuth();
 
   return (
     <Sidebar>
@@ -63,6 +66,16 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => logout()} data-testid="button-logout">
+              <LogOut />
+              <span>Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
