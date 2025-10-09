@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { CustomerStatusBadge } from "@/components/CustomerStatusBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Send, Phone, UserPlus, Upload, Download } from "lucide-react";
+import { Mail, Send, Phone, UserPlus, Upload, Download, Pencil, Trash2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,9 @@ export default function Invitations() {
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
@@ -29,6 +33,16 @@ export default function Invitations() {
   });
 
   const form = useForm<InsertCustomer>({
+    resolver: zodResolver(insertCustomerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      status: "pending",
+    },
+  });
+
+  const editForm = useForm<InsertCustomer>({
     resolver: zodResolver(insertCustomerSchema),
     defaultValues: {
       name: "",
@@ -104,8 +118,80 @@ export default function Invitations() {
     },
   });
 
+  const updateCustomerMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<InsertCustomer> }) => {
+      return apiRequest('PUT', `/api/customers/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Customer Updated",
+        description: "Customer details have been updated successfully.",
+      });
+      setIsEditDialogOpen(false);
+      setSelectedCustomer(null);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update customer.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest('DELETE', `/api/customers/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Customer Deleted",
+        description: "Customer has been deleted successfully.",
+      });
+      setIsDeleteDialogOpen(false);
+      setSelectedCustomer(null);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete customer.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSendInvite = (id: string) => {
     sendInviteMutation.mutate(id);
+  };
+
+  const handleEditCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    editForm.reset({
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone || "",
+      status: customer.status,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const onEditSubmit = (data: InsertCustomer) => {
+    if (selectedCustomer) {
+      updateCustomerMutation.mutate({ id: selectedCustomer.id, data });
+    }
+  };
+
+  const confirmDelete = () => {
+    if (selectedCustomer) {
+      deleteCustomerMutation.mutate(selectedCustomer.id);
+    }
   };
 
   const normalizeColumnName = (name: string): string => {
@@ -436,6 +522,94 @@ Jane Smith,jane@example.com,`}
         </div>
       </div>
 
+      {/* Edit Customer Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Customer</DialogTitle>
+            <DialogDescription>
+              Update customer details below.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John Doe" {...field} data-testid="input-edit-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="john@example.com" {...field} data-testid="input-edit-email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone Number (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="tel" 
+                        placeholder="+1 (555) 000-0000" 
+                        {...field} 
+                        value={field.value || ""}
+                        data-testid="input-edit-phone" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={updateCustomerMutation.isPending} data-testid="button-update-customer">
+                  {updateCustomerMutation.isPending ? "Updating..." : "Update Customer"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the customer{selectedCustomer ? ` "${selectedCustomer.name}"` : ''} and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              disabled={deleteCustomerMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteCustomerMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="grid gap-4">
         {customers.map((customer) => (
           <Card key={customer.id} data-testid={`card-invitation-${customer.id}`}>
@@ -450,7 +624,7 @@ Jane Smith,jane@example.com,`}
                     <CardDescription data-testid={`text-invitation-email-${customer.id}`}>{customer.email}</CardDescription>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <CustomerStatusBadge status={customer.status} />
                   <Button 
                     variant="outline" 
@@ -461,6 +635,22 @@ Jane Smith,jane@example.com,`}
                   >
                     <Mail className="mr-2 h-4 w-4" />
                     {customer.status === 'pending' ? 'Send' : 'Resend'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => handleEditCustomer(customer)}
+                    data-testid={`button-edit-${customer.id}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => handleDeleteCustomer(customer)}
+                    data-testid={`button-delete-${customer.id}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
