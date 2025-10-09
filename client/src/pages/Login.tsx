@@ -31,14 +31,22 @@ export default function Login() {
         throw new Error(error.error || "Login failed");
       }
 
-      // Invalidate session cache to fetch new authenticated status
-      await queryClient.invalidateQueries({ queryKey: ["/api/session"] });
+      const data = await response.json();
+
+      // Update session cache directly with authenticated state
+      queryClient.setQueryData(["/api/session"], {
+        authenticated: true,
+        user: data.user,
+      });
 
       toast({
         title: "Success",
         description: "You have been logged in successfully",
       });
 
+      // Small delay to ensure state updates propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       setLocation("/");
     } catch (error) {
       toast({
