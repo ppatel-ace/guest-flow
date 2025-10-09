@@ -13,7 +13,7 @@ export default function GuestCheckIn() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [customerName, setCustomerName] = useState("");
-  const [checkInMethod, setCheckInMethod] = useState<"phone" | "email">("phone");
+  const [checkInMethod, setCheckInMethod] = useState<"phone" | "email">("email");
   const { toast } = useToast();
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
