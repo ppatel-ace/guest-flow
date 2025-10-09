@@ -123,7 +123,9 @@ export default function GuestCheckIn() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6 md:p-8">
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
         <div className="flex justify-center">
-          <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-12 sm:h-16 md:h-20 w-auto" data-testid="img-logo" />
+          <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
+            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-12 sm:h-16 md:h-20 w-auto" data-testid="img-logo" />
+          </a>
         </div>
         
         {step === "lookup" && (

@@ -19,7 +19,9 @@ export default function StandaloneCheckIn() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="flex items-center justify-between p-4 sm:p-6 border-b">
         <div className="flex-1" />
-        <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-16 sm:h-20 md:h-24 w-auto mx-auto" data-testid="img-logo" />
+        <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
+          <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-16 sm:h-20 md:h-24 w-auto mx-auto" data-testid="img-logo" />
+        </a>
         <div className="flex-1 flex justify-end">
           <ThemeToggle />
         </div>
