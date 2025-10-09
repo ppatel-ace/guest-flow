@@ -5,9 +5,51 @@ import { insertCustomerSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
 
+// Authentication middleware
+const requireAuth = (req: any, res: any, next: any) => {
+  if (req.session?.authenticated) {
+    return next();
+  }
+  res.status(401).json({ error: "Unauthorized" });
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  // Generate QR code
+  // Authentication routes
+  app.post("/api/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      // Simple hardcoded authentication
+      if (username === "admin" && password === "admin") {
+        req.session.authenticated = true;
+        res.json({ success: true, user: { username: "admin" } });
+      } else {
+        res.status(401).json({ error: "Invalid credentials" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/session", (req, res) => {
+    if (req.session?.authenticated) {
+      res.json({ authenticated: true, user: { username: "admin" } });
+    } else {
+      res.json({ authenticated: false });
+    }
+  });
+  
+  // Generate QR code (public - no auth required)
   app.get("/api/generate-qr", async (req, res) => {
     try {
       const url = req.query.url as string;
@@ -21,8 +63,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all customers
-  app.get("/api/customers", async (req, res) => {
+  // Get all customers (protected)
+  app.get("/api/customers", requireAuth, async (req, res) => {
     try {
       const customers = await storage.getAllCustomers();
       res.json(customers);
@@ -31,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Search customers
+  // Search customers (public - used by standalone check-in page)
   app.get("/api/customers/search", async (req, res) => {
     try {
       const term = req.query.term as string;
@@ -45,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get customer by ID
+  // Get customer by ID (public - used by standalone check-in page)
   app.get("/api/customers/:id", async (req, res) => {
     try {
       const customer = await storage.getCustomer(req.params.id);
@@ -58,8 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create customer
-  app.post("/api/customers", async (req, res) => {
+  // Create customer (protected)
+  app.post("/api/customers", requireAuth, async (req, res) => {
     try {
       const data = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(data);
@@ -72,8 +114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update customer
-  app.put("/api/customers/:id", async (req, res) => {
+  // Update customer (protected)
+  app.put("/api/customers/:id", requireAuth, async (req, res) => {
     try {
       const data = insertCustomerSchema.partial().parse(req.body);
       const customer = await storage.updateCustomer(req.params.id, data);
@@ -89,8 +131,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete customer
-  app.delete("/api/customers/:id", async (req, res) => {
+  // Delete customer (protected)
+  app.delete("/api/customers/:id", requireAuth, async (req, res) => {
     try {
       const deleted = await storage.deleteCustomer(req.params.id);
       if (!deleted) {
@@ -102,8 +144,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Send invitation
-  app.post("/api/customers/:id/invite", async (req, res) => {
+  // Send invitation (protected)
+  app.post("/api/customers/:id/invite", requireAuth, async (req, res) => {
     try {
       const customer = await storage.sendInvitation(req.params.id);
       if (!customer) {
@@ -115,7 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Check-in customer
+  // Check-in customer (public - used by standalone check-in page)
   app.post("/api/customers/:id/check-in", async (req, res) => {
     try {
       const customer = await storage.checkInCustomer(req.params.id);
@@ -189,8 +231,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Import customers (bulk create)
-  app.post("/api/customers/import", async (req, res) => {
+  // Import customers (bulk create) (protected)
+  app.post("/api/customers/import", requireAuth, async (req, res) => {
     try {
       const { customers: customersData } = req.body;
       if (!Array.isArray(customersData)) {
@@ -214,8 +256,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get monthly check-in statistics
-  app.get("/api/stats/monthly-checkins", async (req, res) => {
+  // Get monthly check-in statistics (protected)
+  app.get("/api/stats/monthly-checkins", requireAuth, async (req, res) => {
     try {
       const stats = await storage.getMonthlyCheckIns();
       res.json(stats);
