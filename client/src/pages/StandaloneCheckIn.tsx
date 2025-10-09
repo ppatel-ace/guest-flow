@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import logoPath from "@assets/Blue AEDS_1760039981304.png";
 
 export default function StandaloneCheckIn() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
@@ -17,7 +18,7 @@ export default function StandaloneCheckIn() {
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between p-4 border-b">
-        <h1 className="text-2xl font-bold">Customer Check-In</h1>
+        <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-12 w-auto" data-testid="img-logo" />
         <ThemeToggle />
       </header>
       <main className="container mx-auto p-6 max-w-4xl">
