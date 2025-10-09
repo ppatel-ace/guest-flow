@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { LogIn } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -29,6 +30,9 @@ export default function Login() {
         const error = await response.json();
         throw new Error(error.error || "Login failed");
       }
+
+      // Invalidate session cache to fetch new authenticated status
+      await queryClient.invalidateQueries({ queryKey: ["/api/session"] });
 
       toast({
         title: "Success",
