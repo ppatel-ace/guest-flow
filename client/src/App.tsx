@@ -35,19 +35,20 @@ function MainRouter() {
 
 function AppContent() {
   const [location] = useLocation();
+  const normalizedLocation = location.toLowerCase();
   
   // Login page (public)
-  if (location === "/login") {
+  if (normalizedLocation === "/login") {
     return <Login />;
   }
 
   // Standalone check-in page without sidebar (public)
-  if (location === "/scan") {
+  if (normalizedLocation === "/scan") {
     return <StandaloneCheckIn />;
   }
 
   // Guest check-in form without sidebar (public)
-  if (location === "/guest-check-in") {
+  if (normalizedLocation === "/guest-check-in") {
     return <GuestCheckIn />;
   }
 
