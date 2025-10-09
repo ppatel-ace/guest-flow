@@ -120,17 +120,17 @@ export default function GuestCheckIn() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-md space-y-4 sm:space-y-6">
         <div className="flex justify-center">
-          <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-16 w-auto" data-testid="img-logo" />
+          <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-12 sm:h-16 md:h-20 w-auto" data-testid="img-logo" />
         </div>
         
         {step === "lookup" && (
           <Card>
             <CardHeader>
-              <CardTitle>Check-In</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-xl sm:text-2xl">Check-In</CardTitle>
+              <CardDescription className="text-sm sm:text-base">
                 Enter your phone number or email address to check in
               </CardDescription>
             </CardHeader>
@@ -208,9 +208,9 @@ export default function GuestCheckIn() {
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                <CardTitle>Guest Registration</CardTitle>
+                <CardTitle className="text-xl sm:text-2xl">Guest Registration</CardTitle>
               </div>
-              <CardDescription>
+              <CardDescription className="text-sm sm:text-base">
                 We couldn't find your information. Please provide your details to check in.
               </CardDescription>
             </CardHeader>
@@ -274,18 +274,18 @@ export default function GuestCheckIn() {
           <Card className="text-center">
             <CardHeader>
               <div className="mx-auto mb-4">
-                <CheckCircle className="h-16 w-16 text-chart-2" />
+                <CheckCircle className="h-12 w-12 sm:h-16 sm:w-16 text-chart-2" />
               </div>
-              <CardTitle className="text-2xl">Welcome!</CardTitle>
-              <CardDescription className="text-lg">
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl">Welcome!</CardTitle>
+              <CardDescription className="text-base sm:text-lg">
                 You have been successfully checked in
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-xl font-semibold mb-4" data-testid="text-welcome-name">
+              <p className="text-lg sm:text-xl font-semibold mb-4" data-testid="text-welcome-name">
                 {customerName}
               </p>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 You're all set. Enjoy your visit!
               </p>
             </CardContent>

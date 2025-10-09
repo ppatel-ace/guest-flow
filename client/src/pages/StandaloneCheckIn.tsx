@@ -16,37 +16,40 @@ export default function StandaloneCheckIn() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between p-4 border-b">
-        <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-12 w-auto" data-testid="img-logo" />
-        <ThemeToggle />
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="flex items-center justify-between p-4 sm:p-6 border-b">
+        <div className="flex-1" />
+        <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-16 sm:h-20 md:h-24 w-auto mx-auto" data-testid="img-logo" />
+        <div className="flex-1 flex justify-end">
+          <ThemeToggle />
+        </div>
       </header>
-      <main className="container mx-auto p-6 max-w-4xl">
+      <main className="flex-1 container mx-auto p-4 sm:p-6 max-w-4xl">
         <Card className="text-center">
           <CardHeader>
-            <CardTitle className="text-3xl">Welcome!</CardTitle>
-            <CardDescription className="text-lg">
+            <CardTitle className="text-2xl sm:text-3xl md:text-4xl">Welcome!</CardTitle>
+            <CardDescription className="text-base sm:text-lg">
               Please scan the QR code with your phone to check in
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 sm:space-y-6">
             <div className="flex justify-center">
               {qrCodeUrl ? (
                 <img 
                   src={qrCodeUrl} 
                   alt="Check-in QR Code" 
-                  className="w-80 h-80 border-4 border-border rounded-lg"
+                  className="w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 border-4 border-border rounded-lg"
                   data-testid="img-qr-code"
                 />
               ) : (
-                <div className="w-80 h-80 bg-muted rounded-lg flex items-center justify-center">
+                <div className="w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 bg-muted rounded-lg flex items-center justify-center">
                   <p className="text-muted-foreground">Loading QR Code...</p>
                 </div>
               )}
             </div>
             <div className="space-y-2">
-              <p className="text-lg font-medium">How to Check In:</p>
-              <ol className="text-muted-foreground space-y-1 text-left max-w-md mx-auto">
+              <p className="text-base sm:text-lg font-medium">How to Check In:</p>
+              <ol className="text-sm sm:text-base text-muted-foreground space-y-1 text-left max-w-md mx-auto px-4">
                 <li>1. Open your phone's camera</li>
                 <li>2. Point it at the QR code above</li>
                 <li>3. Tap the notification to open the link</li>
