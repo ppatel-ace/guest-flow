@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, Phone, User, Mail } from "lucide-react";
+import { CheckCircle, Phone, User, Mail, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import logoPath from "@assets/Blue AEDS_1760039355599.png";
 
 export default function GuestCheckIn() {
   const [step, setStep] = useState<"lookup" | "details" | "success">("lookup");
@@ -113,9 +114,18 @@ export default function GuestCheckIn() {
     }
   };
 
+  const handleBack = () => {
+    setStep("lookup");
+    setName("");
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-6">
+        <div className="flex justify-center">
+          <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-16 w-auto" data-testid="img-logo" />
+        </div>
+        
         {step === "lookup" && (
           <Card>
             <CardHeader>
@@ -188,7 +198,18 @@ export default function GuestCheckIn() {
         {step === "details" && (
           <Card>
             <CardHeader>
-              <CardTitle>Guest Registration</CardTitle>
+              <div className="flex items-center gap-2 mb-2">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleBack}
+                  type="button"
+                  data-testid="button-back"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <CardTitle>Guest Registration</CardTitle>
+              </div>
               <CardDescription>
                 We couldn't find your information. Please provide your details to check in.
               </CardDescription>
