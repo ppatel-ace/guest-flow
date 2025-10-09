@@ -7,6 +7,9 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
@@ -60,10 +63,7 @@ function AppContent() {
         <div className="flex h-screen w-full">
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
-            <header className="flex items-center justify-between p-4 border-b">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <ThemeToggle />
-            </header>
+            <HeaderWithLogout />
             <main className="flex-1 overflow-auto p-6">
               <MainRouter />
             </main>
@@ -71,6 +71,28 @@ function AppContent() {
         </div>
       </SidebarProvider>
     </ProtectedRoute>
+  );
+}
+
+function HeaderWithLogout() {
+  const { logout } = useAuth();
+
+  return (
+    <header className="flex items-center justify-between p-4 border-b">
+      <SidebarTrigger data-testid="button-sidebar-toggle" />
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => logout()}
+          data-testid="button-logout-header"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Logout
+        </Button>
+        <ThemeToggle />
+      </div>
+    </header>
   );
 }
 
