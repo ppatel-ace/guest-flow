@@ -214,17 +214,44 @@ export default function Invitations() {
     return "";
   };
 
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const fileExtension = file.name.split('.').pop()?.toLowerCase();
-
-    if (fileExtension === 'csv') {
-      Papa.parse(file, {
+  const parseCSVWithEncoding = async (file: File, encodings: string[] = ['UTF-8', 'Windows-1252', 'ISO-8859-1']) => {
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      const arrayBuffer = e.target?.result as ArrayBuffer;
+      let decodedText: string | null = null;
+      let successfulEncoding: string | null = null;
+      
+      // Try each encoding until one works
+      for (const encoding of encodings) {
+        try {
+          const decoder = new TextDecoder(encoding, { fatal: true });
+          decodedText = decoder.decode(arrayBuffer);
+          successfulEncoding = encoding;
+          break;
+        } catch (error) {
+          // This encoding failed, try next one
+          continue;
+        }
+      }
+      
+      if (!decodedText) {
+        toast({
+          title: "Encoding Error",
+          description: "Unable to decode the CSV file. Please ensure it's saved with UTF-8, Windows-1252, or ISO-8859-1 encoding.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      Papa.parse(decodedText, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
+          if (results.errors && results.errors.length > 0) {
+            console.warn('CSV parsing warnings:', results.errors);
+          }
+          
           const parsedCustomers = results.data
             .map((row: any) => {
               const name = getFieldValue(row, 'name', 'Name', 'NAME', 'Customer Name', 'Full Name');
@@ -243,6 +270,12 @@ export default function Invitations() {
           
           if (parsedCustomers.length > 0) {
             importCustomersMutation.mutate(parsedCustomers);
+            if (successfulEncoding !== 'UTF-8') {
+              toast({
+                title: "Import Successful",
+                description: `CSV imported successfully using ${successfulEncoding} encoding.`,
+              });
+            }
           } else {
             toast({
               title: "No Valid Data",
@@ -251,7 +284,7 @@ export default function Invitations() {
             });
           }
         },
-        error: (error) => {
+        error: (error: Error) => {
           toast({
             title: "Parse Error",
             description: `Failed to parse CSV file: ${error.message}`,
@@ -259,6 +292,27 @@ export default function Invitations() {
           });
         },
       });
+    };
+    
+    reader.onerror = () => {
+      toast({
+        title: "File Read Error",
+        description: "Unable to read the CSV file. Please try again.",
+        variant: "destructive",
+      });
+    };
+    
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+    if (fileExtension === 'csv') {
+      parseCSVWithEncoding(file);
     } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
       const reader = new FileReader();
       reader.onload = (e) => {
