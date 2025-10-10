@@ -100,8 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create customer (protected)
-  app.post("/api/customers", requireAuth, async (req, res) => {
+  // Create customer (public - allows CSV/Excel import without login)
+  app.post("/api/customers", async (req, res) => {
     try {
       const data = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(data);
