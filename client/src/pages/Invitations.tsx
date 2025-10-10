@@ -11,6 +11,7 @@ import { Mail, Send, Phone, UserPlus, Upload, Download, Pencil, Trash2 } from "l
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCustomerSchema } from "@shared/schema";
@@ -21,6 +22,7 @@ import * as XLSX from "xlsx";
 
 export default function Invitations() {
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -489,76 +491,78 @@ export default function Invitations() {
           <p className="text-muted-foreground">Manage email invitations and QR codes</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" data-testid="button-add-customer">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add Customer
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Customer</DialogTitle>
-                <DialogDescription>
-                  Enter customer details to add them to the invitation list.
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="John Doe" {...field} data-testid="input-customer-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="john@example.com" {...field} data-testid="input-customer-email" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone Number (Optional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="tel" 
-                            placeholder="+1 (555) 000-0000" 
-                            {...field} 
-                            value={field.value || ""}
-                            data-testid="input-customer-phone" 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <DialogFooter>
-                    <Button type="submit" disabled={addCustomerMutation.isPending} data-testid="button-submit-customer">
-                      {addCustomerMutation.isPending ? "Adding..." : "Add Customer"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+          {isAuthenticated && (
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" data-testid="button-add-customer">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Customer
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New Customer</DialogTitle>
+                  <DialogDescription>
+                    Enter customer details to add them to the invitation list.
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="John Doe" {...field} data-testid="input-customer-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="john@example.com" {...field} data-testid="input-customer-email" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone Number (Optional)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="tel" 
+                              placeholder="+1 (555) 000-0000" 
+                              {...field} 
+                              value={field.value || ""}
+                              data-testid="input-customer-phone" 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                      <Button type="submit" disabled={addCustomerMutation.isPending} data-testid="button-submit-customer">
+                        {addCustomerMutation.isPending ? "Adding..." : "Add Customer"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          )}
 
           <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
             <DialogTrigger asChild>
@@ -635,10 +639,12 @@ Jane Smith,jane@example.com,`}
             Export to Excel
           </Button>
 
-          <Button data-testid="button-send-bulk-invites">
-            <Send className="mr-2 h-4 w-4" />
-            Send Bulk Invites
-          </Button>
+          {isAuthenticated && (
+            <Button data-testid="button-send-bulk-invites">
+              <Send className="mr-2 h-4 w-4" />
+              Send Bulk Invites
+            </Button>
+          )}
         </div>
       </div>
 
@@ -746,32 +752,36 @@ Jane Smith,jane@example.com,`}
                 </div>
                 <div className="flex items-center gap-2">
                   <CustomerStatusBadge status={customer.status} />
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleSendInvite(customer.id)}
-                    disabled={sendInviteMutation.isPending}
-                    data-testid={`button-resend-${customer.id}`}
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    {customer.status === 'pending' ? 'Send' : 'Resend'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={() => handleEditCustomer(customer)}
-                    data-testid={`button-edit-${customer.id}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={() => handleDeleteCustomer(customer)}
-                    data-testid={`button-delete-${customer.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {isAuthenticated && (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleSendInvite(customer.id)}
+                        disabled={sendInviteMutation.isPending}
+                        data-testid={`button-resend-${customer.id}`}
+                      >
+                        <Mail className="mr-2 h-4 w-4" />
+                        {customer.status === 'pending' ? 'Send' : 'Resend'}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => handleEditCustomer(customer)}
+                        data-testid={`button-edit-${customer.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => handleDeleteCustomer(customer)}
+                        data-testid={`button-delete-${customer.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </CardHeader>
