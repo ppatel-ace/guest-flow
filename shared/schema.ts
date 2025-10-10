@@ -8,7 +8,7 @@ export const customerStatusEnum = pgEnum('customer_status', ['pending', 'confirm
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  email: text("email").notNull(),
+  email: text("email").notNull().unique(),
   phone: text("phone"),
   status: customerStatusEnum("status").notNull().default('pending'),
   qrCode: text("qr_code").notNull().unique(),
