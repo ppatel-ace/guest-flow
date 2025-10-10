@@ -110,6 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid customer data", details: error.errors });
       }
+      console.error("Failed to create customer:", error);
       res.status(500).json({ error: "Failed to create customer" });
     }
   });
