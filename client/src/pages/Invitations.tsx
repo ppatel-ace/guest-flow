@@ -416,6 +416,35 @@ export default function Invitations() {
     return d.toLocaleDateString();
   };
 
+  const downloadTemplate = () => {
+    const templateData = [
+      { name: 'John Doe', email: 'john@example.com', phone: '+1234567890' },
+      { name: 'Jane Smith', email: 'jane@example.com', phone: '+0987654321' },
+      { name: 'Bob Wilson', email: 'bob@example.com', phone: '' },
+    ];
+
+    const csvContent = [
+      'name,email,phone',
+      ...templateData.map(row => `${row.name},${row.email},${row.phone}`)
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'customer-import-template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Template Downloaded",
+      description: "CSV template downloaded successfully. Fill it with your customer data and upload.",
+    });
+  };
+
   const exportToExcel = () => {
     const exportData = customers.map(customer => ({
       Name: customer.name,
@@ -562,16 +591,26 @@ export default function Invitations() {
                     className="hidden"
                     data-testid="input-file-upload"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={importCustomersMutation.isPending}
-                    data-testid="button-select-file"
-                  >
-                    {importCustomersMutation.isPending ? "Importing..." : "Select File"}
-                  </Button>
+                  <div className="flex gap-2 justify-center mt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={importCustomersMutation.isPending}
+                      data-testid="button-select-file"
+                    >
+                      {importCustomersMutation.isPending ? "Importing..." : "Select File"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={downloadTemplate}
+                      data-testid="button-download-template"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Template
+                    </Button>
+                  </div>
                 </div>
                 <div className="bg-muted rounded-lg p-4">
                   <p className="text-sm font-medium mb-2">File Format Example:</p>
