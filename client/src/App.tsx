@@ -16,6 +16,7 @@ import Customers from "@/pages/Customers";
 import CheckIn from "@/pages/CheckIn";
 import Invitations from "@/pages/Invitations";
 import Import from "@/pages/Import";
+import DatabaseSetup from "@/pages/DatabaseSetup";
 import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
 import GuestCheckIn from "@/pages/GuestCheckIn";
 import NotFound from "@/pages/not-found";
@@ -28,6 +29,7 @@ function MainRouter() {
       <Route path="/check-in" component={CheckIn} />
       <Route path="/invitations" component={Invitations} />
       <Route path="/import" component={Import} />
+      <Route path="/setup" component={DatabaseSetup} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -8,6 +8,11 @@ export interface MonthlyCheckIn {
   count: number;
 }
 
+export interface ImportResult {
+  inserted: number;
+  skipped: number;
+}
+
 export interface IStorage {
   getCustomer(id: string): Promise<Customer | undefined>;
   getCustomerByPhone(phone: string): Promise<Customer | undefined>;
@@ -22,6 +27,8 @@ export interface IStorage {
   checkInCustomer(id: string): Promise<Customer | undefined>;
   sendInvitation(id: string): Promise<Customer | undefined>;
   getMonthlyCheckIns(): Promise<MonthlyCheckIn[]>;
+  initSchema(): Promise<void>;
+  importFromSQL(sql: string): Promise<ImportResult>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -166,6 +173,66 @@ export class DatabaseStorage implements IStorage {
       month,
       count,
     }));
+  }
+
+  async initSchema(): Promise<void> {
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE customer_status AS ENUM ('pending', 'confirmed', 'checked-in');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+      
+      CREATE TABLE IF NOT EXISTS customers (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL,
+        email text NOT NULL UNIQUE,
+        phone text,
+        status customer_status NOT NULL DEFAULT 'pending',
+        qr_code text NOT NULL UNIQUE,
+        invited_at timestamp,
+        checked_in_at timestamp,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+    `);
+  }
+
+  async importFromSQL(sqlStatements: string): Promise<ImportResult> {
+    const statements = sqlStatements
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && s.toUpperCase().startsWith('INSERT'));
+    
+    if (statements.length === 0) {
+      throw new Error('No valid INSERT statements found in SQL data');
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const statement of statements) {
+      try {
+        await db.execute(sql.raw(statement));
+        inserted++;
+      } catch (error: any) {
+        const errorMsg = error.message || 'Unknown error';
+        const isDuplicate = errorMsg.toLowerCase().includes('duplicate') || 
+                           errorMsg.toLowerCase().includes('unique') ||
+                           errorMsg.toLowerCase().includes('already exists');
+        
+        if (isDuplicate) {
+          skipped++;
+        } else {
+          // Non-duplicate errors should fail immediately
+          throw new Error(`Import failed: ${errorMsg}. Successfully imported ${inserted} customers before failure.`);
+        }
+      }
+    }
+
+    // Log results for debugging
+    console.log(`Import completed: ${inserted} inserted, ${skipped} duplicates skipped`);
+
+    return { inserted, skipped };
   }
 }
 

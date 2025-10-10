@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -38,6 +38,11 @@ const menuItems = [
     title: "Import",
     url: "/import",
     icon: FileSpreadsheet,
+  },
+  {
+    title: "Setup",
+    url: "/setup",
+    icon: Database,
   },
 ];
 

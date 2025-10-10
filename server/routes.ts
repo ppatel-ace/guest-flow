@@ -286,6 +286,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Database setup endpoints (protected)
+  app.post("/api/setup/init-schema", requireAuth, async (req, res) => {
+    try {
+      await storage.initSchema();
+      res.json({ message: "Database schema initialized successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to initialize schema" });
+    }
+  });
+
+  app.post("/api/setup/import-sql", requireAuth, async (req, res) => {
+    try {
+      const { sql } = req.body;
+      if (!sql || typeof sql !== 'string') {
+        return res.status(400).json({ error: "SQL data is required" });
+      }
+      const result = await storage.importFromSQL(sql);
+      const message = result.inserted > 0 
+        ? `Successfully imported ${result.inserted} customers${result.skipped > 0 ? `, ${result.skipped} duplicates skipped` : ''}`
+        : `All ${result.skipped} customers already exist (duplicates skipped)`;
+      res.json({ 
+        message,
+        inserted: result.inserted,
+        skipped: result.skipped
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to import data" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
