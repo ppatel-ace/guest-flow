@@ -54,6 +54,13 @@ function AppContent() {
     return <GuestCheckIn />;
   }
 
+  // Invitations/Import page without sidebar (public - allows CSV/Excel upload without login)
+  if (normalizedLocation === "/invitations" || normalizedLocation === "/import") {
+    return <div className="min-h-screen p-6">
+      {normalizedLocation === "/invitations" ? <Invitations /> : <Import />}
+    </div>;
+  }
+
   // Main app with sidebar (protected)
   const style = {
     "--sidebar-width": "16rem",

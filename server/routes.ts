@@ -63,8 +63,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all customers (protected)
-  app.get("/api/customers", requireAuth, async (req, res) => {
+  // Get all customers (public - allows viewing without login)
+  app.get("/api/customers", async (req, res) => {
     try {
       const customers = await storage.getAllCustomers();
       res.json(customers);
@@ -277,8 +277,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get monthly check-in statistics (protected)
-  app.get("/api/stats/monthly-checkins", requireAuth, async (req, res) => {
+  // Get monthly check-in statistics (public - allows viewing stats without login)
+  app.get("/api/stats/monthly-checkins", async (req, res) => {
     try {
       const stats = await storage.getMonthlyCheckIns();
       res.json(stats);
