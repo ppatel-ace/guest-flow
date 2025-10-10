@@ -76,23 +76,50 @@ export default function Invitations() {
 
   const importCustomersMutation = useMutation({
     mutationFn: async (customers: InsertCustomer[]) => {
-      const promises = customers.map(customer => 
+      const promises = customers.map((customer, index) => 
         apiRequest('POST', '/api/customers', customer)
+          .then(result => ({ status: 'fulfilled' as const, value: result, customer, index }))
+          .catch(error => ({ status: 'rejected' as const, reason: error, customer, index }))
       );
       return Promise.all(promises);
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      toast({
-        title: "Import Successful",
-        description: `${variables.length} customer(s) have been imported.`,
-      });
-      setIsImportDialogOpen(false);
+    onSuccess: (results, variables) => {
+      const succeeded = results.filter(r => r.status === 'fulfilled');
+      const failed = results.filter(r => r.status === 'rejected');
+      
+      if (succeeded.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      }
+      
+      if (failed.length === 0) {
+        toast({
+          title: "Import Successful",
+          description: `${succeeded.length} customer(s) imported successfully.`,
+        });
+        setIsImportDialogOpen(false);
+      } else if (succeeded.length > 0) {
+        const failedNames = failed.map(f => f.customer.name).slice(0, 3).join(', ');
+        const moreCount = failed.length > 3 ? ` and ${failed.length - 3} more` : '';
+        toast({
+          title: "Partial Import",
+          description: `${succeeded.length} imported, ${failed.length} failed. Failed: ${failedNames}${moreCount}. Likely duplicate emails.`,
+          variant: "destructive",
+        });
+        setIsImportDialogOpen(false);
+      } else {
+        const failedNames = failed.map(f => f.customer.name).slice(0, 3).join(', ');
+        const moreCount = failed.length > 3 ? ` and ${failed.length - 3} more` : '';
+        toast({
+          title: "Import Failed",
+          description: `All ${failed.length} customer(s) failed. Failed: ${failedNames}${moreCount}. Check for duplicate emails or missing data.`,
+          variant: "destructive",
+        });
+      }
     },
     onError: () => {
       toast({
-        title: "Import Failed",
-        description: "Some customers could not be imported.",
+        title: "Import Error",
+        description: "An unexpected error occurred during import.",
         variant: "destructive",
       });
     },
