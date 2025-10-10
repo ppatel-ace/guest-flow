@@ -47,7 +47,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllCustomers(): Promise<Customer[]> {
-    return await db.select().from(customers).orderBy(desc(customers.createdAt));
+    return await db.select().from(customers).orderBy(sql`LOWER(${customers.name})`);
   }
 
   async searchCustomers(term: string): Promise<Customer[]> {
