@@ -31,6 +31,10 @@ export const pageSettings = pgTable("page_settings", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   successMessage: text("success_message"),
+  successTitle: text("success_title"),
+  eventName: text("event_name"),
+  eventDate: text("event_date"),
+  eventLocation: text("event_location"),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 

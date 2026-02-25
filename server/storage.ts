@@ -18,11 +18,19 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     title: "Welcome!",
     description: "Please scan the QR code with your phone to check in",
     successMessage: null,
+    successTitle: null,
+    eventName: null,
+    eventDate: null,
+    eventLocation: null,
   },
   guest_checkin_page: {
     title: "Check-In",
     description: "Enter your phone number or email address to check in",
     successMessage: "You have been successfully checked in",
+    successTitle: "Welcome!",
+    eventName: null,
+    eventDate: null,
+    eventLocation: null,
   },
 };
 

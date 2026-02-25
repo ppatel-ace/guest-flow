@@ -19,6 +19,7 @@ import Import from "@/pages/Import";
 import DatabaseSetup from "@/pages/DatabaseSetup";
 import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
 import GuestCheckIn from "@/pages/GuestCheckIn";
+import PublicPages from "@/pages/PublicPages";
 import NotFound from "@/pages/not-found";
 
 function MainRouter() {
@@ -29,6 +30,7 @@ function MainRouter() {
       <Route path="/check-in" component={CheckIn} />
       <Route path="/invitations" component={Invitations} />
       <Route path="/import" component={Import} />
+      <Route path="/public-pages" component={PublicPages} />
       <Route path="/setup" component={DatabaseSetup} />
       <Route component={NotFound} />
     </Switch>

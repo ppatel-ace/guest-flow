@@ -26,7 +26,9 @@ export default function GuestCheckIn() {
 
   const title = settings?.title ?? "Check-In";
   const description = settings?.description ?? "Enter your phone number or email address to check in";
+  const successTitle = settings?.successTitle ?? "Welcome!";
   const successMessage = settings?.successMessage ?? "You have been successfully checked in";
+  const eventName = settings?.eventName;
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,10 +107,15 @@ export default function GuestCheckIn() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6 md:p-8">
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-2">
           <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 lg:h-36 w-auto" data-testid="img-logo" />
+            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 w-auto" data-testid="img-logo" />
           </a>
+          {settingsLoading ? (
+            <Skeleton className="h-5 w-48" />
+          ) : eventName ? (
+            <p className="text-base font-semibold text-center" data-testid="text-event-name">{eventName}</p>
+          ) : null}
         </div>
 
         {step === "lookup" && (
@@ -142,16 +149,7 @@ export default function GuestCheckIn() {
                       <Label htmlFor="phone">Phone Number</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="phone"
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="+1 (555) 000-0000"
-                          className="pl-10"
-                          required
-                          data-testid="input-phone-check-in"
-                        />
+                        <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" className="pl-10" required data-testid="input-phone-check-in" />
                       </div>
                     </div>
                     <Button type="submit" className="w-full" data-testid="button-submit-phone">Continue</Button>
@@ -163,16 +161,7 @@ export default function GuestCheckIn() {
                       <Label htmlFor="email-checkin">Email Address</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="email-checkin"
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="john@example.com"
-                          className="pl-10"
-                          required
-                          data-testid="input-email-check-in"
-                        />
+                        <Input id="email-checkin" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" className="pl-10" required data-testid="input-email-check-in" />
                       </div>
                     </div>
                     <Button type="submit" className="w-full" data-testid="button-submit-email">Continue</Button>
@@ -231,7 +220,7 @@ export default function GuestCheckIn() {
               <div className="mx-auto mb-4">
                 <CheckCircle className="h-12 w-12 sm:h-16 sm:w-16 text-chart-2" />
               </div>
-              <CardTitle className="text-xl sm:text-2xl md:text-3xl">Welcome!</CardTitle>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl">{successTitle}</CardTitle>
               <CardDescription className="text-base sm:text-lg">{successMessage}</CardDescription>
             </CardHeader>
             <CardContent>

@@ -331,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update page settings (protected)
   app.put("/api/page-settings/:key", requireAuth, async (req, res) => {
     try {
-      const { title, description, successMessage } = req.body;
+      const { title, description, successMessage, successTitle, eventName, eventDate, eventLocation } = req.body;
       if (!title || !description) {
         return res.status(400).json({ error: "title and description are required" });
       }
@@ -339,6 +339,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title,
         description,
         successMessage: successMessage || null,
+        successTitle: successTitle || null,
+        eventName: eventName || null,
+        eventDate: eventDate || null,
+        eventLocation: eventLocation || null,
       });
       res.json(settings);
     } catch (error) {
