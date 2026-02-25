@@ -5,11 +5,18 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CheckCircle, Phone, User, Mail, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
-import type { PageSettings } from "@shared/schema";
+import type { PageSettings, FormField } from "@shared/schema";
 
 export default function GuestCheckIn() {
   const [step, setStep] = useState<"lookup" | "details" | "success">("lookup");
@@ -18,10 +25,15 @@ export default function GuestCheckIn() {
   const [name, setName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [checkInMethod, setCheckInMethod] = useState<"phone" | "email">("email");
+  const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
     queryKey: ["/api/page-settings/guest_checkin_page"],
+  });
+
+  const { data: formFields = [] } = useQuery<FormField[]>({
+    queryKey: ["/api/form-fields"],
   });
 
   const title = settings?.title ?? "Check-In";
@@ -77,12 +89,33 @@ export default function GuestCheckIn() {
 
   const handleDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate required custom fields
+    for (const field of formFields) {
+      if (field.required && !extraValues[field.id]?.trim()) {
+        toast({
+          title: "Required field missing",
+          description: `Please fill in "${field.label}".`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      const metadata = formFields.length > 0 ? extraValues : undefined;
+
       const response = await fetch("/api/guest-register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email: normalizedEmail, phone: phone || undefined, status: "checked-in" }),
+        body: JSON.stringify({
+          name,
+          email: normalizedEmail,
+          phone: phone || undefined,
+          status: "checked-in",
+          ...(metadata ? { metadata } : {}),
+        }),
       });
       if (response.ok) {
         const customer = await response.json();
@@ -102,6 +135,66 @@ export default function GuestCheckIn() {
   const handleBack = () => {
     setStep("lookup");
     setName("");
+    setExtraValues({});
+  };
+
+  const renderCustomField = (field: FormField) => {
+    const value = extraValues[field.id] ?? "";
+    const setValue = (v: string) => setExtraValues((prev) => ({ ...prev, [field.id]: v }));
+
+    if (field.fieldType === "select") {
+      let options: string[] = [];
+      try {
+        options = field.options ? JSON.parse(field.options) : [];
+      } catch {
+        options = [];
+      }
+      return (
+        <div key={field.id} className="space-y-2" data-testid={`field-${field.id}`}>
+          <Label htmlFor={`custom-${field.id}`}>
+            {field.label}
+            {!field.required && (
+              <span className="text-muted-foreground text-xs ml-1">(Optional)</span>
+            )}
+          </Label>
+          <Select value={value} onValueChange={setValue}>
+            <SelectTrigger id={`custom-${field.id}`} data-testid={`select-custom-${field.id}`}>
+              <SelectValue placeholder={field.placeholder ?? `Select ${field.label}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {!field.required && (
+                <SelectItem value=" ">—</SelectItem>
+              )}
+              {options.map((opt) => (
+                <SelectItem key={opt} value={opt}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
+    return (
+      <div key={field.id} className="space-y-2" data-testid={`field-${field.id}`}>
+        <Label htmlFor={`custom-${field.id}`}>
+          {field.label}
+          {!field.required && (
+            <span className="text-muted-foreground text-xs ml-1">(Optional)</span>
+          )}
+        </Label>
+        <Input
+          id={`custom-${field.id}`}
+          type={field.fieldType}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={field.placeholder ?? ""}
+          required={field.required}
+          data-testid={`input-custom-${field.id}`}
+        />
+      </div>
+    );
   };
 
   return (
@@ -149,7 +242,16 @@ export default function GuestCheckIn() {
                       <Label htmlFor="phone">Phone Number</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" className="pl-10" required data-testid="input-phone-check-in" />
+                        <Input
+                          id="phone"
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="+1 (555) 000-0000"
+                          className="pl-10"
+                          required
+                          data-testid="input-phone-check-in"
+                        />
                       </div>
                     </div>
                     <Button type="submit" className="w-full" data-testid="button-submit-phone">Continue</Button>
@@ -161,7 +263,16 @@ export default function GuestCheckIn() {
                       <Label htmlFor="email-checkin">Email Address</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="email-checkin" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" className="pl-10" required data-testid="input-email-check-in" />
+                        <Input
+                          id="email-checkin"
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="john@example.com"
+                          className="pl-10"
+                          required
+                          data-testid="input-email-check-in"
+                        />
                       </div>
                     </div>
                     <Button type="submit" className="w-full" data-testid="button-submit-email">Continue</Button>
@@ -191,24 +302,58 @@ export default function GuestCheckIn() {
                   <Label htmlFor="guest-name">Full Name</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="guest-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" className="pl-10" required data-testid="input-guest-name" />
+                    <Input
+                      id="guest-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="John Doe"
+                      className="pl-10"
+                      required
+                      data-testid="input-guest-name"
+                    />
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="guest-email">Email Address</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="guest-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" className="pl-10" required data-testid="input-guest-email" />
+                    <Input
+                      id="guest-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="john@example.com"
+                      className="pl-10"
+                      required
+                      data-testid="input-guest-email"
+                    />
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="guest-phone">Phone Number (Optional)</Label>
+                  <Label htmlFor="guest-phone">
+                    Phone Number <span className="text-muted-foreground text-xs">(Optional)</span>
+                  </Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="guest-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" className="pl-10" data-testid="input-guest-phone" />
+                    <Input
+                      id="guest-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+1 (555) 000-0000"
+                      className="pl-10"
+                      data-testid="input-guest-phone"
+                    />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" data-testid="button-submit-details">Check In</Button>
+
+                {formFields.map(renderCustomField)}
+
+                <Button type="submit" className="w-full" data-testid="button-submit-details">
+                  Check In
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -224,7 +369,9 @@ export default function GuestCheckIn() {
               <CardDescription className="text-base sm:text-lg">{successMessage}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-lg sm:text-xl font-semibold mb-4" data-testid="text-welcome-name">{customerName}</p>
+              <p className="text-lg sm:text-xl font-semibold mb-4" data-testid="text-welcome-name">
+                {customerName}
+              </p>
               <p className="text-sm sm:text-base text-muted-foreground">You're all set. Enjoy your visit!</p>
             </CardContent>
           </Card>

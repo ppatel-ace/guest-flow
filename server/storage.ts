@@ -1,6 +1,6 @@
-import { customers, pageSettings, type Customer, type InsertCustomer, type PageSettings, type InsertPageSettings } from "@shared/schema";
+import { customers, pageSettings, formFields, type Customer, type InsertCustomer, type PageSettings, type InsertPageSettings, type FormField, type InsertFormField } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, or, ilike, sql, gte } from "drizzle-orm";
+import { eq, or, ilike, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface MonthlyCheckIn {
@@ -52,6 +52,11 @@ export interface IStorage {
   importFromSQL(sql: string): Promise<ImportResult>;
   getPageSettings(key: string): Promise<PageSettings>;
   upsertPageSettings(key: string, data: Omit<InsertPageSettings, 'key'>): Promise<PageSettings>;
+  getFormFields(): Promise<FormField[]>;
+  createFormField(data: InsertFormField): Promise<FormField>;
+  updateFormField(id: string, data: Partial<InsertFormField>): Promise<FormField | undefined>;
+  deleteFormField(id: string): Promise<boolean>;
+  reorderFormFields(ids: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -116,10 +121,7 @@ export class DatabaseStorage implements IStorage {
   async checkInCustomer(id: string): Promise<Customer | undefined> {
     const [customer] = await db
       .update(customers)
-      .set({ 
-        status: 'checked-in',
-        checkedInAt: new Date()
-      })
+      .set({ status: 'checked-in', checkedInAt: new Date() })
       .where(eq(customers.id, id))
       .returning();
     return customer || undefined;
@@ -128,10 +130,7 @@ export class DatabaseStorage implements IStorage {
   async sendInvitation(id: string): Promise<Customer | undefined> {
     const [customer] = await db
       .update(customers)
-      .set({ 
-        invitedAt: new Date(),
-        status: 'confirmed'
-      })
+      .set({ invitedAt: new Date(), status: 'confirmed' })
       .where(eq(customers.id, id))
       .returning();
     return customer || undefined;
@@ -151,10 +150,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCustomer(id: string): Promise<boolean> {
-    const result = await db
-      .delete(customers)
-      .where(eq(customers.id, id))
-      .returning();
+    const result = await db.delete(customers).where(eq(customers.id, id)).returning();
     return result.length > 0;
   }
 
@@ -168,31 +164,21 @@ export class DatabaseStorage implements IStorage {
         count: sql<number>`COUNT(*)::int`,
       })
       .from(customers)
-      .where(
-        sql`${customers.checkedInAt} IS NOT NULL AND ${customers.checkedInAt} >= ${twelveMonthsAgo}`
-      )
+      .where(sql`${customers.checkedInAt} IS NOT NULL AND ${customers.checkedInAt} >= ${twelveMonthsAgo}`)
       .groupBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`)
       .orderBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`);
 
     const monthsMap = new Map<string, number>();
     const now = new Date();
-    
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       monthsMap.set(monthKey, 0);
     }
-
     results.forEach(result => {
-      if (result.month) {
-        monthsMap.set(result.month, result.count);
-      }
+      if (result.month) monthsMap.set(result.month, result.count);
     });
-
-    return Array.from(monthsMap.entries()).map(([month, count]) => ({
-      month,
-      count,
-    }));
+    return Array.from(monthsMap.entries()).map(([month, count]) => ({ month, count }));
   }
 
   async initSchema(): Promise<void> {
@@ -222,7 +208,7 @@ export class DatabaseStorage implements IStorage {
       .split(';')
       .map(s => s.trim())
       .filter(s => s.length > 0 && s.toUpperCase().startsWith('INSERT'));
-    
+
     if (statements.length === 0) {
       throw new Error('No valid INSERT statements found in SQL data');
     }
@@ -236,10 +222,9 @@ export class DatabaseStorage implements IStorage {
         inserted++;
       } catch (error: any) {
         const errorMsg = error.message || 'Unknown error';
-        const isDuplicate = errorMsg.toLowerCase().includes('duplicate') || 
-                           errorMsg.toLowerCase().includes('unique') ||
-                           errorMsg.toLowerCase().includes('already exists');
-        
+        const isDuplicate = errorMsg.toLowerCase().includes('duplicate') ||
+          errorMsg.toLowerCase().includes('unique') ||
+          errorMsg.toLowerCase().includes('already exists');
         if (isDuplicate) {
           skipped++;
         } else {
@@ -255,7 +240,6 @@ export class DatabaseStorage implements IStorage {
   async getPageSettings(key: string): Promise<PageSettings> {
     const [row] = await db.select().from(pageSettings).where(eq(pageSettings.key, key));
     if (row) return row;
-    // Return defaults if not yet saved
     const defaults = PAGE_DEFAULTS[key];
     if (!defaults) throw new Error(`Unknown page settings key: ${key}`);
     return { key, ...defaults, updatedAt: new Date() } as PageSettings;
@@ -271,6 +255,40 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  async getFormFields(): Promise<FormField[]> {
+    return await db.select().from(formFields).orderBy(asc(formFields.sortOrder), asc(formFields.createdAt));
+  }
+
+  async createFormField(data: InsertFormField): Promise<FormField> {
+    const existing = await this.getFormFields();
+    const nextOrder = existing.length;
+    const [field] = await db
+      .insert(formFields)
+      .values({ ...data, sortOrder: nextOrder })
+      .returning();
+    return field;
+  }
+
+  async updateFormField(id: string, data: Partial<InsertFormField>): Promise<FormField | undefined> {
+    const [field] = await db
+      .update(formFields)
+      .set(data)
+      .where(eq(formFields.id, id))
+      .returning();
+    return field || undefined;
+  }
+
+  async deleteFormField(id: string): Promise<boolean> {
+    const result = await db.delete(formFields).where(eq(formFields.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async reorderFormFields(ids: string[]): Promise<void> {
+    for (let i = 0; i < ids.length; i++) {
+      await db.update(formFields).set({ sortOrder: i }).where(eq(formFields.id, ids[i]));
+    }
   }
 }
 

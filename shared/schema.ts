@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -15,6 +15,7 @@ export const customers = pgTable("customers", {
   invitedAt: timestamp("invited_at"),
   checkedInAt: timestamp("checked_in_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  metadata: text("metadata"),
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -44,3 +45,22 @@ export const insertPageSettingsSchema = createInsertSchema(pageSettings).omit({
 
 export type InsertPageSettings = z.infer<typeof insertPageSettingsSchema>;
 export type PageSettings = typeof pageSettings.$inferSelect;
+
+export const formFields = pgTable("form_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: text("label").notNull(),
+  fieldType: text("field_type").notNull().default('text'),
+  placeholder: text("placeholder"),
+  required: boolean("required").notNull().default(false),
+  options: text("options"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFormFieldSchema = createInsertSchema(formFields).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFormField = z.infer<typeof insertFormFieldSchema>;
+export type FormField = typeof formFields.$inferSelect;

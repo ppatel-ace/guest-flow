@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema } from "@shared/schema";
+import { insertCustomerSchema, insertFormFieldSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
 
@@ -236,10 +236,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Guest registration and check-in (public)
   app.post("/api/guest-register", async (req, res) => {
     try {
-      const data = insertCustomerSchema.parse(req.body);
+      const { metadata, ...rest } = req.body;
+      const data = insertCustomerSchema.parse(rest);
+      
+      // Attach extra field data as JSON string
+      const customerData = {
+        ...data,
+        metadata: metadata && typeof metadata === 'object' ? JSON.stringify(metadata) : undefined,
+      };
       
       // Create the customer
-      const customer = await storage.createCustomer(data);
+      const customer = await storage.createCustomer(customerData);
       
       // Automatically check them in
       const checkedIn = await storage.checkInCustomer(customer.id);
@@ -250,6 +257,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid customer data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to register and check in" });
+    }
+  });
+
+  // Get all form fields (public - needed by guest check-in form)
+  app.get("/api/form-fields", async (req, res) => {
+    try {
+      const fields = await storage.getFormFields();
+      res.json(fields);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch form fields" });
+    }
+  });
+
+  // Create form field (protected)
+  app.post("/api/form-fields", requireAuth, async (req, res) => {
+    try {
+      const data = insertFormFieldSchema.parse(req.body);
+      const field = await storage.createFormField(data);
+      res.status(201).json(field);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid field data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create form field" });
+    }
+  });
+
+  // Reorder form fields (protected) — must come before /:id route
+  app.put("/api/form-fields/reorder", requireAuth, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: "ids must be an array" });
+      }
+      await storage.reorderFormFields(ids);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder form fields" });
+    }
+  });
+
+  // Update form field (protected)
+  app.put("/api/form-fields/:id", requireAuth, async (req, res) => {
+    try {
+      const data = insertFormFieldSchema.partial().parse(req.body);
+      const field = await storage.updateFormField(req.params.id, data);
+      if (!field) {
+        return res.status(404).json({ error: "Form field not found" });
+      }
+      res.json(field);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid field data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update form field" });
+    }
+  });
+
+  // Delete form field (protected)
+  app.delete("/api/form-fields/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteFormField(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Form field not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete form field" });
     }
   });
 
