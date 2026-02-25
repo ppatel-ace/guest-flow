@@ -50,13 +50,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Generate QR code (public - no auth required)
+  // Uses error correction level H (highest) so logo overlay doesn't break scanning
   app.get("/api/generate-qr", async (req, res) => {
     try {
       const url = req.query.url as string;
       if (!url) {
         return res.status(400).json({ error: "URL is required" });
       }
-      const qrCode = await QRCode.toDataURL(url, { width: 400 });
+      const qrCode = await QRCode.toDataURL(url, { width: 400, errorCorrectionLevel: 'H' });
       res.json({ qrCode });
     } catch (error) {
       res.status(500).json({ error: "Failed to generate QR code" });
@@ -314,6 +315,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to import data" });
+    }
+  });
+
+  // Get page settings (public)
+  app.get("/api/page-settings/:key", async (req, res) => {
+    try {
+      const settings = await storage.getPageSettings(req.params.key);
+      res.json(settings);
+    } catch (error: any) {
+      res.status(404).json({ error: error.message || "Page settings not found" });
+    }
+  });
+
+  // Update page settings (protected)
+  app.put("/api/page-settings/:key", requireAuth, async (req, res) => {
+    try {
+      const { title, description, successMessage } = req.body;
+      if (!title || !description) {
+        return res.status(400).json({ error: "title and description are required" });
+      }
+      const settings = await storage.upsertPageSettings(req.params.key, {
+        title,
+        description,
+        successMessage: successMessage || null,
+      });
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update page settings" });
     }
   });
 

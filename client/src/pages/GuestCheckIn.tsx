@@ -4,9 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle, Phone, User, Mail, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
+import type { PageSettings } from "@shared/schema";
 
 export default function GuestCheckIn() {
   const [step, setStep] = useState<"lookup" | "details" | "success">("lookup");
@@ -17,100 +20,80 @@ export default function GuestCheckIn() {
   const [checkInMethod, setCheckInMethod] = useState<"phone" | "email">("email");
   const { toast } = useToast();
 
+  const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
+    queryKey: ["/api/page-settings/guest_checkin_page"],
+  });
+
+  const title = settings?.title ?? "Check-In";
+  const description = settings?.description ?? "Enter your phone number or email address to check in";
+  const successMessage = settings?.successMessage ?? "You have been successfully checked in";
+
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       const response = await fetch(`/api/check-in/phone`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
       });
-
       if (response.ok) {
         const customer = await response.json();
         setCustomerName(customer.name);
         setStep("success");
-        toast({
-          title: "Checked In Successfully!",
-          description: `Welcome, ${customer.name}!`,
-        });
+        toast({ title: "Checked In Successfully!", description: `Welcome, ${customer.name}!` });
       } else {
         setStep("details");
       }
     } catch (error) {
-      console.error('Check-in failed:', error);
+      console.error("Check-in failed:", error);
       setStep("details");
     }
   };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const response = await fetch(`/api/check-in/email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
       });
-
       if (response.ok) {
         const customer = await response.json();
         setCustomerName(customer.name);
         setStep("success");
-        toast({
-          title: "Checked In Successfully!",
-          description: `Welcome, ${customer.name}!`,
-        });
+        toast({ title: "Checked In Successfully!", description: `Welcome, ${customer.name}!` });
       } else {
         setStep("details");
       }
     } catch (error) {
-      console.error('Check-in failed:', error);
+      console.error("Check-in failed:", error);
       setStep("details");
     }
   };
 
   const handleDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const response = await fetch('/api/guest-register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name, 
-          email: normalizedEmail, 
-          phone: phone || undefined, 
-          status: 'checked-in' 
-        })
+      const response = await fetch("/api/guest-register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email: normalizedEmail, phone: phone || undefined, status: "checked-in" }),
       });
-
       if (response.ok) {
         const customer = await response.json();
         setCustomerName(customer.name);
         setStep("success");
-        toast({
-          title: "Registered & Checked In!",
-          description: `Welcome, ${customer.name}!`,
-        });
+        toast({ title: "Registered & Checked In!", description: `Welcome, ${customer.name}!` });
       } else {
         const error = await response.json();
-        toast({
-          title: "Error",
-          description: error.error || "Failed to register. Please try again.",
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: error.error || "Failed to register. Please try again.", variant: "destructive" });
       }
     } catch (error) {
-      console.error('Failed to register and check in:', error);
-      toast({
-        title: "Error",
-        description: "Failed to register. Please try again.",
-        variant: "destructive"
-      });
+      console.error("Failed to register and check in:", error);
+      toast({ title: "Error", description: "Failed to register. Please try again.", variant: "destructive" });
     }
   };
 
@@ -127,18 +110,25 @@ export default function GuestCheckIn() {
             <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 lg:h-36 w-auto" data-testid="img-logo" />
           </a>
         </div>
-        
+
         {step === "lookup" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl sm:text-2xl">Check-In</CardTitle>
-              <CardDescription className="text-sm sm:text-base">
-                Enter your phone number or email address to check in
-              </CardDescription>
+              {settingsLoading ? (
+                <>
+                  <Skeleton className="h-7 w-32 mb-2" />
+                  <Skeleton className="h-4 w-64" />
+                </>
+              ) : (
+                <>
+                  <CardTitle className="text-xl sm:text-2xl">{title}</CardTitle>
+                  <CardDescription className="text-sm sm:text-base">{description}</CardDescription>
+                </>
+              )}
             </CardHeader>
             <CardContent>
-              <Tabs 
-                value={checkInMethod} 
+              <Tabs
+                value={checkInMethod}
                 onValueChange={(v) => setCheckInMethod(v as "phone" | "email")}
                 data-testid="tabs-check-in-method"
               >
@@ -164,9 +154,7 @@ export default function GuestCheckIn() {
                         />
                       </div>
                     </div>
-                    <Button type="submit" className="w-full" data-testid="button-submit-phone">
-                      Continue
-                    </Button>
+                    <Button type="submit" className="w-full" data-testid="button-submit-phone">Continue</Button>
                   </form>
                 </TabsContent>
                 <TabsContent value="email">
@@ -187,9 +175,7 @@ export default function GuestCheckIn() {
                         />
                       </div>
                     </div>
-                    <Button type="submit" className="w-full" data-testid="button-submit-email">
-                      Continue
-                    </Button>
+                    <Button type="submit" className="w-full" data-testid="button-submit-email">Continue</Button>
                   </form>
                 </TabsContent>
               </Tabs>
@@ -201,13 +187,7 @@ export default function GuestCheckIn() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2 mb-2">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={handleBack}
-                  type="button"
-                  data-testid="button-back"
-                >
+                <Button variant="ghost" size="icon" onClick={handleBack} type="button" data-testid="button-back">
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <CardTitle className="text-xl sm:text-2xl">Guest Registration</CardTitle>
@@ -222,51 +202,24 @@ export default function GuestCheckIn() {
                   <Label htmlFor="guest-name">Full Name</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="guest-name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="John Doe"
-                      className="pl-10"
-                      required
-                      data-testid="input-guest-name"
-                    />
+                    <Input id="guest-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" className="pl-10" required data-testid="input-guest-name" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="guest-email">Email Address</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="guest-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="john@example.com"
-                      className="pl-10"
-                      required
-                      data-testid="input-guest-email"
-                    />
+                    <Input id="guest-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" className="pl-10" required data-testid="input-guest-email" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="guest-phone">Phone Number (Optional)</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="guest-phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+1 (555) 000-0000"
-                      className="pl-10"
-                      data-testid="input-guest-phone"
-                    />
+                    <Input id="guest-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" className="pl-10" data-testid="input-guest-phone" />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" data-testid="button-submit-details">
-                  Check In
-                </Button>
+                <Button type="submit" className="w-full" data-testid="button-submit-details">Check In</Button>
               </form>
             </CardContent>
           </Card>
@@ -279,17 +232,11 @@ export default function GuestCheckIn() {
                 <CheckCircle className="h-12 w-12 sm:h-16 sm:w-16 text-chart-2" />
               </div>
               <CardTitle className="text-xl sm:text-2xl md:text-3xl">Welcome!</CardTitle>
-              <CardDescription className="text-base sm:text-lg">
-                You have been successfully checked in
-              </CardDescription>
+              <CardDescription className="text-base sm:text-lg">{successMessage}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-lg sm:text-xl font-semibold mb-4" data-testid="text-welcome-name">
-                {customerName}
-              </p>
-              <p className="text-sm sm:text-base text-muted-foreground">
-                You're all set. Enjoy your visit!
-              </p>
+              <p className="text-lg sm:text-xl font-semibold mb-4" data-testid="text-welcome-name">{customerName}</p>
+              <p className="text-sm sm:text-base text-muted-foreground">You're all set. Enjoy your visit!</p>
             </CardContent>
           </Card>
         )}

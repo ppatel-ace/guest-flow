@@ -25,3 +25,18 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+
+export const pageSettings = pgTable("page_settings", {
+  key: varchar("key").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  successMessage: text("success_message"),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const insertPageSettingsSchema = createInsertSchema(pageSettings).omit({
+  updatedAt: true,
+});
+
+export type InsertPageSettings = z.infer<typeof insertPageSettingsSchema>;
+export type PageSettings = typeof pageSettings.$inferSelect;

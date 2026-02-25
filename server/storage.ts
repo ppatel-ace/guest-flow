@@ -1,4 +1,4 @@
-import { customers, type Customer, type InsertCustomer } from "@shared/schema";
+import { customers, pageSettings, type Customer, type InsertCustomer, type PageSettings, type InsertPageSettings } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, or, ilike, sql, gte } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -12,6 +12,19 @@ export interface ImportResult {
   inserted: number;
   skipped: number;
 }
+
+const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
+  scan_page: {
+    title: "Welcome!",
+    description: "Please scan the QR code with your phone to check in",
+    successMessage: null,
+  },
+  guest_checkin_page: {
+    title: "Check-In",
+    description: "Enter your phone number or email address to check in",
+    successMessage: "You have been successfully checked in",
+  },
+};
 
 export interface IStorage {
   getCustomer(id: string): Promise<Customer | undefined>;
@@ -29,6 +42,8 @@ export interface IStorage {
   getMonthlyCheckIns(): Promise<MonthlyCheckIn[]>;
   initSchema(): Promise<void>;
   importFromSQL(sql: string): Promise<ImportResult>;
+  getPageSettings(key: string): Promise<PageSettings>;
+  upsertPageSettings(key: string, data: Omit<InsertPageSettings, 'key'>): Promise<PageSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -151,7 +166,6 @@ export class DatabaseStorage implements IStorage {
       .groupBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`)
       .orderBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`);
 
-    // Generate last 12 months array
     const monthsMap = new Map<string, number>();
     const now = new Date();
     
@@ -161,14 +175,12 @@ export class DatabaseStorage implements IStorage {
       monthsMap.set(monthKey, 0);
     }
 
-    // Fill in actual counts
     results.forEach(result => {
       if (result.month) {
         monthsMap.set(result.month, result.count);
       }
     });
 
-    // Convert to array
     return Array.from(monthsMap.entries()).map(([month, count]) => ({
       month,
       count,
@@ -223,16 +235,34 @@ export class DatabaseStorage implements IStorage {
         if (isDuplicate) {
           skipped++;
         } else {
-          // Non-duplicate errors should fail immediately
           throw new Error(`Import failed: ${errorMsg}. Successfully imported ${inserted} customers before failure.`);
         }
       }
     }
 
-    // Log results for debugging
     console.log(`Import completed: ${inserted} inserted, ${skipped} duplicates skipped`);
-
     return { inserted, skipped };
+  }
+
+  async getPageSettings(key: string): Promise<PageSettings> {
+    const [row] = await db.select().from(pageSettings).where(eq(pageSettings.key, key));
+    if (row) return row;
+    // Return defaults if not yet saved
+    const defaults = PAGE_DEFAULTS[key];
+    if (!defaults) throw new Error(`Unknown page settings key: ${key}`);
+    return { key, ...defaults, updatedAt: new Date() } as PageSettings;
+  }
+
+  async upsertPageSettings(key: string, data: Omit<InsertPageSettings, 'key'>): Promise<PageSettings> {
+    const [row] = await db
+      .insert(pageSettings)
+      .values({ key, ...data, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: pageSettings.key,
+        set: { ...data, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
   }
 }
 
