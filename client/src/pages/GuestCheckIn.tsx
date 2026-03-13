@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { CheckCircle, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
@@ -27,6 +41,160 @@ const ACE_POC_OPTIONS = [
   "Ashley Morris",
   "Sanjay Parimi",
 ];
+
+const EMAIL_DOMAINS = ["@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com", "@icloud.com"];
+
+function EmailInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    onChange(val);
+
+    const atIdx = val.indexOf("@");
+    if (atIdx > 0) {
+      const afterAt = val.slice(atIdx + 1).toLowerCase();
+      const local = val.slice(0, atIdx);
+      const filtered = EMAIL_DOMAINS.filter((d) =>
+        d.slice(1).startsWith(afterAt)
+      ).map((d) => `${local}${d}`);
+      setSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else if (atIdx === -1 && val.length > 0) {
+      setSuggestions(EMAIL_DOMAINS.map((d) => `${val}${d}`));
+      setShowSuggestions(false);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleFocus = () => {
+    const atIdx = value.indexOf("@");
+    if (atIdx > 0) {
+      const afterAt = value.slice(atIdx + 1).toLowerCase();
+      const local = value.slice(0, atIdx);
+      const filtered = EMAIL_DOMAINS.filter((d) =>
+        d.slice(1).startsWith(afterAt)
+      ).map((d) => `${local}${d}`);
+      if (filtered.length > 0) {
+        setSuggestions(filtered);
+        setShowSuggestions(true);
+      }
+    }
+  };
+
+  const pickSuggestion = (s: string) => {
+    onChange(s);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        id="guest-email"
+        type="email"
+        value={value}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        placeholder="john@example.com"
+        required
+        autoComplete="off"
+        data-testid="input-guest-email"
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <ul className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-md overflow-hidden">
+          {suggestions.map((s) => (
+            <li
+              key={s}
+              className="px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickSuggestion(s);
+              }}
+            >
+              {s}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PocCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+          data-testid="combobox-ace-poc"
+        >
+          {value || "Search by name..."}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Type a name to filter..." />
+          <CommandList>
+            <CommandEmpty>No match found.</CommandEmpty>
+            <CommandGroup>
+              {ACE_POC_OPTIONS.map((poc) => (
+                <CommandItem
+                  key={poc}
+                  value={poc}
+                  onSelect={(selected) => {
+                    onChange(selected === value ? "" : selected);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === poc ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {poc}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function GuestCheckIn() {
   const [step, setStep] = useState<"form" | "success">("form");
@@ -46,7 +214,7 @@ export default function GuestCheckIn() {
   });
 
   const pageTitle = settings?.title ?? "Check-In";
-  const description = settings?.description ?? "Please fill in your details to check in";
+  const description = settings?.description ?? "Please fill in your details below";
   const successTitle = settings?.successTitle ?? "Welcome!";
   const successMessage = settings?.successMessage ?? "You have been successfully checked in";
   const eventName = settings?.eventName;
@@ -77,8 +245,6 @@ export default function GuestCheckIn() {
         toast({ title: "Error", description: err.error || "Failed to submit form.", variant: "destructive" });
         return;
       }
-
-      const leadData = await leadRes.json();
 
       const checkInRes = await fetch("/api/guest-register", {
         method: "POST",
@@ -116,40 +282,43 @@ export default function GuestCheckIn() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6 md:p-8">
-      <div className="w-full max-w-md space-y-4 sm:space-y-6">
-        <div className="flex flex-col items-center gap-2">
+    <div className="min-h-screen bg-muted/30 flex items-start justify-center py-6 px-4">
+      <div className="w-full max-w-sm space-y-5">
+        <div className="flex flex-col items-center gap-2 pt-2">
           <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 w-auto" data-testid="img-logo" />
+            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-20 w-auto" data-testid="img-logo" />
           </a>
           {settingsLoading ? (
             <Skeleton className="h-5 w-48" />
           ) : eventName ? (
-            <p className="text-base font-semibold text-center" data-testid="text-event-name">{eventName}</p>
+            <p className="text-sm font-semibold text-center text-foreground" data-testid="text-event-name">{eventName}</p>
           ) : null}
         </div>
 
         {step === "form" && (
-          <Card>
-            <CardHeader>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-4">
               {settingsLoading ? (
                 <>
-                  <Skeleton className="h-7 w-32 mb-2" />
-                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-6 w-28 mb-1" />
+                  <Skeleton className="h-4 w-56" />
                 </>
               ) : (
                 <>
-                  <CardTitle className="text-xl sm:text-2xl">{pageTitle}</CardTitle>
-                  <CardDescription className="text-sm sm:text-base">{description}</CardDescription>
+                  <CardTitle className="text-xl">{pageTitle}</CardTitle>
+                  <CardDescription className="text-sm">{description}</CardDescription>
                 </>
               )}
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title-select">Title</Label>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="title-select" className="text-sm font-medium">
+                    Title <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
+                  </Label>
                   <Select value={title} onValueChange={setTitle}>
-                    <SelectTrigger id="title-select" data-testid="select-title">
+                    <SelectTrigger id="title-select" className="h-10" data-testid="select-title">
                       <SelectValue placeholder="Select title" />
                     </SelectTrigger>
                     <SelectContent>
@@ -160,51 +329,46 @@ export default function GuestCheckIn() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="first-name">
-                    First Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="first-name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="John"
-                    required
-                    data-testid="input-first-name"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="first-name" className="text-sm font-medium">
+                      First Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="first-name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="John"
+                      required
+                      className="h-10"
+                      data-testid="input-first-name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="last-name" className="text-sm font-medium">
+                      Last Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="last-name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Doe"
+                      required
+                      className="h-10"
+                      data-testid="input-last-name"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="last-name">
-                    Last Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="last-name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Doe"
-                    required
-                    data-testid="input-last-name"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="guest-email">
+                <div className="space-y-1.5">
+                  <Label htmlFor="guest-email" className="text-sm font-medium">
                     Email <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    id="guest-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="john@example.com"
-                    required
-                    data-testid="input-guest-email"
-                  />
+                  <EmailInput value={email} onChange={setEmail} />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone-number">
+                <div className="space-y-1.5">
+                  <Label htmlFor="phone-number" className="text-sm font-medium">
                     Phone Number <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -214,40 +378,33 @@ export default function GuestCheckIn() {
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+1 (555) 000-0000"
                     required
+                    className="h-10"
                     data-testid="input-phone-number"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="company">
-                    Company <span className="text-muted-foreground text-xs">(Optional)</span>
+                <div className="space-y-1.5">
+                  <Label htmlFor="company" className="text-sm font-medium">
+                    Company <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
                   </Label>
                   <Input
                     id="company"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     placeholder="Acme Corp"
+                    className="h-10"
                     data-testid="input-company"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="ace-poc">
-                    Ace POC <span className="text-muted-foreground text-xs">(Optional)</span>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">
+                    Ace POC <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
                   </Label>
-                  <Select value={acePoc} onValueChange={setAcePoc}>
-                    <SelectTrigger id="ace-poc" data-testid="select-ace-poc">
-                      <SelectValue placeholder="Select contact" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACE_POC_OPTIONS.map((poc) => (
-                        <SelectItem key={poc} value={poc}>{poc}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <PocCombobox value={acePoc} onChange={setAcePoc} />
                 </div>
 
-                <Button type="submit" className="w-full" data-testid="button-submit-lead">
+                <Button type="submit" className="w-full h-11 text-base font-semibold mt-2" data-testid="button-submit-lead">
                   Check In
                 </Button>
               </form>
@@ -256,19 +413,19 @@ export default function GuestCheckIn() {
         )}
 
         {step === "success" && (
-          <Card className="text-center">
-            <CardHeader>
-              <div className="mx-auto mb-4">
-                <CheckCircle className="h-12 w-12 sm:h-16 sm:w-16 text-chart-2" />
+          <Card className="text-center shadow-sm">
+            <CardHeader className="pb-4">
+              <div className="mx-auto mb-3">
+                <CheckCircle className="h-14 w-14 text-green-500" />
               </div>
-              <CardTitle className="text-xl sm:text-2xl md:text-3xl">{successTitle}</CardTitle>
-              <CardDescription className="text-base sm:text-lg">{successMessage}</CardDescription>
+              <CardTitle className="text-2xl">{successTitle}</CardTitle>
+              <CardDescription className="text-base">{successMessage}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-lg sm:text-xl font-semibold mb-4" data-testid="text-welcome-name">
+              <p className="text-xl font-semibold mb-2" data-testid="text-welcome-name">
                 {customerName}
               </p>
-              <p className="text-sm sm:text-base text-muted-foreground">You're all set. Enjoy your visit!</p>
+              <p className="text-sm text-muted-foreground">You're all set. Enjoy your visit!</p>
             </CardContent>
           </Card>
         )}
