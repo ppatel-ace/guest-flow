@@ -64,3 +64,24 @@ export const insertFormFieldSchema = createInsertSchema(formFields).omit({
 
 export type InsertFormField = z.infer<typeof insertFormFieldSchema>;
 export type FormField = typeof formFields.$inferSelect;
+
+export const leads = pgTable("leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title"),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull(),
+  phoneNumber: text("phone_number").notNull(),
+  company: text("company"),
+  acePoc: text("ace_poc"),
+  submittedAt: timestamp("submitted_at").notNull().default(sql`now()`),
+  customerId: varchar("customer_id"),
+});
+
+export const insertLeadSchema = createInsertSchema(leads).omit({
+  id: true,
+  submittedAt: true,
+});
+
+export type InsertLead = z.infer<typeof insertLeadSchema>;
+export type Lead = typeof leads.$inferSelect;

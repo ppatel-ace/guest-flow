@@ -1,4 +1,4 @@
-import { customers, pageSettings, formFields, type Customer, type InsertCustomer, type PageSettings, type InsertPageSettings, type FormField, type InsertFormField } from "@shared/schema";
+import { customers, pageSettings, formFields, leads, type Customer, type InsertCustomer, type PageSettings, type InsertPageSettings, type FormField, type InsertFormField, type Lead, type InsertLead } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -57,6 +57,8 @@ export interface IStorage {
   updateFormField(id: string, data: Partial<InsertFormField>): Promise<FormField | undefined>;
   deleteFormField(id: string): Promise<boolean>;
   reorderFormFields(ids: string[]): Promise<void>;
+  getAllLeads(): Promise<Lead[]>;
+  createLead(data: InsertLead): Promise<Lead>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -289,6 +291,15 @@ export class DatabaseStorage implements IStorage {
     for (let i = 0; i < ids.length; i++) {
       await db.update(formFields).set({ sortOrder: i }).where(eq(formFields.id, ids[i]));
     }
+  }
+
+  async getAllLeads(): Promise<Lead[]> {
+    return await db.select().from(leads).orderBy(sql`${leads.submittedAt} DESC`);
+  }
+
+  async createLead(data: InsertLead): Promise<Lead> {
+    const [lead] = await db.insert(leads).values(data).returning();
+    return lead;
   }
 }
 

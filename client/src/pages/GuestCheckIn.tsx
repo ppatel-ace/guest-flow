@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -12,189 +11,108 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, Phone, User, Mail, ArrowLeft } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
-import type { PageSettings, FormField } from "@shared/schema";
+import type { PageSettings } from "@shared/schema";
+
+const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
+
+const ACE_POC_OPTIONS = [
+  "Jerry Parker",
+  "Larry Pomasan",
+  "Nish Patel",
+  "Craig Frost",
+  "Ashley Morris",
+  "Sanjay Parimi",
+];
 
 export default function GuestCheckIn() {
-  const [step, setStep] = useState<"lookup" | "details" | "success">("lookup");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
+  const [step, setStep] = useState<"form" | "success">("form");
   const [customerName, setCustomerName] = useState("");
-  const [checkInMethod, setCheckInMethod] = useState<"phone" | "email">("email");
-  const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const { toast } = useToast();
+
+  const [title, setTitle] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [company, setCompany] = useState("");
+  const [acePoc, setAcePoc] = useState("");
 
   const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
     queryKey: ["/api/page-settings/guest_checkin_page"],
   });
 
-  const { data: formFields = [] } = useQuery<FormField[]>({
-    queryKey: ["/api/form-fields"],
-  });
-
-  const title = settings?.title ?? "Check-In";
-  const description = settings?.description ?? "Enter your phone number or email address to check in";
+  const pageTitle = settings?.title ?? "Check-In";
+  const description = settings?.description ?? "Please fill in your details to check in";
   const successTitle = settings?.successTitle ?? "Welcome!";
   const successMessage = settings?.successMessage ?? "You have been successfully checked in";
   const eventName = settings?.eventName;
 
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const response = await fetch(`/api/check-in/phone`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-      if (response.ok) {
-        const customer = await response.json();
-        setCustomerName(customer.name);
-        setStep("success");
-        toast({ title: "Checked In Successfully!", description: `Welcome, ${customer.name}!` });
-      } else {
-        setStep("details");
-      }
-    } catch (error) {
-      console.error("Check-in failed:", error);
-      setStep("details");
-    }
-  };
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const response = await fetch(`/api/check-in/email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail }),
-      });
-      if (response.ok) {
-        const customer = await response.json();
-        setCustomerName(customer.name);
-        setStep("success");
-        toast({ title: "Checked In Successfully!", description: `Welcome, ${customer.name}!` });
-      } else {
-        setStep("details");
-      }
-    } catch (error) {
-      console.error("Check-in failed:", error);
-      setStep("details");
-    }
-  };
-
-  const handleDetailsSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate required custom fields
-    for (const field of formFields) {
-      if (field.required && !extraValues[field.id]?.trim()) {
-        toast({
-          title: "Required field missing",
-          description: `Please fill in "${field.label}".`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const metadata = formFields.length > 0 ? extraValues : undefined;
-
-      const response = await fetch("/api/guest-register", {
+      const leadRes = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
+          title: title || null,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           email: normalizedEmail,
-          phone: phone || undefined,
-          status: "checked-in",
-          ...(metadata ? { metadata } : {}),
+          phoneNumber: phoneNumber.trim(),
+          company: company.trim() || null,
+          acePoc: acePoc || null,
         }),
       });
-      if (response.ok) {
-        const customer = await response.json();
+
+      if (!leadRes.ok) {
+        const err = await leadRes.json();
+        toast({ title: "Error", description: err.error || "Failed to submit form.", variant: "destructive" });
+        return;
+      }
+
+      const leadData = await leadRes.json();
+
+      const checkInRes = await fetch("/api/guest-register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName,
+          email: normalizedEmail,
+          phone: phoneNumber.trim() || undefined,
+          status: "checked-in",
+        }),
+      });
+
+      if (checkInRes.ok) {
+        const customer = await checkInRes.json();
         setCustomerName(customer.name);
-        setStep("success");
-        toast({ title: "Registered & Checked In!", description: `Welcome, ${customer.name}!` });
       } else {
-        const error = await response.json();
-        toast({ title: "Error", description: error.error || "Failed to register. Please try again.", variant: "destructive" });
+        const checkInByEmail = await fetch("/api/check-in/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: normalizedEmail }),
+        });
+        if (checkInByEmail.ok) {
+          const customer = await checkInByEmail.json();
+          setCustomerName(customer.name);
+        } else {
+          setCustomerName(fullName);
+        }
       }
+
+      setStep("success");
     } catch (error) {
-      console.error("Failed to register and check in:", error);
-      toast({ title: "Error", description: "Failed to register. Please try again.", variant: "destructive" });
+      console.error("Submission failed:", error);
+      toast({ title: "Error", description: "Failed to submit. Please try again.", variant: "destructive" });
     }
-  };
-
-  const handleBack = () => {
-    setStep("lookup");
-    setName("");
-    setExtraValues({});
-  };
-
-  const renderCustomField = (field: FormField) => {
-    const value = extraValues[field.id] ?? "";
-    const setValue = (v: string) => setExtraValues((prev) => ({ ...prev, [field.id]: v }));
-
-    if (field.fieldType === "select") {
-      let options: string[] = [];
-      try {
-        options = field.options ? JSON.parse(field.options) : [];
-      } catch {
-        options = [];
-      }
-      return (
-        <div key={field.id} className="space-y-2" data-testid={`field-${field.id}`}>
-          <Label htmlFor={`custom-${field.id}`}>
-            {field.label}
-            {!field.required && (
-              <span className="text-muted-foreground text-xs ml-1">(Optional)</span>
-            )}
-          </Label>
-          <Select value={value} onValueChange={setValue}>
-            <SelectTrigger id={`custom-${field.id}`} data-testid={`select-custom-${field.id}`}>
-              <SelectValue placeholder={field.placeholder ?? `Select ${field.label}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {!field.required && (
-                <SelectItem value=" ">—</SelectItem>
-              )}
-              {options.map((opt) => (
-                <SelectItem key={opt} value={opt}>
-                  {opt}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    }
-
-    return (
-      <div key={field.id} className="space-y-2" data-testid={`field-${field.id}`}>
-        <Label htmlFor={`custom-${field.id}`}>
-          {field.label}
-          {!field.required && (
-            <span className="text-muted-foreground text-xs ml-1">(Optional)</span>
-          )}
-        </Label>
-        <Input
-          id={`custom-${field.id}`}
-          type={field.fieldType}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={field.placeholder ?? ""}
-          required={field.required}
-          data-testid={`input-custom-${field.id}`}
-        />
-      </div>
-    );
   };
 
   return (
@@ -211,7 +129,7 @@ export default function GuestCheckIn() {
           ) : null}
         </div>
 
-        {step === "lookup" && (
+        {step === "form" && (
           <Card>
             <CardHeader>
               {settingsLoading ? (
@@ -221,137 +139,115 @@ export default function GuestCheckIn() {
                 </>
               ) : (
                 <>
-                  <CardTitle className="text-xl sm:text-2xl">{title}</CardTitle>
+                  <CardTitle className="text-xl sm:text-2xl">{pageTitle}</CardTitle>
                   <CardDescription className="text-sm sm:text-base">{description}</CardDescription>
                 </>
               )}
             </CardHeader>
             <CardContent>
-              <Tabs
-                value={checkInMethod}
-                onValueChange={(v) => setCheckInMethod(v as "phone" | "email")}
-                data-testid="tabs-check-in-method"
-              >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="phone" data-testid="tab-phone">Phone</TabsTrigger>
-                  <TabsTrigger value="email" data-testid="tab-email">Email</TabsTrigger>
-                </TabsList>
-                <TabsContent value="phone">
-                  <form onSubmit={handlePhoneSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="phone"
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="+1 (555) 000-0000"
-                          className="pl-10"
-                          required
-                          data-testid="input-phone-check-in"
-                        />
-                      </div>
-                    </div>
-                    <Button type="submit" className="w-full" data-testid="button-submit-phone">Continue</Button>
-                  </form>
-                </TabsContent>
-                <TabsContent value="email">
-                  <form onSubmit={handleEmailSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="email-checkin">Email Address</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="email-checkin"
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="john@example.com"
-                          className="pl-10"
-                          required
-                          data-testid="input-email-check-in"
-                        />
-                      </div>
-                    </div>
-                    <Button type="submit" className="w-full" data-testid="button-submit-email">Continue</Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
-
-        {step === "details" && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2 mb-2">
-                <Button variant="ghost" size="icon" onClick={handleBack} type="button" data-testid="button-back">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <CardTitle className="text-xl sm:text-2xl">Guest Registration</CardTitle>
-              </div>
-              <CardDescription className="text-sm sm:text-base">
-                We couldn't find your information. Please provide your details to check in.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleDetailsSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="guest-name">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="guest-name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="John Doe"
-                      className="pl-10"
-                      required
-                      data-testid="input-guest-name"
-                    />
-                  </div>
+                  <Label htmlFor="title-select">Title</Label>
+                  <Select value={title} onValueChange={setTitle}>
+                    <SelectTrigger id="title-select" data-testid="select-title">
+                      <SelectValue placeholder="Select title" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TITLE_OPTIONS.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="guest-email">Email Address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="guest-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="john@example.com"
-                      className="pl-10"
-                      required
-                      data-testid="input-guest-email"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="guest-phone">
-                    Phone Number <span className="text-muted-foreground text-xs">(Optional)</span>
+                  <Label htmlFor="first-name">
+                    First Name <span className="text-destructive">*</span>
                   </Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="guest-phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+1 (555) 000-0000"
-                      className="pl-10"
-                      data-testid="input-guest-phone"
-                    />
-                  </div>
+                  <Input
+                    id="first-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="John"
+                    required
+                    data-testid="input-first-name"
+                  />
                 </div>
 
-                {formFields.map(renderCustomField)}
+                <div className="space-y-2">
+                  <Label htmlFor="last-name">
+                    Last Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="last-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Doe"
+                    required
+                    data-testid="input-last-name"
+                  />
+                </div>
 
-                <Button type="submit" className="w-full" data-testid="button-submit-details">
+                <div className="space-y-2">
+                  <Label htmlFor="guest-email">
+                    Email <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="guest-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="john@example.com"
+                    required
+                    data-testid="input-guest-email"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone-number">
+                    Phone Number <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="phone-number"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+1 (555) 000-0000"
+                    required
+                    data-testid="input-phone-number"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company">
+                    Company <span className="text-muted-foreground text-xs">(Optional)</span>
+                  </Label>
+                  <Input
+                    id="company"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder="Acme Corp"
+                    data-testid="input-company"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ace-poc">
+                    Ace POC <span className="text-muted-foreground text-xs">(Optional)</span>
+                  </Label>
+                  <Select value={acePoc} onValueChange={setAcePoc}>
+                    <SelectTrigger id="ace-poc" data-testid="select-ace-poc">
+                      <SelectValue placeholder="Select contact" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACE_POC_OPTIONS.map((poc) => (
+                        <SelectItem key={poc} value={poc}>{poc}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button type="submit" className="w-full" data-testid="button-submit-lead">
                   Check In
                 </Button>
               </form>

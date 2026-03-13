@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertFormFieldSchema } from "@shared/schema";
+import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
 
@@ -422,6 +422,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(settings);
     } catch (error) {
       res.status(500).json({ error: "Failed to update page settings" });
+    }
+  });
+
+  // Get all leads (protected)
+  app.get("/api/leads", requireAuth, async (req, res) => {
+    try {
+      const allLeads = await storage.getAllLeads();
+      res.json(allLeads);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch leads" });
+    }
+  });
+
+  // Create a lead (public - called from guest check-in form)
+  app.post("/api/leads", async (req, res) => {
+    try {
+      const data = insertLeadSchema.parse(req.body);
+      const lead = await storage.createLead(data);
+      res.status(201).json(lead);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid lead data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to save lead" });
     }
   });
 

@@ -66,7 +66,10 @@ Preferred communication style: Simple, everyday language.
 - Connection pooling with `@neondatabase/serverless` driver
 
 **Schema Design**
-- Single `customers` table with status enum ('pending', 'confirmed', 'checked-in')
+- `customers` table with status enum ('pending', 'confirmed', 'checked-in')
+- `leads` table for lead retrieval: title, firstName, lastName, email, phoneNumber, company, acePoc, submittedAt, customerId
+- `form_fields` table for dynamic custom fields on the check-in form
+- `page_settings` table for configuring public page content
 - UUID primary keys generated via PostgreSQL `gen_random_uuid()`
 - Unique QR codes generated server-side using `crypto.randomUUID()`
 - Timestamp tracking for invitation and check-in events

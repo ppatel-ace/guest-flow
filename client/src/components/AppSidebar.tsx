@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut, Globe } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut, Globe, Clipboard } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -43,6 +43,11 @@ const menuItems = [
     title: "Public Pages",
     url: "/public-pages",
     icon: Globe,
+  },
+  {
+    title: "Leads",
+    url: "/leads",
+    icon: Clipboard,
   },
   {
     title: "Setup",
