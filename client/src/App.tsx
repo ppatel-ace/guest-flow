@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -23,49 +23,9 @@ import PublicPages from "@/pages/PublicPages";
 import Leads from "@/pages/Leads";
 import NotFound from "@/pages/not-found";
 
-function MainRouter() {
-  return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/customers" component={Customers} />
-      <Route path="/check-in" component={CheckIn} />
-      <Route path="/invitations" component={Invitations} />
-      <Route path="/import" component={Import} />
-      <Route path="/public-pages" component={PublicPages} />
-      <Route path="/leads" component={Leads} />
-      <Route path="/setup" component={DatabaseSetup} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
+function AdminLayout() {
+  const { logout } = useAuth();
 
-function AppContent() {
-  const [location] = useLocation();
-  const normalizedLocation = location.toLowerCase();
-  
-  // Login page (public)
-  if (normalizedLocation === "/login") {
-    return <Login />;
-  }
-
-  // Standalone check-in page without sidebar (public)
-  if (normalizedLocation === "/scan") {
-    return <StandaloneCheckIn />;
-  }
-
-  // Guest check-in form without sidebar (public)
-  if (normalizedLocation === "/guest-check-in") {
-    return <GuestCheckIn />;
-  }
-
-  // Invitations/Import page without sidebar (public - allows CSV/Excel upload without login)
-  if (normalizedLocation === "/invitations" || normalizedLocation === "/import") {
-    return <div className="min-h-screen p-6">
-      {normalizedLocation === "/invitations" ? <Invitations /> : <Import />}
-    </div>;
-  }
-
-  // Main app with sidebar (protected)
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -77,9 +37,31 @@ function AppContent() {
         <div className="flex h-screen w-full">
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
-            <HeaderWithLogout />
+            <header className="flex items-center justify-between p-4 border-b">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => logout()}
+                  data-testid="button-logout-header"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+                <ThemeToggle />
+              </div>
+            </header>
             <main className="flex-1 overflow-auto p-6">
-              <MainRouter />
+              <Switch>
+                <Route path="/" component={Dashboard} />
+                <Route path="/customers" component={Customers} />
+                <Route path="/check-in" component={CheckIn} />
+                <Route path="/public-pages" component={PublicPages} />
+                <Route path="/leads" component={Leads} />
+                <Route path="/setup" component={DatabaseSetup} />
+                <Route component={NotFound} />
+              </Switch>
             </main>
           </div>
         </div>
@@ -88,33 +70,22 @@ function AppContent() {
   );
 }
 
-function HeaderWithLogout() {
-  const { logout } = useAuth();
-
-  return (
-    <header className="flex items-center justify-between p-4 border-b">
-      <SidebarTrigger data-testid="button-sidebar-toggle" />
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => logout()}
-          data-testid="button-logout-header"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </Button>
-        <ThemeToggle />
-      </div>
-    </header>
-  );
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AppContent />
+        <Switch>
+          <Route path="/login" component={Login} />
+          <Route path="/scan" component={StandaloneCheckIn} />
+          <Route path="/guest-check-in" component={GuestCheckIn} />
+          <Route path="/invitations">
+            <div className="min-h-screen p-6"><Invitations /></div>
+          </Route>
+          <Route path="/import">
+            <div className="min-h-screen p-6"><Import /></div>
+          </Route>
+          <Route component={AdminLayout} />
+        </Switch>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
