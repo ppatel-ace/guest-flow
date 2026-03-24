@@ -57,6 +57,8 @@ function AdminLayout() {
                 <Route path="/" component={Dashboard} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/check-in" component={CheckIn} />
+                <Route path="/invitations" component={Invitations} />
+                <Route path="/import" component={Import} />
                 <Route path="/public-pages" component={PublicPages} />
                 <Route path="/leads" component={Leads} />
                 <Route path="/setup" component={DatabaseSetup} />
@@ -78,12 +80,6 @@ function App() {
           <Route path="/login" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
-          <Route path="/invitations">
-            <div className="min-h-screen p-6"><Invitations /></div>
-          </Route>
-          <Route path="/import">
-            <div className="min-h-screen p-6"><Import /></div>
-          </Route>
           <Route component={AdminLayout} />
         </Switch>
         <Toaster />
