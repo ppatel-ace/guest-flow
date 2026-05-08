@@ -57,8 +57,19 @@ async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
   }
 }
 
-// Rate limiter for public submission endpoints (15 req / IP / minute)
-const publicSubmitLimiter = rateLimit({
+// Separate rate limiter instances so each endpoint independently caps at 15/min.
+// A single check-in hits both /api/leads and /api/guest-register, so a shared
+// instance would halve the effective budget. With separate instances, one IP
+// can complete up to 15 full check-ins per minute before hitting any limit.
+const leadsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please wait a moment and try again." },
+});
+
+const guestRegisterLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,
   standardHeaders: true,
@@ -495,7 +506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Guest registration (rate limited)
-  app.post("/api/guest-register", publicSubmitLimiter, async (req, res) => {
+  app.post("/api/guest-register", guestRegisterLimiter, async (req, res) => {
     try {
       const { metadata, ...rest } = req.body;
       const data = insertCustomerSchema.parse(rest);
@@ -515,7 +526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create a lead (public - called from guest check-in form)
-  app.post("/api/leads", publicSubmitLimiter, async (req, res) => {
+  app.post("/api/leads", leadsLimiter, async (req, res) => {
     try {
       // ── Bot protection checks (before any DB work) ──────────────────────────
 
@@ -530,9 +541,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Request blocked." });
       }
 
-      // 3. Timing token validation (skip in dev when FINGERPRINT_HMAC_SECRET not set)
+      // 3. Timing token validation — required when FINGERPRINT_HMAC_SECRET is set
       const timingToken = req.body._ft as string | undefined;
-      if (process.env.FINGERPRINT_HMAC_SECRET && timingToken) {
+      if (process.env.FINGERPRINT_HMAC_SECRET) {
+        if (!timingToken) {
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
         const check = validateTimingToken(timingToken);
         if (!check.ok) {
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });

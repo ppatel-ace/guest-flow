@@ -213,6 +213,7 @@ export default function GuestCheckIn() {
   const [acePoc, setAcePoc] = useState("");
 
   // Bot protection state
+  const [honeypot, setHoneypot] = useState<string>(""); // must stay "" for real users; bots auto-fill it
   const [timingToken, setTimingToken] = useState<string>("");
   const [captchaMode, setCaptchaMode] = useState<"invisible" | "visible" | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string>("");
@@ -270,7 +271,7 @@ export default function GuestCheckIn() {
           company: company.trim() || null,
           acePoc: acePoc || null,
           // Bot-protection fields (stripped by server before DB insert)
-          _hp: "",                                   // honeypot — intentionally empty for real users
+          _hp: honeypot,                             // honeypot — real users leave this empty; bots fill it
           _ft: timingToken,                          // fingerprint timing token
           "cf-turnstile-response": turnstileToken,  // Cloudflare Turnstile token
         }),
@@ -354,7 +355,7 @@ export default function GuestCheckIn() {
                 {/* Honeypot field — invisible to real users, bots fill it automatically */}
                 <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden", opacity: 0 }}>
                   <label htmlFor="_hp">Leave this blank</label>
-                  <input id="_hp" name="_hp" type="text" tabIndex={-1} autoComplete="off" />
+                  <input id="_hp" name="_hp" type="text" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
                 </div>
 
                 <div className="space-y-1.5">
