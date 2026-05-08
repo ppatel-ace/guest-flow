@@ -696,9 +696,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
       }
-      // Note: Turnstile is NOT re-verified here. Turnstile tokens are single-use;
-      // the token was already consumed by POST /api/leads which runs first.
-      // Honeypot, UA, and timing together prevent direct-call bypass.
+      // Note: Turnstile is NOT verified on this legacy path. The primary check-in
+      // flow uses /api/guest-checkin which verifies Turnstile exactly once atomically.
+      // Honeypot, UA, and timing together prevent direct-call bypass here.
       // ─────────────────────────────────────────────────────────────────────────
 
       const { metadata, _hp, _ft, "cf-turnstile-response": _cftr, ...rest } = req.body;
