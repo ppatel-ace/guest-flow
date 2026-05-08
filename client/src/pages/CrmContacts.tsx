@@ -235,7 +235,8 @@ export default function CrmContacts() {
                   <SortableHead col="company">Company</SortableHead>
                   <SortableHead col="acePoc">Ace POC</SortableHead>
                   <SortableHead col="visits" className="text-center">Visits</SortableHead>
-                  <SortableHead col="lastVisit">Last Event</SortableHead>
+                  <TableHead>Last Event</TableHead>
+                  <SortableHead col="lastVisit">Last Visit</SortableHead>
                   <TableHead className="w-8"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -264,6 +265,9 @@ export default function CrmContacts() {
                       <Badge variant="outline">{contact.visitCount}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{contact.lastEventName ?? "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {contact.lastVisitedAt ? new Date(contact.lastVisitedAt).toLocaleDateString() : "—"}
+                    </TableCell>
                     <TableCell>
                       <Link href={`/crm/contacts/${contact.id}`}>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
