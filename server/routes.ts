@@ -109,20 +109,7 @@ function getBotStats() {
   };
 }
 
-// Separate rate limiter instances so each endpoint independently caps at 15/min.
-// A single check-in hits both /api/leads and /api/guest-register, so a shared
-// instance would halve the effective budget. With separate instances, one IP
-// can complete up to 15 full check-ins per minute before hitting any limit.
-const leadsLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    recordBlock("rateLimit", req.ip);
-    res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
-  },
-});
+// Rate limiters for the legacy guest-register endpoint and the atomic guest-checkin endpoint.
 
 const guestRegisterLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -731,112 +718,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create a lead (public - called from guest check-in form)
-  app.post("/api/leads", leadsLimiter, async (req, res) => {
-    try {
-      // ── Bot protection checks (before any DB work) ──────────────────────────
-
-      // 1. Honeypot: if the hidden field has a value, the submitter is a bot
-      //    Return a fake success so the bot doesn't know it was caught
-      if (req.body._hp) {
-        recordBlock("honeypot", req.ip);
-        return res.status(201).json({ id: "ok" });
-      }
-
-      // 2. User-Agent headless browser detection
-      if (isHeadlessUA(req.headers["user-agent"])) {
-        recordBlock("ua", req.ip);
-        return res.status(403).json({ error: "Request blocked." });
-      }
-
-      // 3. Timing token validation — required when FINGERPRINT_HMAC_SECRET is set
-      const timingToken = req.body._ft as string | undefined;
-      if (process.env.FINGERPRINT_HMAC_SECRET) {
-        if (!timingToken) {
-          recordBlock("timing", req.ip);
-          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
-        }
-        const check = validateTimingToken(timingToken);
-        if (!check.ok) {
-          recordBlock("timing", req.ip);
-          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
-        }
-      }
-
-      // 4. Cloudflare Turnstile verification
-      //    Both keys must be present for enforcement — partial config is treated as inactive
-      const turnstileToken = req.body["cf-turnstile-response"] as string | undefined;
-      if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY) {
-        if (!turnstileToken) {
-          recordBlock("turnstile", req.ip);
-          return res.status(403).json({ error: "CAPTCHA verification required." });
-        }
-        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "";
-        const valid = await verifyTurnstile(turnstileToken, ip);
-        if (!valid) {
-          recordBlock("turnstile", req.ip);
-          return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
-        }
-      }
-
-      const data = insertLeadSchema.parse(req.body);
-      // Auto-attach the current event name from page settings
-      let eventSettings: import("@shared/schema").PageSettings | null = null;
-      try {
-        eventSettings = await storage.getPageSettings("guest_checkin_page");
-        if (!data.eventName && eventSettings?.eventName) {
-          data.eventName = eventSettings.eventName;
-        }
-      } catch {
-        // proceed without event settings
-      }
-      const lead = await storage.createLead(data);
-
-      // ── CRM upsert flow (synchronous; errors are logged but never break the response) ──
-      try {
-        // 1. Check if contact already exists by email
-        const existingContact = await storage.findContactByEmail(data.email);
-
-        // 2. Only create/find company for NEW contacts — prevents orphan company records
-        let companyId: string | null = null;
-        if (!existingContact && data.company && data.company.trim()) {
-          const company = await storage.upsertCompanyByName(data.company.trim());
-          companyId = company.id;
-        }
-
-        // 3. Upsert contact (creates with companyId, or updates profile fields for existing)
-        const contact = await storage.upsertContactByEmail({
-          companyId,
-          title: data.title ?? null,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          email: data.email,
-          phone: data.phoneNumber,
-          acePoc: data.acePoc ?? null,
-        });
-
-        // 4. Create visit using the contact's actual companyId (preserves historical association)
-        await storage.createVisit({
-          contactId: contact.id,
-          companyId: contact.companyId ?? null,
-          eventName: data.eventName ?? eventSettings?.eventName ?? null,
-          eventDate: eventSettings?.eventDate ?? null,
-          eventLocation: eventSettings?.eventLocation ?? null,
-          acePoc: data.acePoc ?? null,
-          customFields: null,
-        });
-      } catch (crmErr) {
-        console.error("CRM upsert error (non-fatal):", crmErr);
-      }
-
-      res.status(201).json(lead);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid lead data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to save lead" });
-    }
-  });
 
   // ── CRM routes (protected) ────────────────────────────────────────────────
 
