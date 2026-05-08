@@ -9,6 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -95,6 +102,7 @@ export default function CrmCompanyDetail() {
   const [visitSearch, setVisitSearch] = useState("");
   const [visitDateFrom, setVisitDateFrom] = useState("");
   const [visitDateTo, setVisitDateTo] = useState("");
+  const [visitPoc, setVisitPoc] = useState("");
 
   if (isLoading) {
     return (
@@ -122,21 +130,25 @@ export default function CrmCompanyDetail() {
     c.visits.map(v => ({ ...v, contactName: `${c.firstName} ${c.lastName}`, contactId: c.id }))
   ).sort((a, b) => new Date(b.visitedAt).getTime() - new Date(a.visitedAt).getTime());
 
+  const pocOptions = Array.from(new Set(allVisits.map(v => v.acePoc).filter((p): p is string => !!p))).sort();
+
   const filteredVisits = allVisits.filter(v => {
     const search = visitSearch.trim().toLowerCase();
     if (search && !(v.eventName ?? "").toLowerCase().includes(search) && !v.contactName.toLowerCase().includes(search)) return false;
     const visitLocalDate = new Date(v.visitedAt).toLocaleDateString("en-CA");
     if (visitDateFrom && visitLocalDate < visitDateFrom) return false;
     if (visitDateTo && visitLocalDate > visitDateTo) return false;
+    if (visitPoc && (v.acePoc ?? "") !== visitPoc) return false;
     return true;
   });
 
-  const hasVisitFilter = visitSearch.trim() !== "" || visitDateFrom !== "" || visitDateTo !== "";
+  const hasVisitFilter = visitSearch.trim() !== "" || visitDateFrom !== "" || visitDateTo !== "" || visitPoc !== "";
 
   function clearVisitFilters() {
     setVisitSearch("");
     setVisitDateFrom("");
     setVisitDateTo("");
+    setVisitPoc("");
   }
 
   return (
@@ -265,6 +277,22 @@ export default function CrmCompanyDetail() {
                       data-testid="input-visit-date-to"
                     />
                   </div>
+                  {pocOptions.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Ace POC</Label>
+                      <Select value={visitPoc || "__all__"} onValueChange={v => setVisitPoc(v === "__all__" ? "" : v)}>
+                        <SelectTrigger className="h-8 text-sm w-40" data-testid="select-visit-poc">
+                          <SelectValue placeholder="All POCs" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All POCs</SelectItem>
+                          {pocOptions.map(poc => (
+                            <SelectItem key={poc} value={poc}>{poc}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {hasVisitFilter && (
                     <Button variant="ghost" size="sm" onClick={clearVisitFilters} className="h-8 text-xs" data-testid="button-clear-visit-filters">
                       <X className="h-3.5 w-3.5 mr-1" />
