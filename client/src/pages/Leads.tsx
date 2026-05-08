@@ -20,10 +20,6 @@ function formatDate(date: string | Date) {
   return new Date(date).toLocaleString();
 }
 
-function formatDateForExport(date: string | Date) {
-  return new Date(date).toLocaleString();
-}
-
 function leadsToRows(leads: Lead[]) {
   return leads.map((lead) => ({
     Title: lead.title ?? "",
@@ -34,7 +30,7 @@ function leadsToRows(leads: Lead[]) {
     Company: lead.company ?? "",
     "Ace POC": lead.acePoc ?? "",
     "Event Name": lead.eventName ?? "",
-    "Submitted At": formatDateForExport(lead.submittedAt),
+    "Submitted At": formatDate(lead.submittedAt),
   }));
 }
 
@@ -88,7 +84,7 @@ export default function Leads() {
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              disabled={leads.length === 0}
+              disabled={filtered.length === 0}
               data-testid="button-export"
             >
               <Download className="mr-2 h-4 w-4" />
