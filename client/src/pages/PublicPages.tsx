@@ -818,8 +818,6 @@ function GuestCheckInEditor() {
   );
 }
 
-const GENERATED_HMAC_SECRET = "76eef017cfb02fa7a14ddc176969d25e0761e307d31ceb3152502bc312fd962e";
-
 function SecurityStatusPanel() {
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -934,17 +932,18 @@ function SecurityStatusPanel() {
           <div className="space-y-2">
             <p className="font-medium">Step 1 — Add the timing-token secret <span className="text-muted-foreground font-normal">(required)</span></p>
             <p className="text-xs text-muted-foreground">
-              A unique value has been pre-generated. Copy it and add it to Replit Secrets as{" "}
+              Generate a random secret string and add it to Replit Secrets as{" "}
               <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">FINGERPRINT_HMAC_SECRET</code>.
+              Run the command below in a terminal to generate a strong value:
             </p>
-            <div className="flex items-center gap-2 p-2 rounded bg-muted font-mono text-xs break-all">
-              <span className="flex-1">{GENERATED_HMAC_SECRET}</span>
+            <div className="flex items-center gap-2 p-2 rounded bg-muted font-mono text-xs">
+              <span className="flex-1">openssl rand -hex 32</span>
               <Button
                 size="icon"
                 variant="ghost"
                 className="h-6 w-6 shrink-0"
-                onClick={() => copyToClipboard(GENERATED_HMAC_SECRET, "hmac")}
-                data-testid="button-copy-hmac-secret"
+                onClick={() => copyToClipboard("openssl rand -hex 32", "hmac")}
+                data-testid="button-copy-hmac-command"
               >
                 {copied === "hmac" ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
               </Button>

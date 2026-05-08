@@ -47,6 +47,7 @@ expertMode = true
 
 [userenv.shared]
 DATABASE_URL = "postgresql://postgres.pagdiccadattytahnxfj:uvZZT7gEBhvr6MA2@aws-1-us-east-2.pooler.supabase.com:6543/postgres"
+FINGERPRINT_HMAC_SECRET = "76eef017cfb02fa7a14ddc176969d25e0761e307d31ceb3152502bc312fd962e"
 
 [postMerge]
 path = "scripts/post-merge.sh"
