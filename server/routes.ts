@@ -550,7 +550,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       // 4. Cloudflare Turnstile — verified exactly once per submission
-      if (process.env.TURNSTILE_SECRET_KEY) {
+      //    Both keys must be present for enforcement (site key drives the widget;
+      //    secret key drives server verification — partial config is treated as inactive)
+      if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY) {
         if (!cfToken) {
           return res.status(403).json({ error: "CAPTCHA verification required." });
         }
@@ -681,8 +683,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 4. Cloudflare Turnstile verification
+      //    Both keys must be present for enforcement — partial config is treated as inactive
       const turnstileToken = req.body["cf-turnstile-response"] as string | undefined;
-      if (process.env.TURNSTILE_SECRET_KEY) {
+      if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY) {
         if (!turnstileToken) {
           return res.status(403).json({ error: "CAPTCHA verification required." });
         }
