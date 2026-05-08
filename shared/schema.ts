@@ -130,6 +130,7 @@ export const visits = pgTable("visits", {
   eventName: text("event_name"),
   eventDate: text("event_date"),
   eventLocation: text("event_location"),
+  acePoc: text("ace_poc"),
   visitedAt: timestamp("visited_at").notNull().default(sql`now()`),
   customFields: text("custom_fields"),
 });

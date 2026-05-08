@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { Building2, User, Calendar, Download, ArrowLeft, Trophy } from "lucide-react";
+import { Building2, User, Download, ArrowLeft, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,42 +13,58 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import * as XLSX from "xlsx";
 import type { CompanyDetail } from "../../server/storage";
 
-function exportCSV(company: CompanyDetail) {
-  const headers = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Event Name", "Event Date", "Event Location", "Visit Date"];
-  const rows: string[][] = [];
+const EXPORT_HEADERS = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Event Name", "Event Date", "Event Location", "Visit Date"];
+
+function buildRows(company: CompanyDetail) {
+  const rows: Record<string, string>[] = [];
   for (const contact of company.contacts) {
     if (contact.visits.length === 0) {
-      rows.push([
-        contact.title ?? "",
-        contact.firstName,
-        contact.lastName,
-        contact.email,
-        contact.phone ?? "",
-        company.name,
-        contact.acePoc ?? "",
-        "", "", "", "",
-      ]);
+      rows.push({
+        "Title": contact.title ?? "",
+        "First Name": contact.firstName,
+        "Last Name": contact.lastName,
+        "Email": contact.email,
+        "Phone": contact.phone ?? "",
+        "Company": company.name,
+        "Ace POC": contact.acePoc ?? "",
+        "Event Name": "",
+        "Event Date": "",
+        "Event Location": "",
+        "Visit Date": "",
+      });
     } else {
       for (const visit of contact.visits) {
-        rows.push([
-          contact.title ?? "",
-          contact.firstName,
-          contact.lastName,
-          contact.email,
-          contact.phone ?? "",
-          company.name,
-          contact.acePoc ?? "",
-          visit.eventName ?? "",
-          visit.eventDate ?? "",
-          visit.eventLocation ?? "",
-          new Date(visit.visitedAt).toLocaleDateString(),
-        ]);
+        rows.push({
+          "Title": contact.title ?? "",
+          "First Name": contact.firstName,
+          "Last Name": contact.lastName,
+          "Email": contact.email,
+          "Phone": contact.phone ?? "",
+          "Company": company.name,
+          "Ace POC": visit.acePoc ?? "",
+          "Event Name": visit.eventName ?? "",
+          "Event Date": visit.eventDate ?? "",
+          "Event Location": visit.eventLocation ?? "",
+          "Visit Date": new Date(visit.visitedAt).toLocaleDateString(),
+        });
       }
     }
   }
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  return rows;
+}
+
+function exportCSV(company: CompanyDetail) {
+  const rows = buildRows(company);
+  const csv = [EXPORT_HEADERS, ...rows.map(r => EXPORT_HEADERS.map(h => `"${String(r[h] ?? "").replace(/"/g, '""')}"`))].map(r => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -56,6 +72,14 @@ function exportCSV(company: CompanyDetail) {
   a.download = `${company.name.replace(/[^a-z0-9]/gi, "_")}_contacts.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportExcel(company: CompanyDetail) {
+  const rows = buildRows(company);
+  const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_HEADERS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Contacts");
+  XLSX.writeFile(wb, `${company.name.replace(/[^a-z0-9]/gi, "_")}_contacts.xlsx`);
 }
 
 export default function CrmCompanyDetail() {
@@ -108,15 +132,18 @@ export default function CrmCompanyDetail() {
             {company.contacts.length} {company.contacts.length === 1 ? "contact" : "contacts"} · {company.totalVisits} {company.totalVisits === 1 ? "visit" : "visits"}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportCSV(company)}
-          data-testid="button-export-company"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="button-export-company">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => exportCSV(company)}>Export as CSV</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportExcel(company)}>Export as Excel</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -138,7 +165,6 @@ export default function CrmCompanyDetail() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Ace POC</TableHead>
                       <TableHead className="text-center">Visits</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -153,7 +179,6 @@ export default function CrmCompanyDetail() {
                           {contact.phone && <p className="text-xs text-muted-foreground ml-5">{contact.phone}</p>}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{contact.email}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{contact.acePoc ?? "—"}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant="outline">{contact.visits.length}</Badge>
                         </TableCell>
@@ -182,6 +207,7 @@ export default function CrmCompanyDetail() {
                     <TableRow>
                       <TableHead>Contact</TableHead>
                       <TableHead>Event</TableHead>
+                      <TableHead>Ace POC</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Location</TableHead>
                     </TableRow>
@@ -195,6 +221,7 @@ export default function CrmCompanyDetail() {
                           </Link>
                         </TableCell>
                         <TableCell className="text-sm font-medium">{visit.eventName ?? "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{visit.acePoc ?? "—"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {visit.eventDate ?? new Date(visit.visitedAt).toLocaleDateString()}
                         </TableCell>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { StatsCard } from "@/components/StatsCard";
 import { CustomerTable, Customer } from "@/components/CustomerTable";
 import { Users, CheckCircle, Mail, Clock, Download } from "lucide-react";
@@ -10,9 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useQuery } from "@tanstack/react-query";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import type { Customer as CustomerType } from "@shared/schema";
+import type { Customer as CustomerType, Lead } from "@shared/schema";
 import * as XLSX from "xlsx";
 
 interface MonthlyCheckIn {
@@ -20,37 +19,50 @@ interface MonthlyCheckIn {
   count: number;
 }
 
-function exportCustomers(customers: CustomerType[], format: "csv" | "excel") {
-  const rows = customers.map(c => ({
-    Name: c.name,
-    Email: c.email,
-    Phone: c.phone ?? "",
-    Status: c.status,
-    "Invited At": c.invitedAt ? new Date(c.invitedAt).toLocaleString() : "",
-    "Checked In At": c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "",
-  }));
+const EXPORT_HEADERS = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Event Name", "Submitted At"];
 
-  if (format === "csv") {
-    const headers = Object.keys(rows[0] ?? {});
-    const csv = [headers, ...rows.map(r => headers.map(h => `"${String((r as any)[h]).replace(/"/g, '""')}"`))].map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "customers.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  } else {
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Customers");
-    XLSX.writeFile(wb, "customers.xlsx");
-  }
+function leadsToRows(leads: Lead[]) {
+  return leads.map(l => ({
+    "Title": l.title ?? "",
+    "First Name": l.firstName,
+    "Last Name": l.lastName,
+    "Email": l.email,
+    "Phone": l.phoneNumber,
+    "Company": l.company ?? "",
+    "Ace POC": l.acePoc ?? "",
+    "Event Name": l.eventName ?? "",
+    "Submitted At": l.submittedAt ? new Date(l.submittedAt).toLocaleString() : "",
+  }));
+}
+
+function exportLeadsCSV(leads: Lead[]) {
+  const rows = leadsToRows(leads);
+  const csv = [EXPORT_HEADERS, ...rows.map(r => EXPORT_HEADERS.map(h => `"${String((r as any)[h]).replace(/"/g, '""')}"`))]
+    .map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "leads_export.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportLeadsExcel(leads: Lead[]) {
+  const rows = leadsToRows(leads);
+  const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_HEADERS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Leads");
+  XLSX.writeFile(wb, "leads_export.xlsx");
 }
 
 export default function Dashboard() {
   const { data: customers = [] } = useQuery<CustomerType[]>({
     queryKey: ["/api/customers"],
+  });
+
+  const { data: leads = [] } = useQuery<Lead[]>({
+    queryKey: ["/api/leads"],
   });
 
   const { data: monthlyStats = [] } = useQuery<MonthlyCheckIn[]>({
@@ -107,16 +119,16 @@ export default function Dashboard() {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={customers.length === 0} data-testid="button-export-dashboard">
+            <Button variant="outline" size="sm" disabled={leads.length === 0} data-testid="button-export-dashboard">
               <Download className="h-4 w-4 mr-2" />
-              Export
+              Export Leads
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => exportCustomers(customers, "csv")} data-testid="menu-export-csv">
+            <DropdownMenuItem onClick={() => exportLeadsCSV(leads)} data-testid="menu-export-csv">
               Export as CSV
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => exportCustomers(customers, "excel")} data-testid="menu-export-excel">
+            <DropdownMenuItem onClick={() => exportLeadsExcel(leads)} data-testid="menu-export-excel">
               Export as Excel
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -2,9 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { User, Building2, Mail, Phone, Calendar, ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -13,36 +18,45 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import * as XLSX from "xlsx";
 import type { ContactDetail } from "../../server/storage";
 
-function exportCSV(contact: ContactDetail) {
-  const headers = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Event Name", "Event Date", "Event Location", "Visit Date"];
-  const rows = contact.visits.length > 0
-    ? contact.visits.map(v => [
-        contact.title ?? "",
-        contact.firstName,
-        contact.lastName,
-        contact.email,
-        contact.phone ?? "",
-        contact.companyName ?? "",
-        contact.acePoc ?? "",
-        v.eventName ?? "",
-        v.eventDate ?? "",
-        v.eventLocation ?? "",
-        new Date(v.visitedAt).toLocaleDateString(),
-      ])
-    : [[
-        contact.title ?? "",
-        contact.firstName,
-        contact.lastName,
-        contact.email,
-        contact.phone ?? "",
-        contact.companyName ?? "",
-        contact.acePoc ?? "",
-        "", "", "", "",
-      ]];
+const EXPORT_HEADERS = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Event Name", "Event Date", "Event Location", "Visit Date"];
 
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+function buildRows(contact: ContactDetail) {
+  if (contact.visits.length === 0) {
+    return [{
+      "Title": contact.title ?? "",
+      "First Name": contact.firstName,
+      "Last Name": contact.lastName,
+      "Email": contact.email,
+      "Phone": contact.phone ?? "",
+      "Company": contact.companyName ?? "",
+      "Ace POC": contact.acePoc ?? "",
+      "Event Name": "",
+      "Event Date": "",
+      "Event Location": "",
+      "Visit Date": "",
+    }];
+  }
+  return contact.visits.map(v => ({
+    "Title": contact.title ?? "",
+    "First Name": contact.firstName,
+    "Last Name": contact.lastName,
+    "Email": contact.email,
+    "Phone": contact.phone ?? "",
+    "Company": contact.companyName ?? "",
+    "Ace POC": v.acePoc ?? "",
+    "Event Name": v.eventName ?? "",
+    "Event Date": v.eventDate ?? "",
+    "Event Location": v.eventLocation ?? "",
+    "Visit Date": new Date(v.visitedAt).toLocaleDateString(),
+  }));
+}
+
+function exportCSV(contact: ContactDetail) {
+  const rows = buildRows(contact);
+  const csv = [EXPORT_HEADERS, ...rows.map(r => EXPORT_HEADERS.map(h => `"${String(r[h] ?? "").replace(/"/g, '""')}"`))].map(r => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -50,6 +64,14 @@ function exportCSV(contact: ContactDetail) {
   a.download = `${contact.firstName}_${contact.lastName}_visits.csv`.replace(/\s+/g, "_");
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportExcel(contact: ContactDetail) {
+  const rows = buildRows(contact);
+  const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_HEADERS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Visits");
+  XLSX.writeFile(wb, `${contact.firstName}_${contact.lastName}_visits.xlsx`.replace(/\s+/g, "_"));
 }
 
 export default function CrmContactDetail() {
@@ -100,15 +122,18 @@ export default function CrmContactDetail() {
             {contact.visits.length} {contact.visits.length === 1 ? "visit" : "visits"} recorded
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportCSV(contact)}
-          data-testid="button-export-contact"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="button-export-contact">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => exportCSV(contact)}>Export as CSV</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportExcel(contact)}>Export as Excel</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -140,12 +165,6 @@ export default function CrmContactDetail() {
                 )}
               </div>
             )}
-            {contact.acePoc && (
-              <div className="pt-2 border-t">
-                <p className="text-xs text-muted-foreground mb-1">Ace POC</p>
-                <p className="text-sm font-medium">{contact.acePoc}</p>
-              </div>
-            )}
             <div className="pt-2 border-t">
               <p className="text-xs text-muted-foreground mb-1">First seen</p>
               <p className="text-sm">{new Date(contact.createdAt).toLocaleDateString()}</p>
@@ -173,6 +192,7 @@ export default function CrmContactDetail() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Event</TableHead>
+                      <TableHead>Ace POC</TableHead>
                       <TableHead>Event Date</TableHead>
                       <TableHead>Location</TableHead>
                       <TableHead>Checked In</TableHead>
@@ -182,6 +202,7 @@ export default function CrmContactDetail() {
                     {contact.visits.map(visit => (
                       <TableRow key={visit.id} data-testid={`row-visit-${visit.id}`}>
                         <TableCell className="font-medium">{visit.eventName ?? "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{visit.acePoc ?? "—"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{visit.eventDate ?? "—"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{visit.eventLocation ?? "—"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">

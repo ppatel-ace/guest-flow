@@ -457,35 +457,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const lead = await storage.createLead(data);
 
-      // ── CRM upsert flow (fire-and-forget, never block the response) ──
-      (async () => {
-        try {
-          let companyId: string | undefined;
-          if (data.company && data.company.trim()) {
-            const company = await storage.upsertCompanyByName(data.company.trim());
-            companyId = company.id;
-          }
-          const contact = await storage.upsertContactByEmail({
-            companyId: companyId ?? null,
-            title: data.title ?? null,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            email: data.email,
-            phone: data.phoneNumber,
-            acePoc: data.acePoc ?? null,
-          });
-          await storage.createVisit({
-            contactId: contact.id,
-            companyId: companyId ?? null,
-            eventName: data.eventName ?? eventSettings?.eventName ?? null,
-            eventDate: eventSettings?.eventDate ?? null,
-            eventLocation: eventSettings?.eventLocation ?? null,
-            customFields: null,
-          });
-        } catch (crmErr) {
-          console.error("CRM upsert error (non-fatal):", crmErr);
+      // ── CRM upsert flow (synchronous; errors are logged but never break the response) ──
+      try {
+        // 1. Find or create company by name
+        let newCompanyId: string | undefined;
+        if (data.company && data.company.trim()) {
+          const company = await storage.upsertCompanyByName(data.company.trim());
+          newCompanyId = company.id;
         }
-      })();
+
+        // 2. Upsert contact — returns existing contact (with its original companyId) or new one
+        const contact = await storage.upsertContactByEmail({
+          companyId: newCompanyId ?? null,
+          title: data.title ?? null,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phone: data.phoneNumber,
+          acePoc: data.acePoc ?? null,
+        });
+
+        // 3. Create visit using the contact's resolved companyId (preserves existing association)
+        await storage.createVisit({
+          contactId: contact.id,
+          companyId: contact.companyId ?? null,
+          eventName: data.eventName ?? eventSettings?.eventName ?? null,
+          eventDate: eventSettings?.eventDate ?? null,
+          eventLocation: eventSettings?.eventLocation ?? null,
+          acePoc: data.acePoc ?? null,
+          customFields: null,
+        });
+      } catch (crmErr) {
+        console.error("CRM upsert error (non-fatal):", crmErr);
+      }
 
       res.status(201).json(lead);
     } catch (error) {

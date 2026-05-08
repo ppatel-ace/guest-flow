@@ -53,8 +53,8 @@ export interface VisitDetail {
   eventName: string | null;
   eventDate: string | null;
   eventLocation: string | null;
-  visitedAt: Date;
   acePoc: string | null;
+  visitedAt: Date;
 }
 
 export interface ContactDetail {
@@ -383,15 +383,18 @@ export class DatabaseStorage implements IStorage {
       .where(ilike(contacts.email, normalizedEmail));
 
     if (existing) {
-      // Update mutable fields but keep original company association unless new one provided
+      // Update mutable profile fields; NEVER reassign companyId if contact already has one
       const updateData: Partial<InsertContact> = {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone || existing.phone,
-        acePoc: data.acePoc || existing.acePoc,
         title: data.title || existing.title,
+        // acePoc is NOT updated — it's snapshotted per-visit in the visits table
       };
-      if (data.companyId) updateData.companyId = data.companyId;
+      // Only assign company if the contact has none yet
+      if (!existing.companyId && data.companyId) {
+        updateData.companyId = data.companyId;
+      }
       const [updated] = await db
         .update(contacts)
         .set(updateData)
@@ -458,18 +461,17 @@ export class DatabaseStorage implements IStorage {
             eventName: v.eventName,
             eventDate: v.eventDate,
             eventLocation: v.eventLocation,
+            acePoc: v.acePoc,
             visitedAt: v.visitedAt,
-            acePoc: c.acePoc,
           })),
         };
       })
     );
 
-    // Ace POC frequency across all visits for this company
+    // Ace POC frequency: use per-visit snapshot from visits.ace_poc
     const allVisits = await db
-      .select({ acePoc: contacts.acePoc })
+      .select({ acePoc: visits.acePoc })
       .from(visits)
-      .innerJoin(contacts, eq(contacts.id, visits.contactId))
       .where(eq(visits.companyId, id));
 
     const pocMap = new Map<string, number>();
@@ -545,8 +547,8 @@ export class DatabaseStorage implements IStorage {
         eventName: v.eventName,
         eventDate: v.eventDate,
         eventLocation: v.eventLocation,
+        acePoc: v.acePoc,
         visitedAt: v.visitedAt,
-        acePoc: contact.acePoc,
       })),
     };
   }
