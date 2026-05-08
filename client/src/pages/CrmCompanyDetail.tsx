@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { Building2, User, Download, ArrowLeft, Trophy } from "lucide-react";
+import { Building2, User, Download, ArrowLeft, Trophy, Search, X } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -89,6 +92,10 @@ export default function CrmCompanyDetail() {
     queryKey: ["/api/crm/companies", params.id],
   });
 
+  const [visitSearch, setVisitSearch] = useState("");
+  const [visitDateFrom, setVisitDateFrom] = useState("");
+  const [visitDateTo, setVisitDateTo] = useState("");
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -111,9 +118,26 @@ export default function CrmCompanyDetail() {
     );
   }
 
-  const allVisits = company.contacts.flatMap(c =>
+  const allVisits = (company?.contacts ?? []).flatMap(c =>
     c.visits.map(v => ({ ...v, contactName: `${c.firstName} ${c.lastName}`, contactId: c.id }))
   ).sort((a, b) => new Date(b.visitedAt).getTime() - new Date(a.visitedAt).getTime());
+
+  const filteredVisits = allVisits.filter(v => {
+    const search = visitSearch.trim().toLowerCase();
+    if (search && !(v.eventName ?? "").toLowerCase().includes(search) && !v.contactName.toLowerCase().includes(search)) return false;
+    const visitLocalDate = new Date(v.visitedAt).toLocaleDateString("en-CA");
+    if (visitDateFrom && visitLocalDate < visitDateFrom) return false;
+    if (visitDateTo && visitLocalDate > visitDateTo) return false;
+    return true;
+  });
+
+  const hasVisitFilter = visitSearch.trim() !== "" || visitDateFrom !== "" || visitDateTo !== "";
+
+  function clearVisitFilters() {
+    setVisitSearch("");
+    setVisitDateFrom("");
+    setVisitDateTo("");
+  }
 
   return (
     <div className="space-y-6" data-testid="page-company-detail">
@@ -201,10 +225,63 @@ export default function CrmCompanyDetail() {
               <CardTitle className="text-base">Visit History</CardTitle>
               <CardDescription>All event visits from contacts at this company</CardDescription>
             </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              {/* Filters */}
+              {allVisits.length > 0 && (
+                <div className="flex flex-wrap items-end gap-3 pt-3">
+                  <div className="flex-1 min-w-[180px]">
+                    <Label htmlFor="visit-search-company" className="text-xs text-muted-foreground mb-1 block">Search event or contact</Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        id="visit-search-company"
+                        placeholder="Event name or contact…"
+                        value={visitSearch}
+                        onChange={e => setVisitSearch(e.target.value)}
+                        className="pl-8 h-8 text-sm"
+                        data-testid="input-visit-search"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="visit-date-from-company" className="text-xs text-muted-foreground mb-1 block">From</Label>
+                    <Input
+                      id="visit-date-from-company"
+                      type="date"
+                      value={visitDateFrom}
+                      onChange={e => setVisitDateFrom(e.target.value)}
+                      className="h-8 text-sm w-36"
+                      data-testid="input-visit-date-from"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="visit-date-to-company" className="text-xs text-muted-foreground mb-1 block">To</Label>
+                    <Input
+                      id="visit-date-to-company"
+                      type="date"
+                      value={visitDateTo}
+                      onChange={e => setVisitDateTo(e.target.value)}
+                      className="h-8 text-sm w-36"
+                      data-testid="input-visit-date-to"
+                    />
+                  </div>
+                  {hasVisitFilter && (
+                    <Button variant="ghost" size="sm" onClick={clearVisitFilters} className="h-8 text-xs" data-testid="button-clear-visit-filters">
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
             <CardContent className="p-0">
               {allVisits.length === 0 ? (
                 <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
                   No visits recorded
+                </div>
+              ) : filteredVisits.length === 0 ? (
+                <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
+                  No visits match the current filters
                 </div>
               ) : (
                 <Table>
@@ -218,7 +295,7 @@ export default function CrmCompanyDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allVisits.map(visit => (
+                    {filteredVisits.map(visit => (
                       <TableRow key={visit.id} data-testid={`row-visit-${visit.id}`}>
                         <TableCell>
                           <Link href={`/crm/contacts/${visit.contactId}`} className="text-sm hover:underline">
