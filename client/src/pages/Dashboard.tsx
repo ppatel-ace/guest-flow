@@ -1,14 +1,51 @@
+import { useState } from "react";
 import { StatsCard } from "@/components/StatsCard";
 import { CustomerTable, Customer } from "@/components/CustomerTable";
-import { Users, CheckCircle, Mail, Clock } from "lucide-react";
+import { Users, CheckCircle, Mail, Clock, Download } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { Customer as CustomerType } from "@shared/schema";
+import * as XLSX from "xlsx";
 
 interface MonthlyCheckIn {
   month: string;
   count: number;
+}
+
+function exportCustomers(customers: CustomerType[], format: "csv" | "excel") {
+  const rows = customers.map(c => ({
+    Name: c.name,
+    Email: c.email,
+    Phone: c.phone ?? "",
+    Status: c.status,
+    "Invited At": c.invitedAt ? new Date(c.invitedAt).toLocaleString() : "",
+    "Checked In At": c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "",
+  }));
+
+  if (format === "csv") {
+    const headers = Object.keys(rows[0] ?? {});
+    const csv = [headers, ...rows.map(r => headers.map(h => `"${String((r as any)[h]).replace(/"/g, '""')}"`))].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "customers.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  } else {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Customers");
+    XLSX.writeFile(wb, "customers.xlsx");
+  }
 }
 
 export default function Dashboard() {
@@ -63,9 +100,27 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6" data-testid="page-dashboard">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to your customer check-in system</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">Welcome to your customer check-in system</p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" disabled={customers.length === 0} data-testid="button-export-dashboard">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => exportCustomers(customers, "csv")} data-testid="menu-export-csv">
+              Export as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportCustomers(customers, "excel")} data-testid="menu-export-excel">
+              Export as Excel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

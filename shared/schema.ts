@@ -86,3 +86,58 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
+
+// ─── CRM tables ───────────────────────────────────────────────────────────────
+
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type Company = typeof companies.$inferSelect;
+
+export const contacts = pgTable("contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
+  title: text("title"),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull().unique(),
+  phone: text("phone"),
+  acePoc: text("ace_poc"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertContactSchema = createInsertSchema(contacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type Contact = typeof contacts.$inferSelect;
+
+export const visits = pgTable("visits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contactId: varchar("contact_id").notNull(),
+  companyId: varchar("company_id"),
+  eventName: text("event_name"),
+  eventDate: text("event_date"),
+  eventLocation: text("event_location"),
+  visitedAt: timestamp("visited_at").notNull().default(sql`now()`),
+  customFields: text("custom_fields"),
+});
+
+export const insertVisitSchema = createInsertSchema(visits).omit({
+  id: true,
+  visitedAt: true,
+});
+
+export type InsertVisit = z.infer<typeof insertVisitSchema>;
+export type Visit = typeof visits.$inferSelect;

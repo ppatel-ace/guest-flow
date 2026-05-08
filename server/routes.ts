@@ -440,23 +440,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertLeadSchema.parse(req.body);
       // Auto-attach the current event name from page settings
+      let eventSettings: any = null;
       if (!data.eventName) {
         try {
-          const pageSettings = await storage.getPageSettings("guest_checkin_page");
-          if (pageSettings?.eventName) {
-            data.eventName = pageSettings.eventName;
+          eventSettings = await storage.getPageSettings("guest_checkin_page");
+          if (eventSettings?.eventName) {
+            data.eventName = eventSettings.eventName;
           }
         } catch {
-          // If we can't get page settings, proceed without event name
+          // proceed without event name
         }
+      } else {
+        try {
+          eventSettings = await storage.getPageSettings("guest_checkin_page");
+        } catch { /* ignore */ }
       }
       const lead = await storage.createLead(data);
+
+      // ── CRM upsert flow (fire-and-forget, never block the response) ──
+      (async () => {
+        try {
+          let companyId: string | undefined;
+          if (data.company && data.company.trim()) {
+            const company = await storage.upsertCompanyByName(data.company.trim());
+            companyId = company.id;
+          }
+          const contact = await storage.upsertContactByEmail({
+            companyId: companyId ?? null,
+            title: data.title ?? null,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phoneNumber,
+            acePoc: data.acePoc ?? null,
+          });
+          await storage.createVisit({
+            contactId: contact.id,
+            companyId: companyId ?? null,
+            eventName: data.eventName ?? eventSettings?.eventName ?? null,
+            eventDate: eventSettings?.eventDate ?? null,
+            eventLocation: eventSettings?.eventLocation ?? null,
+            customFields: null,
+          });
+        } catch (crmErr) {
+          console.error("CRM upsert error (non-fatal):", crmErr);
+        }
+      })();
+
       res.status(201).json(lead);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid lead data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to save lead" });
+    }
+  });
+
+  // ── CRM routes (protected) ────────────────────────────────────────────────
+
+  app.get("/api/crm/companies", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getAllCompanies();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch companies" });
+    }
+  });
+
+  app.get("/api/crm/companies/:id", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getCompanyById(req.params.id);
+      if (!data) return res.status(404).json({ error: "Company not found" });
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch company" });
+    }
+  });
+
+  app.get("/api/crm/contacts", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getAllContacts();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch contacts" });
+    }
+  });
+
+  app.get("/api/crm/contacts/:id", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getContactById(req.params.id);
+      if (!data) return res.status(404).json({ error: "Contact not found" });
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch contact" });
     }
   });
 

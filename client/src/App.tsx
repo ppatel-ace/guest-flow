@@ -21,6 +21,10 @@ import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
 import GuestCheckIn from "@/pages/GuestCheckIn";
 import PublicPages from "@/pages/PublicPages";
 import Leads from "@/pages/Leads";
+import CrmCompanies from "@/pages/CrmCompanies";
+import CrmCompanyDetail from "@/pages/CrmCompanyDetail";
+import CrmContacts from "@/pages/CrmContacts";
+import CrmContactDetail from "@/pages/CrmContactDetail";
 import NotFound from "@/pages/not-found";
 
 function AdminLayout() {
@@ -61,6 +65,10 @@ function AdminLayout() {
                 <Route path="/import" component={Import} />
                 <Route path="/public-pages" component={PublicPages} />
                 <Route path="/leads" component={Leads} />
+                <Route path="/crm/companies/:id" component={CrmCompanyDetail} />
+                <Route path="/crm/companies" component={CrmCompanies} />
+                <Route path="/crm/contacts/:id" component={CrmContactDetail} />
+                <Route path="/crm/contacts" component={CrmContacts} />
                 <Route path="/setup" component={DatabaseSetup} />
                 <Route component={NotFound} />
               </Switch>
