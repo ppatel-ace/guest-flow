@@ -439,6 +439,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/leads", async (req, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
+      // Auto-attach the current event name from page settings
+      if (!data.eventName) {
+        try {
+          const pageSettings = await storage.getPageSettings("guest_checkin_page");
+          if (pageSettings?.eventName) {
+            data.eventName = pageSettings.eventName;
+          }
+        } catch {
+          // If we can't get page settings, proceed without event name
+        }
+      }
       const lead = await storage.createLead(data);
       res.status(201).json(lead);
     } catch (error) {

@@ -74,6 +74,7 @@ export const leads = pgTable("leads", {
   phoneNumber: text("phone_number").notNull(),
   company: text("company"),
   acePoc: text("ace_poc"),
+  eventName: text("event_name"),
   submittedAt: timestamp("submitted_at").notNull().default(sql`now()`),
   customerId: varchar("customer_id"),
 });

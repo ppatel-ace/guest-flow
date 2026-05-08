@@ -56,6 +56,7 @@ export default function Leads() {
                     <th className="pb-3 pr-4 font-medium">Phone</th>
                     <th className="pb-3 pr-4 font-medium">Company</th>
                     <th className="pb-3 pr-4 font-medium">Ace POC</th>
+                    <th className="pb-3 pr-4 font-medium">Event</th>
                     <th className="pb-3 font-medium">Submitted</th>
                   </tr>
                 </thead>
@@ -76,6 +77,7 @@ export default function Leads() {
                       <td className="py-3 pr-4 text-muted-foreground">{lead.phoneNumber}</td>
                       <td className="py-3 pr-4 text-muted-foreground">{lead.company ?? "—"}</td>
                       <td className="py-3 pr-4 text-muted-foreground">{lead.acePoc ?? "—"}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{lead.eventName ?? "—"}</td>
                       <td className="py-3 text-muted-foreground whitespace-nowrap">
                         {formatDate(lead.submittedAt)}
                       </td>
