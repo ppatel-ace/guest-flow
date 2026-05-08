@@ -389,7 +389,8 @@ export class DatabaseStorage implements IStorage {
         lastName: data.lastName,
         phone: data.phone || existing.phone,
         title: data.title || existing.title,
-        // acePoc is NOT updated — it's snapshotted per-visit in the visits table
+        // acePoc on the contact record reflects the most recent POC; visits snapshot each individually
+        acePoc: data.acePoc || existing.acePoc,
       };
       // Only assign company if the contact has none yet
       if (!existing.companyId && data.companyId) {
@@ -423,7 +424,10 @@ export class DatabaseStorage implements IStorage {
         createdAt: companies.createdAt,
         contactCount: sql<number>`COUNT(DISTINCT ${contacts.id})::int`,
         visitCount: sql<number>`COUNT(DISTINCT ${visits.id})::int`,
-        lastEventName: sql<string | null>`MAX(${visits.eventName})`,
+        lastEventName: sql<string | null>`(
+          SELECT event_name FROM visits WHERE company_id = ${companies.id}
+          ORDER BY visited_at DESC LIMIT 1
+        )`,
         lastVisitedAt: sql<Date | null>`MAX(${visits.visitedAt})`,
       })
       .from(companies)

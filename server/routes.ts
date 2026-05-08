@@ -440,20 +440,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertLeadSchema.parse(req.body);
       // Auto-attach the current event name from page settings
-      let eventSettings: any = null;
-      if (!data.eventName) {
-        try {
-          eventSettings = await storage.getPageSettings("guest_checkin_page");
-          if (eventSettings?.eventName) {
-            data.eventName = eventSettings.eventName;
-          }
-        } catch {
-          // proceed without event name
+      let eventSettings: import("@shared/schema").PageSettings | null = null;
+      try {
+        eventSettings = await storage.getPageSettings("guest_checkin_page");
+        if (!data.eventName && eventSettings?.eventName) {
+          data.eventName = eventSettings.eventName;
         }
-      } else {
-        try {
-          eventSettings = await storage.getPageSettings("guest_checkin_page");
-        } catch { /* ignore */ }
+      } catch {
+        // proceed without event settings
       }
       const lead = await storage.createLead(data);
 

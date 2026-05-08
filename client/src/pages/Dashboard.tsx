@@ -21,7 +21,9 @@ interface MonthlyCheckIn {
 
 const EXPORT_HEADERS = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Event Name", "Submitted At"];
 
-function leadsToRows(leads: Lead[]) {
+type LeadRow = Record<typeof EXPORT_HEADERS[number], string>;
+
+function leadsToRows(leads: Lead[]): LeadRow[] {
   return leads.map(l => ({
     "Title": l.title ?? "",
     "First Name": l.firstName,
@@ -37,7 +39,7 @@ function leadsToRows(leads: Lead[]) {
 
 function exportLeadsCSV(leads: Lead[]) {
   const rows = leadsToRows(leads);
-  const csv = [EXPORT_HEADERS, ...rows.map(r => EXPORT_HEADERS.map(h => `"${String((r as any)[h]).replace(/"/g, '""')}"`))]
+  const csv = [EXPORT_HEADERS, ...rows.map(r => EXPORT_HEADERS.map(h => `"${String(r[h]).replace(/"/g, '""')}"`))]
     .map(r => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);

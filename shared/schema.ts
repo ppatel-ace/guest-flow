@@ -105,7 +105,7 @@ export type Company = typeof companies.$inferSelect;
 
 export const contacts = pgTable("contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  companyId: varchar("company_id"),
+  companyId: varchar("company_id").references(() => companies.id),
   title: text("title"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
@@ -125,8 +125,8 @@ export type Contact = typeof contacts.$inferSelect;
 
 export const visits = pgTable("visits", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  contactId: varchar("contact_id").notNull(),
-  companyId: varchar("company_id"),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id),
+  companyId: varchar("company_id").references(() => companies.id),
   eventName: text("event_name"),
   eventDate: text("event_date"),
   eventLocation: text("event_location"),
