@@ -67,6 +67,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Warn in production when bot-protection secrets are absent — checks silently degrade without them
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.TURNSTILE_SECRET_KEY) {
+      console.warn("WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED");
+    }
+    if (!process.env.FINGERPRINT_HMAC_SECRET) {
+      console.warn("WARN: FINGERPRINT_HMAC_SECRET is not set — timing token enforcement is DISABLED");
+    }
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

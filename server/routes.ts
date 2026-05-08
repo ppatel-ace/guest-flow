@@ -593,9 +593,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Legacy guest-register endpoint — kept for backward compatibility (e.g. existing QR flows).
+  // The primary check-in form now uses /api/guest-checkin which verifies Turnstile.
+  // Turnstile is intentionally absent here: the token was already consumed by /api/guest-checkin
+  // when called via the normal form flow, and re-verifying a single-use token always fails.
+  // Honeypot + UA + timing together defend this path against automated abuse.
   app.post("/api/guest-register", guestRegisterLimiter, async (req, res) => {
     try {
-      // ── Bot protection checks (same stack as /api/leads) ─────────────────────
+      // ── Bot protection checks ───────────────────────────────────────────────
       // 1. Honeypot
       if (req.body._hp) {
         return res.status(201).json({ id: "ok" });
