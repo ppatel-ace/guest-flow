@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { User, Search, Download, ChevronRight, Building2 } from "lucide-react";
+import { User, Search, Download, ChevronRight, Building2, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -15,7 +21,23 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import * as XLSX from "xlsx";
 import type { ContactWithStats } from "../../server/storage";
+
+function contactsToRows(contacts: ContactWithStats[]) {
+  return contacts.map(c => ({
+    "Title": c.title ?? "",
+    "First Name": c.firstName,
+    "Last Name": c.lastName,
+    "Email": c.email,
+    "Phone": c.phone ?? "",
+    "Company": c.companyName ?? "",
+    "Ace POC": c.acePoc ?? "",
+    "Visits": c.visitCount,
+    "Last Event": c.lastEventName ?? "",
+    "Last Visit": c.lastVisitedAt ? new Date(c.lastVisitedAt).toLocaleDateString() : "",
+  }));
+}
 
 function exportCSV(contacts: ContactWithStats[]) {
   const headers = ["Title", "First Name", "Last Name", "Email", "Phone", "Company", "Ace POC", "Visits", "Last Event", "Last Visit"];
@@ -36,9 +58,17 @@ function exportCSV(contacts: ContactWithStats[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "contacts.csv";
+  a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportExcel(contacts: ContactWithStats[]) {
+  const rows = contactsToRows(contacts);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Contacts");
+  XLSX.writeFile(wb, `contacts-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 export default function CrmContacts() {
@@ -66,16 +96,34 @@ export default function CrmContacts() {
           <h1 className="text-3xl font-bold">Contacts</h1>
           <p className="text-muted-foreground">All individuals who have visited your events</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportCSV(filtered)}
-          data-testid="button-export-contacts"
-          disabled={filtered.length === 0}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={filtered.length === 0}
+              data-testid="button-export-contacts"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => exportCSV(filtered)}
+              data-testid="menu-item-export-csv"
+            >
+              Download as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => exportExcel(filtered)}
+              data-testid="menu-item-export-excel"
+            >
+              Download as Excel (.xlsx)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="relative">

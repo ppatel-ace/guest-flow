@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut, Globe, Clipboard, Building2, User } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut, Globe, Building2, User } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -20,7 +20,6 @@ const mainMenuItems = [
   { title: "Invitations", url: "/invitations", icon: Mail },
   { title: "Import", url: "/import", icon: FileSpreadsheet },
   { title: "Public Pages", url: "/public-pages", icon: Globe },
-  { title: "Leads", url: "/leads", icon: Clipboard },
   { title: "Setup", url: "/setup", icon: Database },
 ];
 
