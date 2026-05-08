@@ -845,23 +845,27 @@ function SecurityStatusPanel() {
       label: "Rate Limiting",
       description: "Caps check-in attempts per IP — always active, no key needed.",
       active: status?.rateLimit ?? true,
+      optional: false,
     },
     {
       key: "hmacTiming",
       label: "Timing Token (HMAC)",
       description: "Ensures the form was loaded before submission, blocking instant-replay bots.",
       active: status?.hmacTiming ?? false,
+      optional: false,
       secretKey: "FINGERPRINT_HMAC_SECRET",
     },
     {
       key: "turnstile",
       label: "Cloudflare Turnstile CAPTCHA",
-      description: "ML-based bot detection. Visible widget on non-event days; invisible on event days.",
+      description: "Optional ML-based CAPTCHA. Requires a free Cloudflare account. Form works without it.",
       active: status?.turnstile ?? false,
+      optional: true,
       secretKey: "VITE_TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY",
     },
   ];
 
+  const requiredActive = !isLoading && layers.filter((l) => !l.optional).every((l) => l.active);
   const allActive = !isLoading && layers.every((l) => l.active);
 
   return (
@@ -869,9 +873,9 @@ function SecurityStatusPanel() {
       <div className="space-y-1">
         <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Protection Layers</h3>
         <p className="text-xs text-muted-foreground">
-          {allActive
-            ? "All bot-protection layers are active."
-            : "Some layers need secrets configured in Replit before they activate."}
+          {requiredActive
+            ? "All required bot-protection layers are active."
+            : "One or more required layers need a secret configured in Replit."}
         </p>
       </div>
 
@@ -886,6 +890,8 @@ function SecurityStatusPanel() {
               <div className="h-5 w-5 rounded-full bg-muted animate-pulse mt-0.5" />
             ) : layer.active ? (
               <ShieldCheck className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+            ) : layer.optional ? (
+              <ShieldAlert className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
             ) : (
               <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
             )}
@@ -895,10 +901,16 @@ function SecurityStatusPanel() {
                 {!isLoading && (
                   <Badge
                     variant={layer.active ? "default" : "secondary"}
-                    className={layer.active ? "bg-green-500 hover:bg-green-500 text-white text-xs" : "text-xs"}
+                    className={
+                      layer.active
+                        ? "bg-green-500 hover:bg-green-500 text-white text-xs"
+                        : layer.optional
+                        ? "text-xs text-muted-foreground"
+                        : "text-xs"
+                    }
                     data-testid={`badge-security-${layer.key}`}
                   >
-                    {layer.active ? "Active" : "Not configured"}
+                    {layer.active ? "Active" : layer.optional ? "Optional — not configured" : "Not configured"}
                   </Badge>
                 )}
               </div>
@@ -914,15 +926,15 @@ function SecurityStatusPanel() {
         <div>
           <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Setup Instructions</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Follow these steps to activate all three protection layers. All keys go in Replit Secrets (not environment variables).
+            Add keys to Replit Secrets (not environment variables) then restart the app. Rate limiting is always on — no setup needed.
           </p>
         </div>
 
         <div className="space-y-4 text-sm">
           <div className="space-y-2">
-            <p className="font-medium">Step 1 — Generate the timing-token secret</p>
+            <p className="font-medium">Step 1 — Add the timing-token secret <span className="text-muted-foreground font-normal">(required)</span></p>
             <p className="text-xs text-muted-foreground">
-              A unique random value has been pre-generated for you. Copy it and add it to Replit Secrets as{" "}
+              A unique value has been pre-generated. Copy it and add it to Replit Secrets as{" "}
               <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">FINGERPRINT_HMAC_SECRET</code>.
             </p>
             <div className="flex items-center gap-2 p-2 rounded bg-muted font-mono text-xs break-all">
@@ -940,31 +952,23 @@ function SecurityStatusPanel() {
           </div>
 
           <div className="space-y-2">
-            <p className="font-medium">Step 2 — Create a free Cloudflare Turnstile widget</p>
+            <p className="font-medium">Step 2 — Add a Cloudflare Turnstile CAPTCHA <span className="text-muted-foreground font-normal">(optional)</span></p>
+            <p className="text-xs text-muted-foreground">
+              Skip this step if you don't use Cloudflare — the form works without it and all other protections still run.
+              If you do want the CAPTCHA layer, sign up free at Cloudflare, create a Turnstile widget for your domain, then add the keys below.
+            </p>
             <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Go to <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" className="underline underline-offset-2">dash.cloudflare.com → Turnstile</a> (free, no credit card)</li>
-              <li>Click <strong>Add site</strong></li>
-              <li>Enter your domain (e.g. <code className="bg-muted px-1 py-0.5 rounded font-mono">aceregistration.replit.app</code>) and choose <strong>Managed</strong> widget type</li>
-              <li>Copy the <strong>Site Key</strong> → add to Replit Secrets as <code className="bg-muted px-1 py-0.5 rounded font-mono">VITE_TURNSTILE_SITE_KEY</code></li>
-              <li>Copy the <strong>Secret Key</strong> → add to Replit Secrets as <code className="bg-muted px-1 py-0.5 rounded font-mono">TURNSTILE_SECRET_KEY</code></li>
+              <li>Go to <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" className="underline underline-offset-2">dash.cloudflare.com → Turnstile</a> → Add site → choose <strong>Managed</strong></li>
+              <li>Copy the <strong>Site Key</strong> → Replit Secrets → <code className="bg-muted px-1 py-0.5 rounded font-mono">VITE_TURNSTILE_SITE_KEY</code></li>
+              <li>Copy the <strong>Secret Key</strong> → Replit Secrets → <code className="bg-muted px-1 py-0.5 rounded font-mono">TURNSTILE_SECRET_KEY</code></li>
             </ol>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-1 text-xs h-7"
-              onClick={() => window.open("https://dash.cloudflare.com/?to=/:account/turnstile", "_blank")}
-              data-testid="button-open-cloudflare"
-            >
-              <ExternalLink className="h-3 w-3 mr-1.5" />
-              Open Cloudflare Turnstile Dashboard
-            </Button>
           </div>
 
           <div className="space-y-2">
             <p className="font-medium">Step 3 — Restart the app</p>
             <p className="text-xs text-muted-foreground">
-              After adding all three secrets in Replit, click <strong>Run</strong> (or restart the workflow) so the server picks up the new values.
-              Come back to this tab — all three badges should turn green.
+              After adding secrets in Replit, restart the workflow so the server picks up the new values.
+              Return to this tab — the badges will update to confirm what's active.
             </p>
           </div>
         </div>
