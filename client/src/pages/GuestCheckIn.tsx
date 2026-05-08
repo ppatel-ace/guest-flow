@@ -292,6 +292,10 @@ export default function GuestCheckIn() {
           email: normalizedEmail,
           phone: phoneNumber.trim() || undefined,
           status: "checked-in",
+          // Bot-protection fields forwarded so server can enforce the same checks
+          _hp: honeypot,
+          _ft: timingToken,
+          "cf-turnstile-response": turnstileToken,
         }),
       });
 

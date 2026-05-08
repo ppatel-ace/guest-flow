@@ -508,7 +508,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Guest registration (rate limited)
   app.post("/api/guest-register", guestRegisterLimiter, async (req, res) => {
     try {
-      const { metadata, ...rest } = req.body;
+      // ── Bot protection checks (same stack as /api/leads) ─────────────────────
+      // 1. Honeypot
+      if (req.body._hp) {
+        return res.status(201).json({ id: "ok" });
+      }
+      // 2. Headless UA
+      if (isHeadlessUA(req.headers["user-agent"])) {
+        return res.status(403).json({ error: "Request blocked." });
+      }
+      // 3. Timing token (required when secret is configured)
+      const timingToken = req.body._ft as string | undefined;
+      if (process.env.FINGERPRINT_HMAC_SECRET) {
+        if (!timingToken) {
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+        const check = validateTimingToken(timingToken);
+        if (!check.ok) {
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+      }
+      // 4. Cloudflare Turnstile
+      const turnstileToken = req.body["cf-turnstile-response"] as string | undefined;
+      if (process.env.TURNSTILE_SECRET_KEY) {
+        if (!turnstileToken) {
+          return res.status(403).json({ error: "CAPTCHA verification required." });
+        }
+        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+        const valid = await verifyTurnstile(turnstileToken, ip);
+        if (!valid) {
+          return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
+      const { metadata, _hp, _ft, "cf-turnstile-response": _cftr, ...rest } = req.body;
       const data = insertCustomerSchema.parse(rest);
       const customerData = {
         ...data,
