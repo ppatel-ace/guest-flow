@@ -76,27 +76,35 @@ function maskIp(ip: string | undefined): string {
 }
 
 let _blockDay = new Date().toISOString().slice(0, 10);
+// Uncapped per-reason totals — never lose a count due to log rotation
+let _blockCounts: Record<BlockReason, number> = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
+// Capped recent-event log for the dashboard table (last 100 entries)
 let _blockLog: BlockEvent[] = [];
 
 function recordBlock(reason: BlockReason, ip: string | undefined) {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== _blockDay) {
     _blockLog = [];
+    _blockCounts = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
     _blockDay = today;
   }
+  _blockCounts[reason]++;
   _blockLog.push({ timestamp: Date.now(), reason, maskedIp: maskIp(ip) });
-  if (_blockLog.length > 500) _blockLog = _blockLog.slice(-500);
+  if (_blockLog.length > 100) _blockLog = _blockLog.slice(-100);
 }
 
 function getBotStats() {
   const today = new Date().toISOString().slice(0, 10);
-  if (today !== _blockDay) { _blockLog = []; _blockDay = today; }
-  const counts: Record<BlockReason, number> = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
-  for (const e of _blockLog) counts[e.reason]++;
+  if (today !== _blockDay) {
+    _blockLog = [];
+    _blockCounts = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
+    _blockDay = today;
+  }
+  const total = Object.values(_blockCounts).reduce((s, n) => s + n, 0);
   return {
     date: today,
-    total: _blockLog.length,
-    counts,
+    total,
+    counts: { ..._blockCounts },
     recentLog: [..._blockLog].reverse().slice(0, 20),
   };
 }
@@ -680,20 +688,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ── Bot protection checks ───────────────────────────────────────────────
       // 1. Honeypot
       if (req.body._hp) {
+        recordBlock("honeypot", req.ip);
         return res.status(201).json({ id: "ok" });
       }
       // 2. Headless UA
       if (isHeadlessUA(req.headers["user-agent"])) {
+        recordBlock("ua", req.ip);
         return res.status(403).json({ error: "Request blocked." });
       }
       // 3. Timing token (required when secret is configured)
       const timingToken = req.body._ft as string | undefined;
       if (process.env.FINGERPRINT_HMAC_SECRET) {
         if (!timingToken) {
+          recordBlock("timing", req.ip);
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
         const check = validateTimingToken(timingToken);
         if (!check.ok) {
+          recordBlock("timing", req.ip);
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
       }
