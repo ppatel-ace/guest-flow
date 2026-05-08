@@ -259,7 +259,9 @@ export default function GuestCheckIn() {
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
     try {
-      const leadRes = await fetch("/api/leads", {
+      // Single atomic endpoint: bot checks + lead write + customer check-in in one request.
+      // This ensures Turnstile is verified exactly once alongside the DB writes.
+      const res = await fetch("/api/guest-checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -270,64 +272,33 @@ export default function GuestCheckIn() {
           phoneNumber: phoneNumber.trim(),
           company: company.trim() || null,
           acePoc: acePoc || null,
-          // Bot-protection fields (stripped by server before DB insert)
-          _hp: honeypot,                             // honeypot — real users leave this empty; bots fill it
-          _ft: timingToken,                          // fingerprint timing token
-          "cf-turnstile-response": turnstileToken,  // Cloudflare Turnstile token
-        }),
-      });
-
-      if (!leadRes.ok) {
-        const err = await leadRes.json();
-        toast({ title: "Error", description: err.error || "Failed to submit form.", variant: "destructive" });
-        setSubmitting(false);
-        return;
-      }
-
-      const checkInRes = await fetch("/api/guest-register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: fullName,
-          email: normalizedEmail,
-          phone: phoneNumber.trim() || undefined,
-          status: "checked-in",
-          // Bot-protection fields forwarded so server can enforce the same checks
           _hp: honeypot,
           _ft: timingToken,
           "cf-turnstile-response": turnstileToken,
         }),
       });
 
-      if (checkInRes.ok) {
-        const customer = await checkInRes.json();
-        // customer.name may be absent on honeypot fake-success — fall back to entered name
-        setCustomerName(customer.name || fullName);
-      } else if (checkInRes.status === 403 || checkInRes.status === 429) {
-        // Bot-blocked: surface a real error — do NOT show success screen
-        const err = await checkInRes.json().catch(() => ({}));
+      if (res.status === 403 || res.status === 429) {
+        const body: { error?: string } = await res.json().catch(() => ({}));
         toast({
           title: "Verification failed",
-          description: (err as any).error || "Please refresh the page and try again.",
+          description: body.error ?? "Please refresh the page and try again.",
           variant: "destructive",
         });
         setSubmitting(false);
         return;
-      } else {
-        // Non-bot failure (e.g. duplicate): try email-based check-in for pre-registered guests
-        const checkInByEmail = await fetch("/api/check-in/email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: normalizedEmail }),
-        });
-        if (checkInByEmail.ok) {
-          const customer = await checkInByEmail.json();
-          setCustomerName(customer.name);
-        } else {
-          setCustomerName(fullName);
-        }
       }
 
+      if (!res.ok) {
+        const body: { error?: string } = await res.json().catch(() => ({}));
+        toast({ title: "Error", description: body.error ?? "Failed to submit form.", variant: "destructive" });
+        setSubmitting(false);
+        return;
+      }
+
+      const data: { name?: string } = await res.json();
+      // Honeypot fake-success returns {"id":"ok"} with no name — fall back to entered name
+      setCustomerName(data.name ?? fullName);
       setStep("success");
     } catch (error) {
       console.error("Submission failed:", error);

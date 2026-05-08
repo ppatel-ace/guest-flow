@@ -11,6 +11,9 @@ declare module "express-session" {
 }
 
 const app = express();
+// Trust the first proxy hop so req.ip reflects the real client IP from X-Forwarded-For.
+// Required for correct per-client rate limiting behind Replit's reverse proxy.
+app.set("trust proxy", 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

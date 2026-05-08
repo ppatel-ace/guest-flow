@@ -77,6 +77,15 @@ const guestRegisterLimiter = rateLimit({
   message: { error: "Too many requests. Please wait a moment and try again." },
 });
 
+// Single limiter for the atomic guest check-in endpoint
+const guestCheckinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please wait a moment and try again." },
+});
+
 // Authentication middleware
 const requireAuth = (req: any, res: any, next: any) => {
   if (req.session?.authenticated) {
@@ -506,6 +515,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Guest registration (rate limited)
+  // Atomic public guest check-in: runs all bot checks once, then creates lead + customer.
+  // Single endpoint eliminates Turnstile token reuse (tokens are single-use).
+  app.post("/api/guest-checkin", guestCheckinLimiter, async (req, res) => {
+    try {
+      const { _hp, _ft, "cf-turnstile-response": cfToken, ...body } = req.body;
+
+      // 1. Honeypot — fake success, zero DB work
+      if (_hp) {
+        return res.status(201).json({ id: "ok" });
+      }
+      // 2. Headless UA
+      if (isHeadlessUA(req.headers["user-agent"])) {
+        return res.status(403).json({ error: "Request blocked." });
+      }
+      // 3. Timing token (required when secret is configured)
+      if (process.env.FINGERPRINT_HMAC_SECRET) {
+        if (!_ft) {
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+        const check = validateTimingToken(_ft as string);
+        if (!check.ok) {
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+      }
+      // 4. Cloudflare Turnstile — verified exactly once per submission
+      if (process.env.TURNSTILE_SECRET_KEY) {
+        if (!cfToken) {
+          return res.status(403).json({ error: "CAPTCHA verification required." });
+        }
+        const ip = req.ip ?? "unknown";
+        const valid = await verifyTurnstile(cfToken as string, ip);
+        if (!valid) {
+          return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
+        }
+      }
+
+      // ── DB writes (only reached by legitimate users) ─────────────────────────
+      // 1. Lead record
+      const leadData = insertLeadSchema.parse({
+        title: body.title ?? null,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phoneNumber: body.phoneNumber,
+        company: body.company ?? null,
+        acePoc: body.acePoc ?? null,
+      });
+      await storage.createLead(leadData);
+
+      // 2. Customer create + check-in (fall back to email look-up if already registered)
+      const fullName = `${leadData.firstName} ${leadData.lastName}`.trim();
+      let customer = null;
+      try {
+        const customerData = insertCustomerSchema.parse({
+          name: fullName,
+          email: body.email,
+          phone: body.phoneNumber || undefined,
+          status: "checked-in",
+        });
+        const created = await storage.createCustomer(customerData);
+        customer = await storage.checkInCustomer(created.id);
+      } catch {
+        // Customer may already exist — look up and check in by email
+        const existing = await storage.getCustomerByEmail(body.email);
+        if (existing) {
+          customer = await storage.checkInCustomer(existing.id);
+        }
+      }
+
+      res.status(201).json(customer ?? { name: fullName });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to check in" });
+    }
+  });
+
   app.post("/api/guest-register", guestRegisterLimiter, async (req, res) => {
     try {
       // ── Bot protection checks (same stack as /api/leads) ─────────────────────
