@@ -164,7 +164,10 @@ export default function CrmCompanyDetail() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
+                      <TableHead>Title</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Ace POC</TableHead>
                       <TableHead className="text-center">Visits</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -174,11 +177,13 @@ export default function CrmCompanyDetail() {
                         <TableCell>
                           <Link href={`/crm/contacts/${contact.id}`} className="font-medium hover:underline flex items-center gap-1.5">
                             <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            {contact.title ? `${contact.title} ` : ""}{contact.firstName} {contact.lastName}
+                            {contact.firstName} {contact.lastName}
                           </Link>
-                          {contact.phone && <p className="text-xs text-muted-foreground ml-5">{contact.phone}</p>}
                         </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{contact.title ?? "—"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{contact.email}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{contact.phone ?? "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{contact.acePoc ?? "—"}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant="outline">{contact.visits.length}</Badge>
                         </TableCell>
