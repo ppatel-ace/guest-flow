@@ -612,6 +612,8 @@ function GuestCheckInEditor() {
   const [description, setDescription] = useState("");
   const [successTitle, setSuccessTitle] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [captchaBypassStart, setCaptchaBypassStart] = useState("");
+  const [captchaBypassEnd, setCaptchaBypassEnd] = useState("");
 
   useEffect(() => {
     if (settings) {
@@ -620,6 +622,8 @@ function GuestCheckInEditor() {
       setDescription(settings.description ?? "Enter your phone number or email address to check in");
       setSuccessTitle(settings.successTitle ?? "Welcome!");
       setSuccessMessage(settings.successMessage ?? "You have been successfully checked in");
+      setCaptchaBypassStart(settings.captchaBypassStart ?? "");
+      setCaptchaBypassEnd(settings.captchaBypassEnd ?? "");
     }
   }, [settings]);
 
@@ -631,6 +635,8 @@ function GuestCheckInEditor() {
         eventName,
         successTitle,
         successMessage,
+        captchaBypassStart: captchaBypassStart || null,
+        captchaBypassEnd: captchaBypassEnd || null,
       });
       return res.json();
     },
@@ -740,10 +746,60 @@ function GuestCheckInEditor() {
         </div>
       </div>
 
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Bot Protection — CAPTCHA Bypass</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            On these dates the visible CAPTCHA widget is hidden for real attendees. Silent bot detection still runs every day.
+            Leave blank to always show the CAPTCHA widget.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="captcha-bypass-start">Event Start Date</Label>
+            <Input
+              id="captcha-bypass-start"
+              type="date"
+              value={captchaBypassStart}
+              onChange={(e) => setCaptchaBypassStart(e.target.value)}
+              disabled={isLoading}
+              data-testid="input-captcha-bypass-start"
+            />
+            <p className="text-xs text-muted-foreground">First day CAPTCHA is hidden (YYYY-MM-DD)</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="captcha-bypass-end">Event End Date</Label>
+            <Input
+              id="captcha-bypass-end"
+              type="date"
+              value={captchaBypassEnd}
+              onChange={(e) => setCaptchaBypassEnd(e.target.value)}
+              disabled={isLoading}
+              data-testid="input-captcha-bypass-end"
+            />
+            <p className="text-xs text-muted-foreground">Last day CAPTCHA is hidden (inclusive)</p>
+          </div>
+        </div>
+
+        {captchaBypassStart && captchaBypassEnd && captchaBypassStart > captchaBypassEnd && (
+          <p className="text-xs text-destructive">Start date must be on or before end date.</p>
+        )}
+      </div>
+
       <div className="flex justify-end">
         <Button
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending || isLoading || !title.trim() || !description.trim()}
+          disabled={
+            mutation.isPending ||
+            isLoading ||
+            !title.trim() ||
+            !description.trim() ||
+            (!!captchaBypassStart && !!captchaBypassEnd && captchaBypassStart > captchaBypassEnd)
+          }
           data-testid="button-save-guest-page"
         >
           <Save className="mr-2 h-4 w-4" />

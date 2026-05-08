@@ -94,6 +94,8 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     eventName: null,
     eventDate: null,
     eventLocation: null,
+    captchaBypassStart: null,
+    captchaBypassEnd: null,
   },
   guest_checkin_page: {
     title: "Check-In",
@@ -103,6 +105,8 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     eventName: null,
     eventDate: null,
     eventLocation: null,
+    captchaBypassStart: null,
+    captchaBypassEnd: null,
   },
 };
 

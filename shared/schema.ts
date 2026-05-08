@@ -36,6 +36,8 @@ export const pageSettings = pgTable("page_settings", {
   eventName: text("event_name"),
   eventDate: text("event_date"),
   eventLocation: text("event_location"),
+  captchaBypassStart: text("captcha_bypass_start"),
+  captchaBypassEnd: text("captcha_bypass_end"),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 

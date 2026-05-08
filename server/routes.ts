@@ -4,6 +4,67 @@ import { storage } from "./storage";
 import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
+import rateLimit from "express-rate-limit";
+import { createHmac } from "crypto";
+
+// ─── Bot-protection helpers ────────────────────────────────────────────────────
+
+const HMAC_SECRET = process.env.FINGERPRINT_HMAC_SECRET ?? "dev-fallback-change-in-prod";
+
+function makeTimingToken(): string {
+  const ts = Date.now();
+  const sig = createHmac("sha256", HMAC_SECRET).update(String(ts)).digest("hex");
+  return `${ts}.${sig}`;
+}
+
+function validateTimingToken(token: string): { ok: boolean; reason?: string } {
+  const parts = token?.split(".");
+  if (!parts || parts.length !== 2) return { ok: false, reason: "malformed" };
+  const [tsStr, sig] = parts;
+  const expected = createHmac("sha256", HMAC_SECRET).update(tsStr).digest("hex");
+  if (sig !== expected) return { ok: false, reason: "invalid signature" };
+  const age = Date.now() - Number(tsStr);
+  if (age < 2000) return { ok: false, reason: "too fast" };
+  if (age > 30 * 60 * 1000) return { ok: false, reason: "expired" };
+  return { ok: true };
+}
+
+const HEADLESS_UA_PATTERNS = [
+  "headlesschrome", "puppeteer", "playwright", "selenium", "phantomjs",
+  "python-requests", "python-urllib", "curl/", "wget/", "httpie",
+  "go-http-client", "java/", "apache-httpclient",
+];
+
+function isHeadlessUA(ua: string | undefined): boolean {
+  if (!ua) return true;
+  const lower = ua.toLowerCase();
+  return HEADLESS_UA_PATTERNS.some((p) => lower.includes(p));
+}
+
+async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // skip verification in dev when key not set
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret, response: token, remoteip: ip }),
+    });
+    const data = await res.json() as { success: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
+// Rate limiter for public submission endpoints (15 req / IP / minute)
+const publicSubmitLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please wait a moment and try again." },
+});
 
 // Authentication middleware
 const requireAuth = (req: any, res: any, next: any) => {
@@ -233,32 +294,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Guest registration and check-in (public)
-  app.post("/api/guest-register", async (req, res) => {
-    try {
-      const { metadata, ...rest } = req.body;
-      const data = insertCustomerSchema.parse(rest);
-      
-      // Attach extra field data as JSON string
-      const customerData = {
-        ...data,
-        metadata: metadata && typeof metadata === 'object' ? JSON.stringify(metadata) : undefined,
-      };
-      
-      // Create the customer
-      const customer = await storage.createCustomer(customerData);
-      
-      // Automatically check them in
-      const checkedIn = await storage.checkInCustomer(customer.id);
-      
-      res.status(201).json(checkedIn);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid customer data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to register and check in" });
-    }
-  });
 
   // Get all form fields (public - needed by guest check-in form)
   app.get("/api/form-fields", async (req, res) => {
@@ -393,6 +428,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CAPTCHA mode endpoint (public, no-cache) — tells the frontend whether to show visible widget
+  app.get("/api/captcha-mode", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      let mode: "invisible" | "visible" = "visible";
+      try {
+        const settings = await storage.getPageSettings("guest_checkin_page");
+        const start = settings.captchaBypassStart;
+        const end = settings.captchaBypassEnd;
+        if (start && end) {
+          const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+          if (today >= start && today <= end) mode = "invisible";
+        }
+      } catch {
+        // if settings not found, default to visible
+      }
+      res.json({ mode, token: makeTimingToken() });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to determine CAPTCHA mode" });
+    }
+  });
+
   // Get page settings (public)
   app.get("/api/page-settings/:key", async (req, res) => {
     try {
@@ -406,7 +463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update page settings (protected)
   app.put("/api/page-settings/:key", requireAuth, async (req, res) => {
     try {
-      const { title, description, successMessage, successTitle, eventName, eventDate, eventLocation } = req.body;
+      const { title, description, successMessage, successTitle, eventName, eventDate, eventLocation, captchaBypassStart, captchaBypassEnd } = req.body;
       if (!title || !description) {
         return res.status(400).json({ error: "title and description are required" });
       }
@@ -418,6 +475,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventName: eventName || null,
         eventDate: eventDate || null,
         eventLocation: eventLocation || null,
+        captchaBypassStart: captchaBypassStart || null,
+        captchaBypassEnd: captchaBypassEnd || null,
       });
       res.json(settings);
     } catch (error) {
@@ -435,9 +494,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create a lead (public - called from guest check-in form)
-  app.post("/api/leads", async (req, res) => {
+  // Guest registration (rate limited)
+  app.post("/api/guest-register", publicSubmitLimiter, async (req, res) => {
     try {
+      const { metadata, ...rest } = req.body;
+      const data = insertCustomerSchema.parse(rest);
+      const customerData = {
+        ...data,
+        metadata: metadata && typeof metadata === 'object' ? JSON.stringify(metadata) : undefined,
+      };
+      const customer = await storage.createCustomer(customerData);
+      const checkedIn = await storage.checkInCustomer(customer.id);
+      res.status(201).json(checkedIn);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid customer data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to register and check in" });
+    }
+  });
+
+  // Create a lead (public - called from guest check-in form)
+  app.post("/api/leads", publicSubmitLimiter, async (req, res) => {
+    try {
+      // ── Bot protection checks (before any DB work) ──────────────────────────
+
+      // 1. Honeypot: if the hidden field has a value, the submitter is a bot
+      //    Return a fake success so the bot doesn't know it was caught
+      if (req.body._hp) {
+        return res.status(201).json({ id: "ok" });
+      }
+
+      // 2. User-Agent headless browser detection
+      if (isHeadlessUA(req.headers["user-agent"])) {
+        return res.status(403).json({ error: "Request blocked." });
+      }
+
+      // 3. Timing token validation (skip in dev when FINGERPRINT_HMAC_SECRET not set)
+      const timingToken = req.body._ft as string | undefined;
+      if (process.env.FINGERPRINT_HMAC_SECRET && timingToken) {
+        const check = validateTimingToken(timingToken);
+        if (!check.ok) {
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+      }
+
+      // 4. Cloudflare Turnstile verification
+      const turnstileToken = req.body["cf-turnstile-response"] as string | undefined;
+      if (process.env.TURNSTILE_SECRET_KEY) {
+        if (!turnstileToken) {
+          return res.status(403).json({ error: "CAPTCHA verification required." });
+        }
+        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "";
+        const valid = await verifyTurnstile(turnstileToken, ip);
+        if (!valid) {
+          return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
+        }
+      }
+
       const data = insertLeadSchema.parse(req.body);
       // Auto-attach the current event name from page settings
       let eventSettings: import("@shared/schema").PageSettings | null = null;

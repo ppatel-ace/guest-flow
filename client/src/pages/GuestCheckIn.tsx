@@ -28,6 +28,7 @@ import { CheckCircle, ChevronsUpDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { Turnstile } from "@marsidev/react-turnstile";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
 import type { PageSettings } from "@shared/schema";
 
@@ -43,6 +44,8 @@ const ACE_POC_OPTIONS = [
 ];
 
 const EMAIL_DOMAINS = ["@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com", "@icloud.com"];
+
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
 
 function EmailInput({
   value,
@@ -209,9 +212,28 @@ export default function GuestCheckIn() {
   const [company, setCompany] = useState("");
   const [acePoc, setAcePoc] = useState("");
 
+  // Bot protection state
+  const [timingToken, setTimingToken] = useState<string>("");
+  const [captchaMode, setCaptchaMode] = useState<"invisible" | "visible" | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+
   const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
     queryKey: ["/api/page-settings/guest_checkin_page"],
   });
+
+  // Fetch CAPTCHA mode and timing token on mount
+  useEffect(() => {
+    fetch("/api/captcha-mode")
+      .then((r) => r.json())
+      .then((data: { mode: "invisible" | "visible"; token: string }) => {
+        setCaptchaMode(data.mode);
+        setTimingToken(data.token);
+      })
+      .catch(() => {
+        setCaptchaMode("visible");
+      });
+  }, []);
 
   const pageTitle = settings?.title ?? "Check-In";
   const description = settings?.description ?? "Please fill in your details below";
@@ -219,9 +241,19 @@ export default function GuestCheckIn() {
   const successMessage = settings?.successMessage ?? "You have been successfully checked in";
   const eventName = settings?.eventName;
 
+  // Whether Turnstile has produced a token yet (only matters when site key is configured)
+  const turnstileReady = !TURNSTILE_SITE_KEY || !!turnstileToken;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
 
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      toast({ title: "Please wait", description: "Security check not complete yet. Try again in a moment.", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
     const normalizedEmail = email.trim().toLowerCase();
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
@@ -237,12 +269,17 @@ export default function GuestCheckIn() {
           phoneNumber: phoneNumber.trim(),
           company: company.trim() || null,
           acePoc: acePoc || null,
+          // Bot-protection fields (stripped by server before DB insert)
+          _hp: "",                                   // honeypot — intentionally empty for real users
+          _ft: timingToken,                          // fingerprint timing token
+          "cf-turnstile-response": turnstileToken,  // Cloudflare Turnstile token
         }),
       });
 
       if (!leadRes.ok) {
         const err = await leadRes.json();
         toast({ title: "Error", description: err.error || "Failed to submit form.", variant: "destructive" });
+        setSubmitting(false);
         return;
       }
 
@@ -278,6 +315,7 @@ export default function GuestCheckIn() {
     } catch (error) {
       console.error("Submission failed:", error);
       toast({ title: "Error", description: "Failed to submit. Please try again.", variant: "destructive" });
+      setSubmitting(false);
     }
   };
 
@@ -312,6 +350,12 @@ export default function GuestCheckIn() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+
+                {/* Honeypot field — invisible to real users, bots fill it automatically */}
+                <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden", opacity: 0 }}>
+                  <label htmlFor="_hp">Leave this blank</label>
+                  <input id="_hp" name="_hp" type="text" tabIndex={-1} autoComplete="off" />
+                </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="title-select" className="text-sm font-medium">
@@ -404,8 +448,37 @@ export default function GuestCheckIn() {
                   <PocCombobox value={acePoc} onChange={setAcePoc} />
                 </div>
 
-                <Button type="submit" className="w-full h-11 text-base font-semibold mt-2" data-testid="button-submit-lead">
-                  Check In
+                {/* Cloudflare Turnstile — renders based on mode once site key is available */}
+                {TURNSTILE_SITE_KEY && captchaMode === "visible" && (
+                  <div className="flex justify-center" data-testid="turnstile-widget">
+                    <Turnstile
+                      siteKey={TURNSTILE_SITE_KEY}
+                      onSuccess={setTurnstileToken}
+                      onError={() => setTurnstileToken("")}
+                      onExpire={() => setTurnstileToken("")}
+                      options={{ appearance: "always", theme: "light" }}
+                    />
+                  </div>
+                )}
+
+                {/* Invisible Turnstile (event days) — no widget, runs silently */}
+                {TURNSTILE_SITE_KEY && captchaMode === "invisible" && (
+                  <Turnstile
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onSuccess={setTurnstileToken}
+                    onError={() => setTurnstileToken("")}
+                    onExpire={() => setTurnstileToken("")}
+                    options={{ appearance: "execute" }}
+                  />
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full h-11 text-base font-semibold mt-2"
+                  disabled={submitting || !turnstileReady}
+                  data-testid="button-submit-lead"
+                >
+                  {submitting ? "Submitting..." : "Check In"}
                 </Button>
               </form>
             </CardContent>
