@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { User, Search, Download, ChevronRight, Building2, ChevronDown } from "lucide-react";
+import { User, Search, Download, ChevronRight, Building2, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import * as XLSX from "xlsx";
 import type { ContactWithStats } from "../../server/storage";
+
+type SortColumn = "name" | "company" | "acePoc" | "visits" | "lastVisit";
+type SortDir = "asc" | "desc";
 
 function contactsToRows(contacts: ContactWithStats[]) {
   return contacts.map(c => ({
@@ -71,12 +74,62 @@ function exportExcel(contacts: ContactWithStats[]) {
   XLSX.writeFile(wb, `contacts-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+function SortIcon({ column, sortCol, sortDir }: { column: SortColumn; sortCol: SortColumn; sortDir: SortDir }) {
+  if (sortCol !== column) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="ml-1 h-3.5 w-3.5 text-foreground" />
+    : <ArrowDown className="ml-1 h-3.5 w-3.5 text-foreground" />;
+}
+
+function sortContacts(contacts: ContactWithStats[], col: SortColumn, dir: SortDir) {
+  return [...contacts].sort((a, b) => {
+    let av: string | number = 0;
+    let bv: string | number = 0;
+    switch (col) {
+      case "name":
+        av = `${a.lastName} ${a.firstName}`.toLowerCase();
+        bv = `${b.lastName} ${b.firstName}`.toLowerCase();
+        break;
+      case "company":
+        av = (a.companyName ?? "").toLowerCase();
+        bv = (b.companyName ?? "").toLowerCase();
+        break;
+      case "acePoc":
+        av = (a.acePoc ?? "").toLowerCase();
+        bv = (b.acePoc ?? "").toLowerCase();
+        break;
+      case "visits":
+        av = a.visitCount;
+        bv = b.visitCount;
+        break;
+      case "lastVisit":
+        av = a.lastVisitedAt ? new Date(a.lastVisitedAt).getTime() : 0;
+        bv = b.lastVisitedAt ? new Date(b.lastVisitedAt).getTime() : 0;
+        break;
+    }
+    if (av < bv) return dir === "asc" ? -1 : 1;
+    if (av > bv) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
+}
+
 export default function CrmContacts() {
   const [search, setSearch] = useState("");
+  const [sortCol, setSortCol] = useState<SortColumn>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const { data: contacts = [], isLoading } = useQuery<ContactWithStats[]>({
     queryKey: ["/api/crm/contacts"],
   });
+
+  function handleSort(col: SortColumn) {
+    if (sortCol === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
 
   const filtered = contacts.filter(c => {
     const term = search.toLowerCase();
@@ -88,6 +141,23 @@ export default function CrmContacts() {
       (c.acePoc ?? "").toLowerCase().includes(term)
     );
   });
+
+  const sorted = sortContacts(filtered, sortCol, sortDir);
+
+  function SortableHead({ col, children, className }: { col: SortColumn; children: React.ReactNode; className?: string }) {
+    return (
+      <TableHead className={className}>
+        <button
+          className="flex items-center hover:text-foreground transition-colors w-full"
+          onClick={() => handleSort(col)}
+          data-testid={`sort-${col}`}
+        >
+          {children}
+          <SortIcon column={col} sortCol={sortCol} sortDir={sortDir} />
+        </button>
+      </TableHead>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="page-crm-contacts">
@@ -111,13 +181,13 @@ export default function CrmContacts() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={() => exportCSV(filtered)}
+              onClick={() => exportCSV(sorted)}
               data-testid="menu-item-export-csv"
             >
               Download as CSV
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => exportExcel(filtered)}
+              onClick={() => exportExcel(sorted)}
               data-testid="menu-item-export-excel"
             >
               Download as Excel (.xlsx)
@@ -140,7 +210,7 @@ export default function CrmContacts() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-medium">
-            {isLoading ? "Loading..." : `${filtered.length} ${filtered.length === 1 ? "contact" : "contacts"}`}
+            {isLoading ? "Loading..." : `${sorted.length} ${sorted.length === 1 ? "contact" : "contacts"}`}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -150,7 +220,7 @@ export default function CrmContacts() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : sorted.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <User className="h-10 w-10 mb-3 opacity-30" />
               <p className="text-sm">No contacts found</p>
@@ -160,17 +230,17 @@ export default function CrmContacts() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <SortableHead col="name">Name</SortableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Ace POC</TableHead>
-                  <TableHead className="text-center">Visits</TableHead>
-                  <TableHead>Last Event</TableHead>
+                  <SortableHead col="company">Company</SortableHead>
+                  <SortableHead col="acePoc">Ace POC</SortableHead>
+                  <SortableHead col="visits" className="text-center">Visits</SortableHead>
+                  <SortableHead col="lastVisit">Last Event</SortableHead>
                   <TableHead className="w-8"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(contact => (
+                {sorted.map(contact => (
                   <TableRow key={contact.id} className="cursor-pointer hover:bg-muted/50" data-testid={`row-contact-${contact.id}`}>
                     <TableCell>
                       <Link href={`/crm/contacts/${contact.id}`} className="font-medium hover:underline flex items-center gap-2">
