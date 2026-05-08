@@ -528,18 +528,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
       }
-      // 4. Cloudflare Turnstile
-      const turnstileToken = req.body["cf-turnstile-response"] as string | undefined;
-      if (process.env.TURNSTILE_SECRET_KEY) {
-        if (!turnstileToken) {
-          return res.status(403).json({ error: "CAPTCHA verification required." });
-        }
-        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
-        const valid = await verifyTurnstile(turnstileToken, ip);
-        if (!valid) {
-          return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
-        }
-      }
+      // Note: Turnstile is NOT re-verified here. Turnstile tokens are single-use;
+      // the token was already consumed by POST /api/leads which runs first.
+      // Honeypot, UA, and timing together prevent direct-call bypass.
       // ─────────────────────────────────────────────────────────────────────────
 
       const { metadata, _hp, _ft, "cf-turnstile-response": _cftr, ...rest } = req.body;

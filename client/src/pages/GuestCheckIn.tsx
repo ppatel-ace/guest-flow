@@ -301,8 +301,20 @@ export default function GuestCheckIn() {
 
       if (checkInRes.ok) {
         const customer = await checkInRes.json();
-        setCustomerName(customer.name);
+        // customer.name may be absent on honeypot fake-success — fall back to entered name
+        setCustomerName(customer.name || fullName);
+      } else if (checkInRes.status === 403 || checkInRes.status === 429) {
+        // Bot-blocked: surface a real error — do NOT show success screen
+        const err = await checkInRes.json().catch(() => ({}));
+        toast({
+          title: "Verification failed",
+          description: (err as any).error || "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
       } else {
+        // Non-bot failure (e.g. duplicate): try email-based check-in for pre-registered guests
         const checkInByEmail = await fetch("/api/check-in/email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
