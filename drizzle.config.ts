@@ -5,7 +5,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 const databaseUrl = process.env.DATABASE_URL;
-const isNeon = databaseUrl.includes("neon.tech");
+const hostname = new URL(databaseUrl).hostname;
+const isNeon = hostname.endsWith("neon.tech");
 
 export default defineConfig({
   out: "./migrations",

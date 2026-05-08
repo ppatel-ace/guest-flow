@@ -12,14 +12,17 @@ if (!process.env.DATABASE_URL) {
 }
 
 const databaseUrl = process.env.DATABASE_URL;
+const hostname = new URL(databaseUrl).hostname;
+const isNeon = hostname.endsWith("neon.tech");
 
 function createDb() {
-  if (databaseUrl.includes("neon.tech")) {
+  if (isNeon) {
     neonConfig.webSocketConstructor = ws;
     const pool = new Pool({ connectionString: databaseUrl });
     return { db: neonDrizzle({ client: pool, schema }), pool };
   }
-  const client = postgres(databaseUrl, { ssl: "require" });
+  // prepare: false is required for Supabase pooler (PgBouncer) and safe for all standard Postgres
+  const client = postgres(databaseUrl, { ssl: "require", prepare: false });
   return { db: pgDrizzle(client, { schema }), pool: undefined };
 }
 
