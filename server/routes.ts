@@ -453,16 +453,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ── CRM upsert flow (synchronous; errors are logged but never break the response) ──
       try {
-        // 1. Find or create company by name
-        let newCompanyId: string | undefined;
-        if (data.company && data.company.trim()) {
+        // 1. Check if contact already exists by email
+        const existingContact = await storage.findContactByEmail(data.email);
+
+        // 2. Only create/find company for NEW contacts — prevents orphan company records
+        let companyId: string | null = null;
+        if (!existingContact && data.company && data.company.trim()) {
           const company = await storage.upsertCompanyByName(data.company.trim());
-          newCompanyId = company.id;
+          companyId = company.id;
         }
 
-        // 2. Upsert contact — returns existing contact (with its original companyId) or new one
+        // 3. Upsert contact (creates with companyId, or updates profile fields for existing)
         const contact = await storage.upsertContactByEmail({
-          companyId: newCompanyId ?? null,
+          companyId,
           title: data.title ?? null,
           firstName: data.firstName,
           lastName: data.lastName,
@@ -471,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           acePoc: data.acePoc ?? null,
         });
 
-        // 3. Create visit using the contact's resolved companyId (preserves existing association)
+        // 4. Create visit using the contact's actual companyId (preserves historical association)
         await storage.createVisit({
           contactId: contact.id,
           companyId: contact.companyId ?? null,

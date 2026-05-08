@@ -132,6 +132,7 @@ export interface IStorage {
   getAllLeads(): Promise<Lead[]>;
   createLead(data: InsertLead): Promise<Lead>;
   // CRM
+  findContactByEmail(email: string): Promise<Contact | undefined>;
   upsertCompanyByName(name: string): Promise<Company>;
   upsertContactByEmail(data: InsertContact): Promise<Contact>;
   createVisit(data: InsertVisit): Promise<Visit>;
@@ -363,6 +364,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── CRM ────────────────────────────────────────────────────────────────────
+
+  async findContactByEmail(email: string): Promise<Contact | undefined> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const [contact] = await db.select().from(contacts).where(ilike(contacts.email, normalizedEmail));
+    return contact ?? undefined;
+  }
 
   async upsertCompanyByName(name: string): Promise<Company> {
     const normalized = name.trim();
