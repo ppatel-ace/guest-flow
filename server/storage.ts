@@ -367,16 +367,18 @@ export class DatabaseStorage implements IStorage {
 
   async findContactByEmail(email: string): Promise<Contact | undefined> {
     const normalizedEmail = email.trim().toLowerCase();
-    const [contact] = await db.select().from(contacts).where(ilike(contacts.email, normalizedEmail));
+    // Use eq — email is always stored lowercase so this is exact + case-insensitive
+    const [contact] = await db.select().from(contacts).where(eq(contacts.email, normalizedEmail));
     return contact ?? undefined;
   }
 
   async upsertCompanyByName(name: string): Promise<Company> {
     const normalized = name.trim();
+    // Use LOWER(name) = LOWER(value) for safe case-insensitive exact match (avoids ilike wildcards)
     const [existing] = await db
       .select()
       .from(companies)
-      .where(ilike(companies.name, normalized));
+      .where(sql`LOWER(${companies.name}) = LOWER(${normalized})`);
     if (existing) return existing;
     const [created] = await db.insert(companies).values({ name: normalized }).returning();
     return created;
@@ -384,10 +386,11 @@ export class DatabaseStorage implements IStorage {
 
   async upsertContactByEmail(data: InsertContact): Promise<Contact> {
     const normalizedEmail = data.email.trim().toLowerCase();
+    // Use eq — email is always stored lowercase so this is exact + case-insensitive
     const [existing] = await db
       .select()
       .from(contacts)
-      .where(ilike(contacts.email, normalizedEmail));
+      .where(eq(contacts.email, normalizedEmail));
 
     if (existing) {
       // Update mutable profile fields; NEVER reassign companyId if contact already has one
