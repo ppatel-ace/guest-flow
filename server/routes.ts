@@ -470,6 +470,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Security status (protected) — returns which bot-protection secrets are active, no values exposed
+  app.get("/api/admin/security-status", requireAuth, (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({
+      turnstile: !!process.env.TURNSTILE_SECRET_KEY && !!process.env.VITE_TURNSTILE_SITE_KEY,
+      hmacTiming: !!process.env.FINGERPRINT_HMAC_SECRET,
+      rateLimit: true, // always active, no key required
+    });
+  });
+
   // Get page settings (public)
   app.get("/api/page-settings/:key", async (req, res) => {
     try {

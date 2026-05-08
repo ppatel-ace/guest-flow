@@ -43,6 +43,10 @@ import {
   ChevronUp,
   ChevronDown,
   Lock,
+  ShieldCheck,
+  ShieldAlert,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -814,6 +818,161 @@ function GuestCheckInEditor() {
   );
 }
 
+const GENERATED_HMAC_SECRET = "76eef017cfb02fa7a14ddc176969d25e0761e307d31ceb3152502bc312fd962e";
+
+function SecurityStatusPanel() {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const { data: status, isLoading } = useQuery<{
+    turnstile: boolean;
+    hmacTiming: boolean;
+    rateLimit: boolean;
+  }>({
+    queryKey: ["/api/admin/security-status"],
+    refetchOnWindowFocus: false,
+  });
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const layers = [
+    {
+      key: "rateLimit",
+      label: "Rate Limiting",
+      description: "Caps check-in attempts per IP — always active, no key needed.",
+      active: status?.rateLimit ?? true,
+    },
+    {
+      key: "hmacTiming",
+      label: "Timing Token (HMAC)",
+      description: "Ensures the form was loaded before submission, blocking instant-replay bots.",
+      active: status?.hmacTiming ?? false,
+      secretKey: "FINGERPRINT_HMAC_SECRET",
+    },
+    {
+      key: "turnstile",
+      label: "Cloudflare Turnstile CAPTCHA",
+      description: "ML-based bot detection. Visible widget on non-event days; invisible on event days.",
+      active: status?.turnstile ?? false,
+      secretKey: "VITE_TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY",
+    },
+  ];
+
+  const allActive = !isLoading && layers.every((l) => l.active);
+
+  return (
+    <div className="space-y-6" data-testid="section-security-status">
+      <div className="space-y-1">
+        <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Protection Layers</h3>
+        <p className="text-xs text-muted-foreground">
+          {allActive
+            ? "All bot-protection layers are active."
+            : "Some layers need secrets configured in Replit before they activate."}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {layers.map((layer) => (
+          <div
+            key={layer.key}
+            className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+            data-testid={`security-layer-${layer.key}`}
+          >
+            {isLoading ? (
+              <div className="h-5 w-5 rounded-full bg-muted animate-pulse mt-0.5" />
+            ) : layer.active ? (
+              <ShieldCheck className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+            ) : (
+              <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">{layer.label}</span>
+                {!isLoading && (
+                  <Badge
+                    variant={layer.active ? "default" : "secondary"}
+                    className={layer.active ? "bg-green-500 hover:bg-green-500 text-white text-xs" : "text-xs"}
+                    data-testid={`badge-security-${layer.key}`}
+                  >
+                    {layer.active ? "Active" : "Not configured"}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">{layer.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Setup Instructions</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Follow these steps to activate all three protection layers. All keys go in Replit Secrets (not environment variables).
+          </p>
+        </div>
+
+        <div className="space-y-4 text-sm">
+          <div className="space-y-2">
+            <p className="font-medium">Step 1 — Generate the timing-token secret</p>
+            <p className="text-xs text-muted-foreground">
+              A unique random value has been pre-generated for you. Copy it and add it to Replit Secrets as{" "}
+              <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">FINGERPRINT_HMAC_SECRET</code>.
+            </p>
+            <div className="flex items-center gap-2 p-2 rounded bg-muted font-mono text-xs break-all">
+              <span className="flex-1">{GENERATED_HMAC_SECRET}</span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 shrink-0"
+                onClick={() => copyToClipboard(GENERATED_HMAC_SECRET, "hmac")}
+                data-testid="button-copy-hmac-secret"
+              >
+                {copied === "hmac" ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="font-medium">Step 2 — Create a free Cloudflare Turnstile widget</p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Go to <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" className="underline underline-offset-2">dash.cloudflare.com → Turnstile</a> (free, no credit card)</li>
+              <li>Click <strong>Add site</strong></li>
+              <li>Enter your domain (e.g. <code className="bg-muted px-1 py-0.5 rounded font-mono">aceregistration.replit.app</code>) and choose <strong>Managed</strong> widget type</li>
+              <li>Copy the <strong>Site Key</strong> → add to Replit Secrets as <code className="bg-muted px-1 py-0.5 rounded font-mono">VITE_TURNSTILE_SITE_KEY</code></li>
+              <li>Copy the <strong>Secret Key</strong> → add to Replit Secrets as <code className="bg-muted px-1 py-0.5 rounded font-mono">TURNSTILE_SECRET_KEY</code></li>
+            </ol>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-1 text-xs h-7"
+              onClick={() => window.open("https://dash.cloudflare.com/?to=/:account/turnstile", "_blank")}
+              data-testid="button-open-cloudflare"
+            >
+              <ExternalLink className="h-3 w-3 mr-1.5" />
+              Open Cloudflare Turnstile Dashboard
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <p className="font-medium">Step 3 — Restart the app</p>
+            <p className="text-xs text-muted-foreground">
+              After adding all three secrets in Replit, click <strong>Run</strong> (or restart the workflow) so the server picks up the new values.
+              Come back to this tab — all three badges should turn green.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PublicPages() {
   return (
     <div className="space-y-6" data-testid="page-public-pages">
@@ -831,6 +990,10 @@ export default function PublicPages() {
           <TabsTrigger value="guest" data-testid="tab-guest-page">
             <ClipboardList className="mr-2 h-4 w-4" />
             Guest Check-In Form
+          </TabsTrigger>
+          <TabsTrigger value="security" data-testid="tab-security">
+            <Lock className="mr-2 h-4 w-4" />
+            Security
           </TabsTrigger>
         </TabsList>
 
@@ -858,6 +1021,20 @@ export default function PublicPages() {
             </CardHeader>
             <CardContent>
               <GuestCheckInEditor />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Bot Protection</CardTitle>
+              <CardDescription>
+                Status of all protection layers on the guest check-in form, and step-by-step setup instructions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SecurityStatusPanel />
             </CardContent>
           </Card>
         </TabsContent>
