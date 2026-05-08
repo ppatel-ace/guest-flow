@@ -57,6 +57,50 @@ async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
   }
 }
 
+// ─── Bot-block in-memory counters (resets daily, no DB required) ──────────────
+
+type BlockReason = "honeypot" | "ua" | "timing" | "turnstile" | "rateLimit";
+
+interface BlockEvent {
+  timestamp: number;
+  reason: BlockReason;
+  maskedIp: string;
+}
+
+function maskIp(ip: string | undefined): string {
+  if (!ip) return "unknown";
+  const v4 = ip.split(".");
+  if (v4.length === 4) return `${v4[0]}.${v4[1]}.x.x`;
+  const colon = ip.indexOf(":");
+  return colon !== -1 ? ip.slice(0, colon) + ":xxxx:…" : ip.slice(0, 8) + "…";
+}
+
+let _blockDay = new Date().toISOString().slice(0, 10);
+let _blockLog: BlockEvent[] = [];
+
+function recordBlock(reason: BlockReason, ip: string | undefined) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _blockDay) {
+    _blockLog = [];
+    _blockDay = today;
+  }
+  _blockLog.push({ timestamp: Date.now(), reason, maskedIp: maskIp(ip) });
+  if (_blockLog.length > 500) _blockLog = _blockLog.slice(-500);
+}
+
+function getBotStats() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _blockDay) { _blockLog = []; _blockDay = today; }
+  const counts: Record<BlockReason, number> = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
+  for (const e of _blockLog) counts[e.reason]++;
+  return {
+    date: today,
+    total: _blockLog.length,
+    counts,
+    recentLog: [..._blockLog].reverse().slice(0, 20),
+  };
+}
+
 // Separate rate limiter instances so each endpoint independently caps at 15/min.
 // A single check-in hits both /api/leads and /api/guest-register, so a shared
 // instance would halve the effective budget. With separate instances, one IP
@@ -66,7 +110,10 @@ const leadsLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests. Please wait a moment and try again." },
+  handler: (req, res) => {
+    recordBlock("rateLimit", req.ip);
+    res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+  },
 });
 
 const guestRegisterLimiter = rateLimit({
@@ -74,7 +121,10 @@ const guestRegisterLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests. Please wait a moment and try again." },
+  handler: (req, res) => {
+    recordBlock("rateLimit", req.ip);
+    res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+  },
 });
 
 // Single limiter for the atomic guest check-in endpoint
@@ -83,7 +133,10 @@ const guestCheckinLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests. Please wait a moment and try again." },
+  handler: (req, res) => {
+    recordBlock("rateLimit", req.ip);
+    res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+  },
 });
 
 // Authentication middleware
@@ -480,6 +533,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Bot-protection stats (protected) — in-memory counters, reset daily
+  app.get("/api/admin/bot-stats", requireAuth, (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(getBotStats());
+  });
+
   // Get page settings (public)
   app.get("/api/page-settings/:key", async (req, res) => {
     try {
@@ -533,19 +592,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 1. Honeypot — fake success, zero DB work
       if (_hp) {
+        recordBlock("honeypot", req.ip);
         return res.status(201).json({ id: "ok" });
       }
       // 2. Headless UA
       if (isHeadlessUA(req.headers["user-agent"])) {
+        recordBlock("ua", req.ip);
         return res.status(403).json({ error: "Request blocked." });
       }
       // 3. Timing token (required when secret is configured)
       if (process.env.FINGERPRINT_HMAC_SECRET) {
         if (!_ft) {
+          recordBlock("timing", req.ip);
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
         const check = validateTimingToken(_ft as string);
         if (!check.ok) {
+          recordBlock("timing", req.ip);
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
       }
@@ -554,11 +617,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       //    secret key drives server verification — partial config is treated as inactive)
       if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY) {
         if (!cfToken) {
+          recordBlock("turnstile", req.ip);
           return res.status(403).json({ error: "CAPTCHA verification required." });
         }
         const ip = req.ip ?? "unknown";
         const valid = await verifyTurnstile(cfToken as string, ip);
         if (!valid) {
+          recordBlock("turnstile", req.ip);
           return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
         }
       }
@@ -662,11 +727,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 1. Honeypot: if the hidden field has a value, the submitter is a bot
       //    Return a fake success so the bot doesn't know it was caught
       if (req.body._hp) {
+        recordBlock("honeypot", req.ip);
         return res.status(201).json({ id: "ok" });
       }
 
       // 2. User-Agent headless browser detection
       if (isHeadlessUA(req.headers["user-agent"])) {
+        recordBlock("ua", req.ip);
         return res.status(403).json({ error: "Request blocked." });
       }
 
@@ -674,10 +741,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timingToken = req.body._ft as string | undefined;
       if (process.env.FINGERPRINT_HMAC_SECRET) {
         if (!timingToken) {
+          recordBlock("timing", req.ip);
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
         const check = validateTimingToken(timingToken);
         if (!check.ok) {
+          recordBlock("timing", req.ip);
           return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
         }
       }
@@ -687,11 +756,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const turnstileToken = req.body["cf-turnstile-response"] as string | undefined;
       if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY) {
         if (!turnstileToken) {
+          recordBlock("turnstile", req.ip);
           return res.status(403).json({ error: "CAPTCHA verification required." });
         }
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "";
         const valid = await verifyTurnstile(turnstileToken, ip);
         if (!valid) {
+          recordBlock("turnstile", req.ip);
           return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
         }
       }
