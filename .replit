@@ -42,3 +42,8 @@ waitForPort = 5000
 [agent]
 integrations = ["javascript_database:1.0.0"]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+DATABASE_URL = "postgresql://postgres:uvZZT7gEBhvr6MA2@db.pagdiccadattytahnxfj.supabase.co:5432/postgres"
