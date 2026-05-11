@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation, Redirect } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,17 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  if (!authLoading && isAuthenticated) {
-    return <Redirect to="/" />;
-  }
+  // Refetch session on mount so stale cache never blocks the redirect
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/session"] });
+  }, []);
+
+  // Redirect once we know the user is already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      setLocation("/");
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
