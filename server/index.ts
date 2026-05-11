@@ -67,6 +67,26 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Production guard: only expose public-facing pages on the deployed URL.
+  // All admin routes (dashboard, login, invitations, etc.) redirect to the
+  // guest check-in page. API calls and static assets are passed through as-is
+  // (admin API endpoints are already protected by requireAuth).
+  if (process.env.NODE_ENV === "production") {
+    const PUBLIC_PAGES = ["/guest-check-in", "/scan"];
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      // Always pass through API calls and static assets (files with extensions)
+      if (req.path.startsWith("/api/") || /\.\w+$/.test(req.path)) {
+        return next();
+      }
+      // Allow the two public pages
+      if (PUBLIC_PAGES.some(p => req.path === p || req.path.startsWith(p + "/"))) {
+        return next();
+      }
+      // Everything else (/, /login, /customers, /export, etc.) → guest check-in
+      return res.redirect(302, "/guest-check-in");
+    });
+  }
+
   // Warn in production when bot-protection secrets are absent — checks silently degrade without them
   if (process.env.NODE_ENV === "production") {
     if (!process.env.TURNSTILE_SECRET_KEY) {
