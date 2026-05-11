@@ -602,7 +602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (deletedLead.customerId) {
         await storage.deleteCustomer(deletedLead.customerId);
       }
-      res.status(204).send();
+      res.json({ deleted: true, id });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete lead" });
     }

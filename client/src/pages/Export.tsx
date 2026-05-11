@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import type { Lead, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const ACE_POC_OPTIONS = [
   "Jerry Parker", "Larry Pomasan", "Nish Patel",
@@ -32,7 +33,8 @@ const UNDO_MS = 5000;
 const MAX_PENDING = 5;
 
 interface PendingDeletion {
-  leadId: string;
+  key: string;        // customerId — used as unique key / undo handle
+  leadId: string | null; // for optimistic filtering of filteredLeads
   label: string;
   deadline: number;
   timerId: ReturnType<typeof setTimeout>;
@@ -200,7 +202,7 @@ function EditDialog({ lead, onClose, onSaved }: EditDialogProps) {
 interface UndoTrayProps {
   pending: PendingDeletion[];
   now: number;
-  onUndo: (leadId: string) => void;
+  onUndo: (key: string) => void;
 }
 
 function UndoTray({ pending, now, onUndo }: UndoTrayProps) {
@@ -212,9 +214,9 @@ function UndoTray({ pending, now, onUndo }: UndoTrayProps) {
         const pct = (remaining / UNDO_MS) * 100;
         return (
           <div
-            key={p.leadId}
+            key={p.key}
             className="flex items-center gap-3 bg-popover border rounded-lg shadow-lg px-4 py-3 min-w-72"
-            data-testid={`undo-card-${p.leadId}`}
+            data-testid={`undo-card-${p.key}`}
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">Deleted "{p.label}"</p>
@@ -228,9 +230,9 @@ function UndoTray({ pending, now, onUndo }: UndoTrayProps) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onUndo(p.leadId)}
+              onClick={() => onUndo(p.key)}
               className="shrink-0 h-8 gap-1.5"
-              data-testid={`button-undo-${p.leadId}`}
+              data-testid={`button-undo-${p.key}`}
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Undo
@@ -250,6 +252,7 @@ export default function Export() {
   const [pending, setPending] = useState<PendingDeletion[]>([]);
   const [now, setNow] = useState(Date.now());
   const timerMap = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const { toast } = useToast();
 
   // Tick every 200 ms while there are pending deletions
   useEffect(() => {
@@ -273,7 +276,8 @@ export default function Export() {
   });
 
   const isLoading = leadsLoading || customersLoading;
-  const pendingIds = useMemo(() => new Set(pending.map(p => p.leadId)), [pending]);
+  const pendingIds = useMemo(() => new Set(pending.map(p => p.key)), [pending]);
+  const pendingLeadIds = useMemo(() => new Set(pending.map(p => p.leadId).filter(Boolean) as string[]), [pending]);
 
   const eventNames = useMemo(() => {
     const names = leads.map(l => l.eventName?.trim()).filter((n): n is string => !!n);
@@ -282,8 +286,8 @@ export default function Export() {
 
   const filteredLeads = useMemo(() =>
     (selectedEvent === "all" ? leads : leads.filter(l => (l.eventName?.trim() ?? "") === selectedEvent))
-      .filter(l => !pendingIds.has(l.id)),
-    [leads, selectedEvent, pendingIds]
+      .filter(l => !pendingLeadIds.has(l.id)),
+    [leads, selectedEvent, pendingLeadIds]
   );
 
   const leadByCustomerId = useMemo(
@@ -316,30 +320,41 @@ export default function Export() {
   }, [customers, leadByCustomerId, leadByEmail, selectedEvent]);
 
   // ── Delete / undo ────────────────────────────────────────────────────────────
-  function handleDelete(leadId: string, label: string) {
-    if (pending.length >= MAX_PENDING) return;
+  function handleDelete(leadId: string | null, customerId: string, label: string) {
+    const key = customerId;
+    if (pending.length >= MAX_PENDING || pendingIds.has(key)) return;
     const deadline = Date.now() + UNDO_MS;
     const timerId = setTimeout(async () => {
       try {
-        await apiRequest("DELETE", `/api/leads/${leadId}`);
+        if (leadId) {
+          await apiRequest("DELETE", `/api/leads/${leadId}`);
+        } else {
+          await apiRequest("DELETE", `/api/customers/${customerId}`);
+        }
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["/api/leads"] }),
           queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
         ]);
+      } catch (err) {
+        toast({
+          title: "Delete failed",
+          description: err instanceof Error ? err.message : "Could not delete record. Please try again.",
+          variant: "destructive",
+        });
       } finally {
-        setPending(p => p.filter(x => x.leadId !== leadId));
-        timerMap.current.delete(leadId);
+        setPending(p => p.filter(x => x.key !== key));
+        timerMap.current.delete(key);
       }
     }, UNDO_MS);
-    timerMap.current.set(leadId, timerId);
-    setPending(p => [...p, { leadId, label, deadline, timerId }]);
+    timerMap.current.set(key, timerId);
+    setPending(p => [...p, { key, leadId, label, deadline, timerId }]);
   }
 
-  function handleUndo(leadId: string) {
-    const id = timerMap.current.get(leadId);
+  function handleUndo(key: string) {
+    const id = timerMap.current.get(key);
     if (id !== undefined) clearTimeout(id);
-    timerMap.current.delete(leadId);
-    setPending(p => p.filter(x => x.leadId !== leadId));
+    timerMap.current.delete(key);
+    setPending(p => p.filter(x => x.key !== key));
   }
 
   // ── Download ─────────────────────────────────────────────────────────────────
@@ -520,7 +535,7 @@ export default function Export() {
               <TableBody>
                 {checkedIn.map(c => {
                   const lead = c.leadId ? leads.find(l => l.id === c.leadId) ?? null : null;
-                  const canDelete = !!c.leadId && !pendingIds.has(c.leadId) && pending.length < MAX_PENDING;
+                  const canDelete = !pendingIds.has(c.id) && pending.length < MAX_PENDING;
                   const canEdit = !!c.leadId && !!lead;
                   return (
                     <TableRow key={c.id} data-testid={`row-checkin-${c.id}`}>
@@ -550,7 +565,7 @@ export default function Export() {
                             variant="ghost"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
                             disabled={!canDelete}
-                            onClick={() => c.leadId && handleDelete(c.leadId, c.name)}
+                            onClick={() => handleDelete(c.leadId, c.id, c.name)}
                             data-testid={`button-delete-${c.id}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
