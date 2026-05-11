@@ -9,7 +9,7 @@ packages = ["remote-exec"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["node", "./dist/index.cjs"]
+run = ["sh", "-c", "NODE_ENV=production node ./dist/index.cjs"]
 
 [[ports]]
 localPort = 5000
