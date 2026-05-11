@@ -82,13 +82,13 @@ app.use((req, res, next) => {
   // (admin API endpoints are already protected by requireAuth).
   // The admin login form lives at /ace-admin (not /login).
   if (process.env.NODE_ENV === "production") {
-    const PUBLIC_PAGES = ["/guest-check-in", "/scan", "/ace-admin"];
+    const PUBLIC_PAGES = ["/guest-check-in", "/scan"];
     app.use((req: Request, res: Response, next: NextFunction) => {
       // Always pass through API calls and static assets (files with extensions)
       if (req.path.startsWith("/api/") || /\.\w+$/.test(req.path)) {
         return next();
       }
-      // Allow the public pages (guest check-in, scan, and the hidden admin login)
+      // Allow the two public pages (guest check-in and scan)
       if (PUBLIC_PAGES.some(p => req.path === p || req.path.startsWith(p + "/"))) {
         return next();
       }
