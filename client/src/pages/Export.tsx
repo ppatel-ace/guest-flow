@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileDown, FileSpreadsheet, CheckCircle2, Loader2, UserCheck,
-  Pencil, Trash2, RotateCcw, X,
+  Pencil, Trash2,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -29,22 +33,17 @@ const ACE_POC_OPTIONS = [
   "Craig Frost", "Ashley Morris", "Sanjay Parimi",
 ];
 
-const UNDO_MS = 5000;
-const MAX_PENDING = 5;
-
-interface PendingDeletion {
-  key: string;        // customerId — used as unique key / undo handle
-  leadId: string | null; // for optimistic filtering of filteredLeads
-  label: string;
-  deadline: number;
-  timerId: ReturnType<typeof setTimeout>;
-}
-
 interface EnrichedCustomer extends Customer {
   acePoc: string | null;
   company: string | null;
   eventName: string | null;
   leadId: string | null;
+}
+
+interface PendingDelete {
+  leadId: string | null;
+  customerId: string;
+  label: string;
 }
 
 function buildLeadsSheet(leads: Lead[]) {
@@ -198,68 +197,14 @@ function EditDialog({ lead, onClose, onSaved }: EditDialogProps) {
   );
 }
 
-// ── Pending deletion tray ──────────────────────────────────────────────────────
-interface UndoTrayProps {
-  pending: PendingDeletion[];
-  now: number;
-  onUndo: (key: string) => void;
-}
-
-function UndoTray({ pending, now, onUndo }: UndoTrayProps) {
-  if (pending.length === 0) return null;
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 items-end" aria-live="polite">
-      {[...pending].reverse().map(p => {
-        const remaining = Math.max(0, p.deadline - now);
-        const pct = (remaining / UNDO_MS) * 100;
-        return (
-          <div
-            key={p.key}
-            className="flex items-center gap-3 bg-popover border rounded-lg shadow-lg px-4 py-3 min-w-72"
-            data-testid={`undo-card-${p.key}`}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">Deleted "{p.label}"</p>
-              <div className="mt-1.5 h-1 w-full rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-destructive rounded-full transition-none"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onUndo(p.key)}
-              className="shrink-0 h-8 gap-1.5"
-              data-testid={`button-undo-${p.key}`}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Undo
-            </Button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function Export() {
   const [downloaded, setDownloaded] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState("all");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [pending, setPending] = useState<PendingDeletion[]>([]);
-  const [now, setNow] = useState(Date.now());
-  const timerMap = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
-
-  // Tick every 200 ms while there are pending deletions
-  useEffect(() => {
-    if (pending.length === 0) return;
-    const id = setInterval(() => setNow(Date.now()), 200);
-    return () => clearInterval(id);
-  }, [pending.length]);
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -276,8 +221,6 @@ export default function Export() {
   });
 
   const isLoading = leadsLoading || customersLoading;
-  const pendingIds = useMemo(() => new Set(pending.map(p => p.key)), [pending]);
-  const pendingLeadIds = useMemo(() => new Set(pending.map(p => p.leadId).filter(Boolean) as string[]), [pending]);
 
   const eventNames = useMemo(() => {
     const names = leads.map(l => l.eventName?.trim()).filter((n): n is string => !!n);
@@ -285,9 +228,8 @@ export default function Export() {
   }, [leads]);
 
   const filteredLeads = useMemo(() =>
-    (selectedEvent === "all" ? leads : leads.filter(l => (l.eventName?.trim() ?? "") === selectedEvent))
-      .filter(l => !pendingLeadIds.has(l.id)),
-    [leads, selectedEvent, pendingLeadIds]
+    selectedEvent === "all" ? leads : leads.filter(l => (l.eventName?.trim() ?? "") === selectedEvent),
+    [leads, selectedEvent]
   );
 
   const leadByCustomerId = useMemo(
@@ -319,42 +261,30 @@ export default function Export() {
     });
   }, [customers, leadByCustomerId, leadByEmail, selectedEvent]);
 
-  // ── Delete / undo ────────────────────────────────────────────────────────────
-  function handleDelete(leadId: string | null, customerId: string, label: string) {
-    const key = customerId;
-    if (pending.length >= MAX_PENDING || pendingIds.has(key)) return;
-    const deadline = Date.now() + UNDO_MS;
-    const timerId = setTimeout(async () => {
-      try {
-        if (leadId) {
-          await apiRequest("DELETE", `/api/leads/${leadId}`);
-        } else {
-          await apiRequest("DELETE", `/api/customers/${customerId}`);
-        }
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["/api/leads"] }),
-          queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
-        ]);
-      } catch (err) {
-        toast({
-          title: "Delete failed",
-          description: err instanceof Error ? err.message : "Could not delete record. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setPending(p => p.filter(x => x.key !== key));
-        timerMap.current.delete(key);
+  // ── Delete ────────────────────────────────────────────────────────────────
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { leadId, customerId } = pendingDelete;
+    setDeleting(true);
+    try {
+      await apiRequest("DELETE", `/api/customers/${customerId}`);
+      if (leadId) {
+        await apiRequest("DELETE", `/api/leads/${leadId}`);
       }
-    }, UNDO_MS);
-    timerMap.current.set(key, timerId);
-    setPending(p => [...p, { key, leadId, label, deadline, timerId }]);
-  }
-
-  function handleUndo(key: string) {
-    const id = timerMap.current.get(key);
-    if (id !== undefined) clearTimeout(id);
-    timerMap.current.delete(key);
-    setPending(p => p.filter(x => x.key !== key));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/leads"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
+      ]);
+    } catch (err) {
+      toast({
+        title: "Delete failed",
+        description: err instanceof Error ? err.message : "Could not delete record. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
   }
 
   // ── Download ─────────────────────────────────────────────────────────────────
@@ -535,7 +465,6 @@ export default function Export() {
               <TableBody>
                 {checkedIn.map(c => {
                   const lead = c.leadId ? leads.find(l => l.id === c.leadId) ?? null : null;
-                  const canDelete = !pendingIds.has(c.id) && pending.length < MAX_PENDING;
                   const canEdit = !!c.leadId && !!lead;
                   return (
                     <TableRow key={c.id} data-testid={`row-checkin-${c.id}`}>
@@ -564,8 +493,7 @@ export default function Export() {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            disabled={!canDelete}
-                            onClick={() => handleDelete(c.leadId, c.id, c.name)}
+                            onClick={() => setPendingDelete({ leadId: c.leadId, customerId: c.id, label: c.name })}
                             data-testid={`button-delete-${c.id}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -588,8 +516,33 @@ export default function Export() {
         onSaved={() => setEditingLead(null)}
       />
 
-      {/* Undo tray */}
-      <UndoTray pending={pending} now={now} onUndo={handleUndo} />
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!pendingDelete} onOpenChange={open => { if (!open && !deleting) setPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete check-in?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the check-in record
+              {pendingDelete?.label ? ` for "${pendingDelete.label}"` : ""}
+              {pendingDelete?.leadId ? " and its associated lead entry" : ""}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting} data-testid="button-delete-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={confirmDelete}
+              data-testid="button-delete-confirm"
+            >
+              {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
