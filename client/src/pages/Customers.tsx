@@ -52,8 +52,8 @@ export default function Customers() {
     <div className="space-y-6" data-testid="page-customers">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold">Customers</h1>
-          <p className="text-muted-foreground">Manage your customer list and invitations</p>
+          <h1 className="text-3xl font-bold">Invites</h1>
+          <p className="text-muted-foreground">Manage your invite list and check-ins</p>
         </div>
         <div className="flex gap-2">
           <AddCustomerDialog onAdd={handleAddCustomer} />
@@ -65,7 +65,7 @@ export default function Customers() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search customers..."
+          placeholder="Search invites..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-9"

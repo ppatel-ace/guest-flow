@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 const mainMenuItems = [
   { title: "Dashboard", url: "/", icon: Home },
-  { title: "Customers", url: "/customers", icon: Users },
+  { title: "Invites", url: "/customers", icon: Users },
   { title: "Check-In", url: "/check-in", icon: QrCode },
   { title: "Invitations", url: "/invitations", icon: Mail },
   { title: "Import", url: "/import", icon: FileSpreadsheet },
