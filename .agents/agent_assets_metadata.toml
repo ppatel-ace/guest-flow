@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "IZda1A5uDTsGJ8A9Y8DFE"
+uri = "file://crm-export.tar.gz"
+type = "unspecified"
+title = "GuestFlow CRM Export (crm-export.tar.gz)"
