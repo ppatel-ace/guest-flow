@@ -75,7 +75,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Switch>
-          <Route path="/login" component={Login} />
+          <Route path="/ace-admin" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
           <Route component={AdminLayout} />
