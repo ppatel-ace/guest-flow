@@ -30,17 +30,26 @@ function buildLeadsSheet(leads: Lead[]) {
   }));
 }
 
-function buildCheckInsSheet(customers: Customer[]) {
+function buildCheckInsSheet(customers: Customer[], leads: Lead[]) {
+  const leadByCustomerId = new Map(leads.filter(l => l.customerId).map(l => [l.customerId, l]));
+  const leadByEmail = new Map(leads.map(l => [l.email, l]));
+
   return customers
     .filter(c => c.status === "checked-in")
-    .map(c => ({
-      "Name": c.name,
-      "Email": c.email,
-      "Phone": c.phone ?? "",
-      "Status": c.status,
-      "Invited At": c.invitedAt ? new Date(c.invitedAt).toLocaleString() : "",
-      "Checked In At": c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "",
-    }));
+    .map(c => {
+      const lead = leadByCustomerId.get(c.id) ?? leadByEmail.get(c.email);
+      return {
+        "Name": c.name,
+        "Email": c.email,
+        "Phone": c.phone ?? "",
+        "Company": lead?.company ?? "",
+        "Ace POC": lead?.acePoc ?? "",
+        "Event Name": lead?.eventName ?? "",
+        "Status": c.status,
+        "Invited At": c.invitedAt ? new Date(c.invitedAt).toLocaleString() : "",
+        "Checked In At": c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "",
+      };
+    });
 }
 
 export default function Export() {
@@ -48,18 +57,33 @@ export default function Export() {
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
   });
 
   const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
   });
 
   const isLoading = leadsLoading || customersLoading;
-  const checkedIn = customers.filter(c => c.status === "checked-in")
+
+  const leadByCustomerId = new Map(leads.filter(l => l.customerId).map(l => [l.customerId, l]));
+  const leadByEmail = new Map(leads.map(l => [l.email, l]));
+
+  const checkedIn = customers
+    .filter(c => c.status === "checked-in")
     .sort((a, b) => {
       if (!a.checkedInAt) return 1;
       if (!b.checkedInAt) return -1;
       return new Date(b.checkedInAt).getTime() - new Date(a.checkedInAt).getTime();
+    })
+    .map(c => {
+      const lead = leadByCustomerId.get(c.id) ?? leadByEmail.get(c.email);
+      return { ...c, acePoc: lead?.acePoc ?? null, company: lead?.company ?? null, eventName: lead?.eventName ?? null };
     });
 
   function handleDownload() {
@@ -68,7 +92,7 @@ export default function Export() {
     const leadsSheet = XLSX.utils.json_to_sheet(buildLeadsSheet(leads));
     XLSX.utils.book_append_sheet(wb, leadsSheet, "Leads");
 
-    const checkInsSheet = XLSX.utils.json_to_sheet(buildCheckInsSheet(customers));
+    const checkInsSheet = XLSX.utils.json_to_sheet(buildCheckInsSheet(customers, leads));
     XLSX.utils.book_append_sheet(wb, checkInsSheet, "Check-ins");
 
     const date = new Date().toISOString().slice(0, 10);
@@ -77,7 +101,7 @@ export default function Export() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl" data-testid="page-export">
+    <div className="space-y-6 max-w-5xl" data-testid="page-export">
       <div>
         <h1 className="text-3xl font-bold">Export Event Data</h1>
         <p className="text-muted-foreground mt-1">Review and download all leads and check-ins from this event</p>
@@ -132,7 +156,7 @@ export default function Export() {
             <div className="flex items-center gap-2 text-sm">
               <Badge variant="secondary">Sheet 2</Badge>
               <span className="font-medium">Check-ins</span>
-              <span className="text-muted-foreground">— Name, Email, Phone, Status, Invited At, Checked In At</span>
+              <span className="text-muted-foreground">— Name, Email, Phone, Company, Ace POC, Event Name, Invited At, Checked In At</span>
             </div>
           </div>
 
@@ -205,6 +229,9 @@ export default function Export() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Ace POC</TableHead>
+                  <TableHead>Event</TableHead>
                   <TableHead>Checked In At</TableHead>
                 </TableRow>
               </TableHeader>
@@ -214,6 +241,9 @@ export default function Export() {
                     <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell className="text-muted-foreground">{c.email}</TableCell>
                     <TableCell className="text-muted-foreground">{c.phone ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.company ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.acePoc ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.eventName ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "—"}
                     </TableCell>
