@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileDown, FileSpreadsheet, CheckCircle2, Loader2, UserCheck,
@@ -14,10 +14,6 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
-} from "@/components/ui/alert-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -203,8 +199,48 @@ export default function Export() {
   const [selectedEvent, setSelectedEvent] = useState("all");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [countdown, setCountdown] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
+
+  const COUNTDOWN_SECS = 5;
+
+  function startDelete(item: PendingDelete) {
+    setPendingDelete(item);
+    setCountdown(COUNTDOWN_SECS);
+  }
+
+  function cancelDelete() {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    setPendingDelete(null);
+    setCountdown(0);
+  }
+
+  useEffect(() => {
+    if (!pendingDelete) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [pendingDelete]);
+
+  useEffect(() => {
+    if (pendingDelete && countdown === 0 && !deleting) {
+      commitDelete(pendingDelete);
+    }
+  }, [countdown]);
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -262,14 +298,14 @@ export default function Export() {
   }, [customers, leadByCustomerId, leadByEmail, selectedEvent]);
 
   // ── Delete ────────────────────────────────────────────────────────────────
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    const { leadId, customerId } = pendingDelete;
+  async function commitDelete(item: PendingDelete) {
     setDeleting(true);
+    setPendingDelete(null);
+    setCountdown(0);
     try {
-      await apiRequest("DELETE", `/api/customers/${customerId}`);
-      if (leadId) {
-        await apiRequest("DELETE", `/api/leads/${leadId}`);
+      await apiRequest("DELETE", `/api/customers/${item.customerId}`);
+      if (item.leadId) {
+        await apiRequest("DELETE", `/api/leads/${item.leadId}`);
       }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/leads"] }),
@@ -283,7 +319,6 @@ export default function Export() {
       });
     } finally {
       setDeleting(false);
-      setPendingDelete(null);
     }
   }
 
@@ -493,7 +528,7 @@ export default function Export() {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => setPendingDelete({ leadId: c.leadId, customerId: c.id, label: c.name })}
+                            onClick={() => startDelete({ leadId: c.leadId, customerId: c.id, label: c.name })}
                             data-testid={`button-delete-${c.id}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -516,33 +551,45 @@ export default function Export() {
         onSaved={() => setEditingLead(null)}
       />
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog open={!!pendingDelete} onOpenChange={open => { if (!open && !deleting) setPendingDelete(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete check-in?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the check-in record
-              {pendingDelete?.label ? ` for "${pendingDelete.label}"` : ""}
-              {pendingDelete?.leadId ? " and its associated lead entry" : ""}.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting} data-testid="button-delete-cancel">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleting}
-              onClick={confirmDelete}
-              data-testid="button-delete-confirm"
+      {/* Countdown delete banner */}
+      {pendingDelete && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm rounded-lg border bg-background shadow-lg overflow-hidden"
+          data-testid="banner-delete-countdown"
+        >
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Trash2 className="h-4 w-4 shrink-0 text-destructive" />
+              <span className="text-sm font-medium truncate">
+                Deleting "{pendingDelete.label}"
+              </span>
+              <span className="text-sm text-muted-foreground shrink-0">{countdown}s</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={cancelDelete}
+              data-testid="button-delete-undo"
             >
-              {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</> : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              Undo
+            </Button>
+          </div>
+          <div className="h-1 bg-muted">
+            <div
+              className="h-1 bg-destructive transition-all duration-1000 ease-linear"
+              style={{ width: `${(countdown / COUNTDOWN_SECS) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Deleting spinner banner */}
+      {deleting && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm rounded-lg border bg-background shadow-lg px-4 py-3 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Deleting…</span>
+        </div>
+      )}
     </div>
   );
 }
