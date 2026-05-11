@@ -70,7 +70,7 @@ app.use((req, res, next) => {
   // Unconditional guard: /login is permanently retired — redirect to guest check-in
   // in all environments so the URL is never exposed even in development.
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path === "/login") {
+    if (req.path === "/login" || req.path === "/login/") {
       return res.redirect(302, "/guest-check-in");
     }
     return next();
