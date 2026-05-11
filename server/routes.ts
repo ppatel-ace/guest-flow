@@ -578,6 +578,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update a lead (protected)
+  app.patch("/api/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateSchema = insertLeadSchema.partial();
+      const data = updateSchema.parse(req.body);
+      const updated = await storage.updateLead(id, data);
+      if (!updated) return res.status(404).json({ error: "Lead not found" });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: error.errors });
+      res.status(500).json({ error: "Failed to update lead" });
+    }
+  });
+
+  // Delete a lead (protected)
+  app.delete("/api/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteLead(id);
+      if (!deleted) return res.status(404).json({ error: "Lead not found" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete lead" });
+    }
+  });
+
   // Guest registration (rate limited)
   // Atomic public guest check-in: runs all bot checks once, then creates lead + customer.
   // Single endpoint eliminates Turnstile token reuse (tokens are single-use).
