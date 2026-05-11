@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut, Globe, Building2, User } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -20,12 +20,7 @@ const mainMenuItems = [
   { title: "Invitations", url: "/invitations", icon: Mail },
   { title: "Import", url: "/import", icon: FileSpreadsheet },
   { title: "Public Pages", url: "/public-pages", icon: Globe },
-  { title: "Setup", url: "/setup", icon: Database },
-];
-
-const crmMenuItems = [
-  { title: "Companies", url: "/crm/companies", icon: Building2 },
-  { title: "Contacts", url: "/crm/contacts", icon: User },
+  { title: "Export", url: "/export", icon: FileDown },
 ];
 
 export function AppSidebar() {
@@ -48,24 +43,6 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>CRM</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {crmMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`link-crm-${item.title.toLowerCase()}`}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
