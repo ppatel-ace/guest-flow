@@ -32,7 +32,7 @@ function buildLeadsSheet(leads: Lead[]) {
     "Phone": l.phoneNumber,
     "Company": l.company ?? "",
     "Ace POC": l.acePoc ?? "",
-    "Event Name": l.eventName ?? "",
+    "Event Name": l.eventName?.trim() ?? "",
     "Submitted At": new Date(l.submittedAt).toLocaleString(),
   }));
 }
@@ -51,7 +51,7 @@ function buildCheckInsSheet(customers: Customer[], leads: Lead[]) {
         "Phone": c.phone ?? "",
         "Company": lead?.company ?? "",
         "Ace POC": lead?.acePoc ?? "",
-        "Event Name": lead?.eventName ?? "",
+        "Event Name": lead?.eventName?.trim() ?? "",
         "Status": c.status,
         "Invited At": c.invitedAt ? new Date(c.invitedAt).toLocaleString() : "",
         "Checked In At": c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "",
@@ -81,13 +81,13 @@ export default function Export() {
 
   const eventNames = useMemo(() => {
     const names = leads
-      .map(l => l.eventName)
+      .map(l => l.eventName?.trim())
       .filter((n): n is string => !!n);
     return Array.from(new Set(names)).sort();
   }, [leads]);
 
   const filteredLeads = useMemo(() =>
-    selectedEvent === "all" ? leads : leads.filter(l => l.eventName === selectedEvent),
+    selectedEvent === "all" ? leads : leads.filter(l => (l.eventName?.trim() ?? "") === selectedEvent),
     [leads, selectedEvent]
   );
 
@@ -104,7 +104,7 @@ export default function Export() {
     const base = customers.filter(c => c.status === "checked-in");
     const enriched = base.map(c => {
       const lead = leadByCustomerId.get(c.id) ?? leadByEmail.get(c.email);
-      return { ...c, acePoc: lead?.acePoc ?? null, company: lead?.company ?? null, eventName: lead?.eventName ?? null };
+      return { ...c, acePoc: lead?.acePoc ?? null, company: lead?.company ?? null, eventName: lead?.eventName?.trim() ?? null };
     });
     const filtered = selectedEvent === "all"
       ? enriched
