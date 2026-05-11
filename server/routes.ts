@@ -597,8 +597,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/leads/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const deleted = await storage.deleteLead(id);
-      if (!deleted) return res.status(404).json({ error: "Lead not found" });
+      const deletedLead = await storage.deleteLead(id);
+      if (!deletedLead) return res.status(404).json({ error: "Lead not found" });
+      if (deletedLead.customerId) {
+        await storage.deleteCustomer(deletedLead.customerId);
+      }
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete lead" });

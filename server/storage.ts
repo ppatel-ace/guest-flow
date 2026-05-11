@@ -136,7 +136,7 @@ export interface IStorage {
   getAllLeads(): Promise<Lead[]>;
   createLead(data: InsertLead): Promise<Lead>;
   updateLead(id: string, data: Partial<InsertLead>): Promise<Lead | undefined>;
-  deleteLead(id: string): Promise<boolean>;
+  deleteLead(id: string): Promise<Lead | undefined>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
   upsertCompanyByName(name: string): Promise<Company>;
@@ -374,9 +374,9 @@ export class DatabaseStorage implements IStorage {
     return lead || undefined;
   }
 
-  async deleteLead(id: string): Promise<boolean> {
-    const result = await db.delete(leads).where(eq(leads.id, id)).returning();
-    return result.length > 0;
+  async deleteLead(id: string): Promise<Lead | undefined> {
+    const [deleted] = await db.delete(leads).where(eq(leads.id, id)).returning();
+    return deleted || undefined;
   }
 
   // ─── CRM ────────────────────────────────────────────────────────────────────

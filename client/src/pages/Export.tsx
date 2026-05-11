@@ -322,7 +322,10 @@ export default function Export() {
     const timerId = setTimeout(async () => {
       try {
         await apiRequest("DELETE", `/api/leads/${leadId}`);
-        await queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["/api/leads"] }),
+          queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
+        ]);
       } finally {
         setPending(p => p.filter(x => x.leadId !== leadId));
         timerMap.current.delete(leadId);
