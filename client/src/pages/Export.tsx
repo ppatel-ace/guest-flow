@@ -141,7 +141,7 @@ export default function Export() {
           ) : (
             <Button
               onClick={handleDownload}
-              disabled={isLoading || (leads.length === 0 && customers.length === 0)}
+              disabled={isLoading || (leads.length === 0 && checkedInCount === 0)}
               size="lg"
               data-testid="button-download-excel"
             >
