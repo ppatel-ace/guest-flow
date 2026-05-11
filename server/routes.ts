@@ -633,6 +633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: body.phoneNumber,
         company: body.company ?? null,
         acePoc: body.acePoc ?? null,
+        eventName: body.eventName ?? null,
       });
       await storage.createLead(leadData);
 

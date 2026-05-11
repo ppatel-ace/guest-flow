@@ -272,6 +272,7 @@ export default function GuestCheckIn() {
           phoneNumber: phoneNumber.trim(),
           company: company.trim() || null,
           acePoc: acePoc || null,
+          eventName: eventName || null,
           _hp: honeypot,
           _ft: timingToken,
           "cf-turnstile-response": turnstileToken,
