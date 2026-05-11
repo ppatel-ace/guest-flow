@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileDown, FileSpreadsheet, CheckCircle2, Loader2 } from "lucide-react";
+import { FileDown, FileSpreadsheet, CheckCircle2, Loader2, UserCheck } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { Lead, Customer } from "@shared/schema";
 
 function buildLeadsSheet(leads: Lead[]) {
@@ -46,7 +55,12 @@ export default function Export() {
   });
 
   const isLoading = leadsLoading || customersLoading;
-  const checkedInCount = customers.filter(c => c.status === "checked-in").length;
+  const checkedIn = customers.filter(c => c.status === "checked-in")
+    .sort((a, b) => {
+      if (!a.checkedInAt) return 1;
+      if (!b.checkedInAt) return -1;
+      return new Date(b.checkedInAt).getTime() - new Date(a.checkedInAt).getTime();
+    });
 
   function handleDownload() {
     const wb = XLSX.utils.book_new();
@@ -63,10 +77,10 @@ export default function Export() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl" data-testid="page-export">
+    <div className="space-y-6 max-w-4xl" data-testid="page-export">
       <div>
         <h1 className="text-3xl font-bold">Export Event Data</h1>
-        <p className="text-muted-foreground mt-1">Download all leads and check-ins from this event as an Excel file</p>
+        <p className="text-muted-foreground mt-1">Review and download all leads and check-ins from this event</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -91,7 +105,7 @@ export default function Export() {
             {customersLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             ) : (
-              <p className="text-3xl font-bold" data-testid="count-checkins">{checkedInCount}</p>
+              <p className="text-3xl font-bold" data-testid="count-checkins">{checkedIn.length}</p>
             )}
             <p className="text-xs text-muted-foreground mt-1">invited guests arrived</p>
           </CardContent>
@@ -141,7 +155,7 @@ export default function Export() {
           ) : (
             <Button
               onClick={handleDownload}
-              disabled={isLoading || (leads.length === 0 && checkedInCount === 0)}
+              disabled={isLoading || (leads.length === 0 && checkedIn.length === 0)}
               size="lg"
               data-testid="button-download-excel"
             >
@@ -157,6 +171,56 @@ export default function Export() {
                 </>
               )}
             </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5" />
+            Checked-In Guests
+            {!customersLoading && (
+              <Badge variant="secondary" className="ml-1">{checkedIn.length}</Badge>
+            )}
+          </CardTitle>
+          <CardDescription>Invited guests who have arrived, most recent first</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {customersLoading ? (
+            <div className="space-y-2 p-6">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : checkedIn.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
+              <UserCheck className="h-9 w-9 mb-3 opacity-25" />
+              <p className="text-sm">No guests have checked in yet</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Checked In At</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {checkedIn.map(c => (
+                  <TableRow key={c.id} data-testid={`row-checkin-${c.id}`}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.phone ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {c.checkedInAt ? new Date(c.checkedInAt).toLocaleString() : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
