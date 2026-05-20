@@ -120,9 +120,13 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
 };
 
 const FIXED_FIELDS = [
-  { label: "Full Name", type: "text", required: true },
-  { label: "Email Address", type: "email", required: true },
-  { label: "Phone Number", type: "tel", required: false },
+  { label: "Title", type: "select", required: false },
+  { label: "First Name", type: "text", required: true },
+  { label: "Last Name", type: "text", required: true },
+  { label: "Email", type: "email", required: true },
+  { label: "Phone Number", type: "tel", required: true },
+  { label: "Company", type: "text", required: false },
+  { label: "Ace POC", type: "select", required: false },
 ];
 
 interface FieldDialogState {
