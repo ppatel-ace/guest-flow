@@ -1147,10 +1147,17 @@ function VisitorLogTab() {
     }
   };
 
+  const IMPORT_KEYS = ["fullName","email","company","acePoc","ace_poc","signedInAt","signedOutAt","usCitizen","us_citizen","purpose","location","notes"] as const;
+
   const handleConfirmImport = async () => {
     setImporting(true);
+    const slimRows = allParsedRows.map((row) => {
+      const slim: Record<string, string> = {};
+      for (const key of IMPORT_KEYS) { if (key in row) slim[key] = row[key]; }
+      return slim;
+    });
     try {
-      const res = await apiRequest("POST", "/api/visitors/bulk-import", { rows: allParsedRows });
+      const res = await apiRequest("POST", "/api/visitors/bulk-import", { rows: slimRows });
       const result = await res.json();
       toast({ title: "Import complete", description: result.message });
       queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
