@@ -229,7 +229,6 @@ export interface IStorage {
   listAcePocs(): Promise<AcePoc[]>;
   createAcePoc(name: string): Promise<AcePoc>;
   deleteAcePoc(id: string): Promise<boolean>;
-  seedAcePocs(names: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1107,12 +1106,6 @@ export class DatabaseStorage implements IStorage {
   async deleteAcePoc(id: string): Promise<boolean> {
     const result = await db.delete(acePocs).where(eq(acePocs.id, id)).returning();
     return result.length > 0;
-  }
-
-  async seedAcePocs(names: string[]): Promise<void> {
-    for (const name of names) {
-      await db.insert(acePocs).values({ name }).onConflictDoNothing();
-    }
   }
 
 }

@@ -3,7 +3,6 @@ import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
-import { storage } from "./storage";
 
 // Extend Express session
 declare module "express-session" {
@@ -110,16 +109,6 @@ app.use((req, res, next) => {
   }
 
   await runMigrations();
-
-  // Seed default ACE POC names (no-ops if already present)
-  await storage.seedAcePocs([
-    "Jerry Parker",
-    "Larry Pomasan",
-    "Nish Patel",
-    "Craig Frost",
-    "Ashley Morris",
-    "Sanjay Parimi",
-  ]);
 
   const server = await registerRoutes(app);
 
