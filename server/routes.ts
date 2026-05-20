@@ -469,8 +469,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         return res.status(400).json({ error: "Invalid date format" });
       }
-      const data = await storage.getVisitorAnalytics(startDate, endDate, bucket as "day" | "week" | "month");
-      res.json(data);
+      const result = await storage.getVisitorAnalytics(startDate, endDate, bucket as "day" | "week" | "month");
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch analytics" });
     }

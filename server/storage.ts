@@ -26,6 +26,11 @@ export interface VisitorAnalyticsPeriod {
   invites: number;
 }
 
+export interface VisitorAnalyticsResult {
+  periods: VisitorAnalyticsPeriod[];
+  hourly: { hour: number; label: string; count: number }[];
+}
+
 export interface ImportResult {
   inserted: number;
   skipped: number;
@@ -159,7 +164,7 @@ export interface IStorage {
   checkInCustomer(id: string): Promise<Customer | undefined>;
   sendInvitation(id: string): Promise<Customer | undefined>;
   getMonthlyCheckIns(): Promise<MonthlyCheckIn[]>;
-  getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsPeriod[]>;
+  getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsResult>;
   initSchema(): Promise<void>;
   importFromSQL(sql: string): Promise<ImportResult>;
   getPageSettings(key: string): Promise<PageSettings>;
@@ -282,11 +287,11 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsPeriod[]> {
+  async getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsResult> {
     const b = bucket;
     const bucketLiteral = sql.raw(`'${b}'`);
 
-    const [visitorRows, inviteRows] = await Promise.all([
+    const [visitorRows, inviteRows, hourlyRows] = await Promise.all([
       db.select({
         period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${leads.submittedAt}), 'YYYY-MM-DD')`,
         count: sql<number>`COUNT(*)::int`,
@@ -300,6 +305,13 @@ export class DatabaseStorage implements IStorage {
       }).from(customers)
         .where(sql`${customers.createdAt} >= ${start} AND ${customers.createdAt} <= ${end}`)
         .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${customers.createdAt})`),
+
+      db.select({
+        hour: sql<number>`EXTRACT(HOUR FROM ${leads.submittedAt})::int`,
+        count: sql<number>`COUNT(*)::int`,
+      }).from(leads)
+        .where(sql`${leads.submittedAt} >= ${start} AND ${leads.submittedAt} <= ${end}`)
+        .groupBy(sql`EXTRACT(HOUR FROM ${leads.submittedAt})`),
     ]);
 
     const periodsMap = new Map<string, { visitors: number; invites: number }>();
@@ -318,9 +330,19 @@ export class DatabaseStorage implements IStorage {
       }
     });
 
-    return Array.from(periodsMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([period, data]) => ({ period, ...data }));
+    const hourlyMap = new Map(hourlyRows.map(r => [r.hour, r.count]));
+    const hourly = Array.from({ length: 11 }, (_, i) => {
+      const h = i + 8;
+      const label = h === 12 ? "12pm" : h < 12 ? `${h}am` : `${h - 12}pm`;
+      return { hour: h, label, count: hourlyMap.get(h) ?? 0 };
+    });
+
+    return {
+      periods: Array.from(periodsMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([period, data]) => ({ period, ...data })),
+      hourly,
+    };
   }
 
   async getMonthlyCheckIns(): Promise<MonthlyCheckIn[]> {

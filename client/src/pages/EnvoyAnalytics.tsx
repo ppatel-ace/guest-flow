@@ -8,7 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { VisitorAnalyticsPeriod } from "../../../server/storage";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface VisitorAnalyticsPeriod {
+  period: string;
+  visitors: number;
+  invites: number;
+}
+
+interface VisitorAnalyticsResult {
+  periods: VisitorAnalyticsPeriod[];
+  hourly: { hour: number; label: string; count: number }[];
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,7 +39,6 @@ function generateAllPeriods(start: Date, end: Date, bucket: "day" | "week" | "mo
   const periods: string[] = [];
   const cur = new Date(start);
   cur.setHours(0, 0, 0, 0);
-  // Align to bucket boundary
   if (bucket === "week") {
     const day = cur.getDay();
     cur.setDate(cur.getDate() - ((day + 6) % 7)); // back to Monday
@@ -44,13 +55,11 @@ function generateAllPeriods(start: Date, end: Date, bucket: "day" | "week" | "mo
   return periods;
 }
 
-function formatLabel(period: string, bucket: "day" | "week" | "month"): string {
+function formatPeriodLabel(period: string, bucket: "day" | "week" | "month"): string {
   const d = new Date(period + "T12:00:00");
   if (bucket === "month") return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-
-// ── Preset helpers ────────────────────────────────────────────────────────────
 
 type Preset = "7d" | "30d" | "3m" | "1y" | "custom";
 
@@ -100,7 +109,6 @@ export default function Analytics() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  // Resolve effective date range
   const { start, end } = useMemo(() => {
     if (preset === "custom" && customStart && customEnd) {
       const s = new Date(customStart + "T00:00:00");
@@ -115,26 +123,31 @@ export default function Analytics() {
 
   const queryUrl = `/api/analytics/visitors?start=${toDateStr(start)}&end=${toDateStr(end)}&bucket=${bucket}`;
 
-  const { data: rawPeriods = [], isLoading } = useQuery<VisitorAnalyticsPeriod[]>({
+  const { data, isLoading } = useQuery<VisitorAnalyticsResult>({
     queryKey: [queryUrl],
   });
 
-  // Merge server data with all expected periods (fill zeros for empty ones)
+  const rawPeriods = data?.periods ?? [];
+  const hourlyData = data?.hourly ?? [];
+
+  // Merge server data with all expected periods (fill zeros for empty buckets)
   const chartData = useMemo(() => {
     const serverMap = new Map(rawPeriods.map(p => [p.period, p]));
     return generateAllPeriods(start, end, bucket).map(period => ({
-      label: formatLabel(period, bucket),
+      label: formatPeriodLabel(period, bucket),
       visitors: serverMap.get(period)?.visitors ?? 0,
       invites: serverMap.get(period)?.invites ?? 0,
     }));
   }, [rawPeriods, start, end, bucket]);
 
-  // Totals
   const totalVisitors = chartData.reduce((s, d) => s + d.visitors, 0);
   const totalInvites = chartData.reduce((s, d) => s + d.invites, 0);
   const periodCount = chartData.length || 1;
-  const avgVisitors = (totalVisitors / periodCount).toFixed(1);
+  const avgPerPeriod = (totalVisitors / periodCount).toFixed(1);
   const checkInRate = totalInvites > 0 ? Math.round((totalVisitors / totalInvites) * 100) : 0;
+
+  const peakMax = Math.max(...hourlyData.map(h => h.count), 1);
+  const peakHour = hourlyData.find(h => h.count === Math.max(...hourlyData.map(x => x.count)));
 
   const presets: { key: Preset; label: string }[] = [
     { key: "7d", label: "7D" },
@@ -203,7 +216,7 @@ export default function Analytics() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard icon={Users} label="Total visitors" value={totalVisitors} sub="check-ins submitted" />
         <StatCard icon={CalendarDays} label="Total invites" value={totalInvites} sub="invites created" />
-        <StatCard icon={TrendingUp} label={`Avg / ${bucket}`} value={avgVisitors} sub="visitor check-ins" />
+        <StatCard icon={TrendingUp} label={`Avg / ${bucket}`} value={avgPerPeriod} sub="visitor check-ins" />
         <StatCard
           icon={UserCheck}
           label="Check-in rate"
@@ -213,7 +226,7 @@ export default function Analytics() {
         />
       </div>
 
-      {/* Chart */}
+      {/* Visitors over time chart */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Visitors over time</CardTitle>
@@ -225,11 +238,9 @@ export default function Analytics() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-              Loading…
-            </div>
+            <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
           ) : (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
@@ -238,15 +249,66 @@ export default function Analytics() {
                   interval={chartData.length > 20 ? Math.floor(chartData.length / 12) : 0}
                 />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 6 }}
-                  cursor={{ fill: "hsl(var(--muted))" }}
-                />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6 }} cursor={{ fill: "hsl(var(--muted))" }} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 <Bar dataKey="visitors" name="Visitors" fill="hsl(var(--primary))" fillOpacity={0.85} radius={[3, 3, 0, 0]} />
                 <Bar dataKey="invites" name="Invites" fill="hsl(142 71% 45%)" fillOpacity={0.75} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Peak visit hours */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Peak visit hours</CardTitle>
+              <CardDescription className="mt-0.5">
+                Sign-ins by hour of day (8am–6pm) for selected period
+              </CardDescription>
+            </div>
+            {peakHour && peakHour.count > 0 && (
+              <div className="text-right shrink-0">
+                <p className="text-xs text-muted-foreground">Busiest hour</p>
+                <p className="text-lg font-bold">{peakHour.label}</p>
+                <p className="text-xs text-muted-foreground">{peakHour.count} sign-in{peakHour.count !== 1 ? "s" : ""}</p>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="h-24 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="space-y-1.5" data-testid="chart-peak-hours">
+              {hourlyData.map(({ label, count, hour }) => {
+                const pct = Math.round((count / peakMax) * 100);
+                const isPeak = peakHour?.hour === hour && count > 0;
+                return (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-9 shrink-0 text-right">{label}</span>
+                    <div className="flex-1 h-5 rounded bg-muted overflow-hidden">
+                      <div
+                        className={`h-5 rounded transition-all ${isPeak ? "bg-primary" : "bg-primary/60"}`}
+                        style={{ width: count > 0 ? `${Math.max(pct, 2)}%` : "0%" }}
+                      />
+                    </div>
+                    <span className="text-xs w-6 shrink-0 text-right">
+                      {count > 0 ? (
+                        <span className={isPeak ? "font-semibold" : "text-muted-foreground"}>{count}</span>
+                      ) : (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+              {hourlyData.every(h => h.count === 0) && (
+                <p className="text-sm text-muted-foreground text-center py-4">No visitor data for this period.</p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
