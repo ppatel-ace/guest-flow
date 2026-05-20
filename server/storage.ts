@@ -209,6 +209,10 @@ export interface IStorage {
   createVisitor(data: InsertVisitor): Promise<Visitor>;
   getAllVisitors(): Promise<Visitor[]>;
   bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }>;
+  getVisitorProfile(email?: string, name?: string): Promise<{
+    stats: { totalVisits: number; firstVisited: Date | null; lastVisited: Date | null; avgDurationMinutes: number | null };
+    visits: Visitor[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -826,6 +830,38 @@ export class DatabaseStorage implements IStorage {
 
   async getAllVisitors(): Promise<Visitor[]> {
     return await db.select().from(visitors).orderBy(desc(visitors.signedInAt));
+  }
+
+  async getVisitorProfile(email?: string, name?: string): Promise<{
+    stats: { totalVisits: number; firstVisited: Date | null; lastVisited: Date | null; avgDurationMinutes: number | null };
+    visits: Visitor[];
+  }> {
+    let rows: Visitor[] = [];
+    if (email) {
+      rows = await db.select().from(visitors)
+        .where(sql`LOWER(${visitors.email}) = LOWER(${email})`)
+        .orderBy(desc(visitors.signedInAt));
+    } else if (name) {
+      rows = await db.select().from(visitors)
+        .where(sql`LOWER(${visitors.fullName}) = LOWER(${name})`)
+        .orderBy(desc(visitors.signedInAt));
+    }
+    if (rows.length === 0) {
+      return { stats: { totalVisits: 0, firstVisited: null, lastVisited: null, avgDurationMinutes: null }, visits: [] };
+    }
+    const sorted = [...rows].sort((a, b) => new Date(a.signedInAt).getTime() - new Date(b.signedInAt).getTime());
+    const firstVisited = sorted[0].signedInAt;
+    const lastVisited = sorted[sorted.length - 1].signedInAt;
+    const withDuration = rows.filter(r => r.signedOutAt);
+    const avgDurationMinutes = withDuration.length > 0
+      ? Math.round(withDuration.reduce((sum, r) => {
+          return sum + (new Date(r.signedOutAt!).getTime() - new Date(r.signedInAt).getTime()) / 60000;
+        }, 0) / withDuration.length)
+      : null;
+    return {
+      stats: { totalVisits: rows.length, firstVisited, lastVisited, avgDurationMinutes },
+      visits: rows,
+    };
   }
 
   async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {

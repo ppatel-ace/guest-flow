@@ -42,6 +42,9 @@ import {
   Download,
   Upload,
   X,
+  Clock,
+  Calendar,
+  History,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -979,6 +982,16 @@ function formatDuration(signedInAt: string | Date, signedOutAt: string | Date | 
   return `${hours}h ${mins}m`;
 }
 
+interface VisitorProfileResult {
+  stats: {
+    totalVisits: number;
+    firstVisited: string | null;
+    lastVisited: string | null;
+    avgDurationMinutes: number | null;
+  };
+  visits: Visitor[];
+}
+
 type ImportPreviewRow = {
   fullName: string;
   email: string;
@@ -999,6 +1012,17 @@ function VisitorLogTab() {
 
   const { data: allVisitors = [], isLoading, refetch } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
+  });
+
+  const profileQueryKey = selected
+    ? selected.email
+      ? `/api/visitors/profile?email=${encodeURIComponent(selected.email)}`
+      : `/api/visitors/profile?name=${encodeURIComponent(selected.fullName)}`
+    : null;
+
+  const { data: profile, isLoading: profileLoading } = useQuery<VisitorProfileResult>({
+    queryKey: [profileQueryKey],
+    enabled: profileQueryKey !== null,
   });
 
   const filtered = allVisitors.filter((v) => {
@@ -1146,51 +1170,157 @@ function VisitorLogTab() {
         </div>
       )}
 
-      {/* Detail sheet */}
+      {/* Visitor profile sheet */}
       <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           {selected && (
             <>
               <SheetHeader className="pb-4">
-                <SheetTitle>Visitor Details</SheetTitle>
+                <SheetTitle>Visitor Profile</SheetTitle>
               </SheetHeader>
-              <div className="space-y-5">
-                <div className="flex items-center gap-4">
-                  {selected.photoData ? (
-                    <img src={selected.photoData} alt="Visitor photo" className="h-20 w-20 rounded-full object-cover border shrink-0" />
-                  ) : (
-                    <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border">
-                      <span className="text-2xl font-semibold text-primary">{getInitials(selected.fullName).toUpperCase()}</span>
+
+              {/* Header: avatar + name + email + company */}
+              <div className="flex items-center gap-4 pb-5 border-b">
+                {selected.photoData ? (
+                  <img src={selected.photoData} alt="Visitor photo" className="h-16 w-16 rounded-full object-cover border shrink-0" />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border">
+                    <span className="text-xl font-semibold text-primary">{getInitials(selected.fullName).toUpperCase()}</span>
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-lg font-semibold">{selected.fullName}</div>
+                  {selected.email && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                      <span className="text-muted-foreground/60">✉</span>
+                      <span className="truncate">{selected.email}</span>
                     </div>
                   )}
-                  <div>
-                    <div className="text-lg font-semibold">{selected.fullName}</div>
-                    <div className="text-sm text-muted-foreground">{selected.email || "No email"}</div>
-                    <div className="mt-1">{sourceBadge(selected.source)}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {selected.company && (<><span className="text-muted-foreground font-medium">Company</span><span>{selected.company}</span></>)}
-                  {selected.acePoc && (<><span className="text-muted-foreground font-medium">ACE POC</span><span>{selected.acePoc}</span></>)}
-                  {selected.purpose && (<><span className="text-muted-foreground font-medium">Purpose</span><span>{selected.purpose}</span></>)}
-                  {selected.usCitizen && (<><span className="text-muted-foreground font-medium">US Citizen</span><span>{selected.usCitizen}</span></>)}
-                  {selected.location && (<><span className="text-muted-foreground font-medium">Location</span><span>{selected.location}</span></>)}
-                  <span className="text-muted-foreground font-medium">Signed In</span>
-                  <span>{new Date(selected.signedInAt).toLocaleString()}</span>
-                  {selected.signedOutAt && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Signed Out</span>
-                      <span>{new Date(selected.signedOutAt).toLocaleString()}</span>
-                      <span className="text-muted-foreground font-medium">Duration</span>
-                      <span>{formatDuration(selected.signedInAt, selected.signedOutAt)}</span>
-                    </>
+                  {selected.company && (
+                    <div className="text-sm text-muted-foreground mt-0.5">{selected.company}</div>
                   )}
                 </div>
+              </div>
 
+              {/* Stat chips */}
+              {profileLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4">
+                  {[0,1,2,3].map(i => (
+                    <div key={i} className="rounded-lg border bg-muted/30 p-3 animate-pulse h-16" />
+                  ))}
+                </div>
+              ) : profile && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4">
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1">
+                      <History className="h-3.5 w-3.5" />
+                      Total visits
+                    </div>
+                    <div className="text-2xl font-bold">{profile.stats.totalVisits}</div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      First visited
+                    </div>
+                    <div className="text-sm font-semibold">
+                      {profile.stats.firstVisited
+                        ? new Date(profile.stats.firstVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Last visited
+                    </div>
+                    <div className="text-sm font-semibold">
+                      {profile.stats.lastVisited
+                        ? new Date(profile.stats.lastVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      Avg duration
+                    </div>
+                    <div className="text-sm font-semibold">
+                      {profile.stats.avgDurationMinutes != null
+                        ? (() => {
+                            const h = Math.floor(profile.stats.avgDurationMinutes / 60);
+                            const m = profile.stats.avgDurationMinutes % 60;
+                            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                          })()
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Visit history */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Previous visits</h3>
+
+                {profileLoading ? (
+                  <div className="space-y-2">
+                    {[0,1,2].map(i => (
+                      <div key={i} className="h-12 rounded-md bg-muted/30 animate-pulse" />
+                    ))}
+                  </div>
+                ) : !profile || profile.visits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No visits found.</p>
+                ) : (
+                  <div className="rounded-md border overflow-hidden">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                      <span>Date &amp; Time</span>
+                      <span>Purpose / ACE POC</span>
+                      <span>Status</span>
+                      <span>Duration</span>
+                      <span>Source</span>
+                    </div>
+                    <div className="divide-y max-h-96 overflow-y-auto">
+                      {profile.visits.map((v) => (
+                        <div
+                          key={v.id}
+                          className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2.5 items-center text-xs"
+                          data-testid={`profile-visit-${v.id}`}
+                        >
+                          <div>
+                            <div className="font-medium text-foreground">
+                              {new Date(v.signedInAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {new Date(v.signedInAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              {v.signedOutAt && (
+                                <> – {new Date(v.signedOutAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {v.purpose ? <div className="font-medium text-foreground">{v.purpose}</div> : <div className="text-muted-foreground">—</div>}
+                            {v.acePoc && <div className="text-muted-foreground">{v.acePoc}</div>}
+                          </div>
+                          <div>
+                            {v.signedOutAt
+                              ? <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed out</Badge>
+                              : <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed in</Badge>
+                            }
+                          </div>
+                          <div className="text-muted-foreground whitespace-nowrap">
+                            {formatDuration(v.signedInAt, v.signedOutAt)}
+                          </div>
+                          <div>{sourceBadge(v.source)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes (from the clicked visit, if any) */}
                 {selected.notes && (
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Notes</div>
+                  <div className="pt-2 space-y-1">
+                    <div className="text-sm font-medium text-muted-foreground">Notes (this visit)</div>
                     <p className="text-sm">{selected.notes}</p>
                   </div>
                 )}

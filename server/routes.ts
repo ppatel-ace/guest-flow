@@ -1063,6 +1063,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Visitors (walk-ins from kiosk / Envoy) ────────────────────────────────
 
+  // Visitor profile — all visits for a person (protected)
+  app.get("/api/visitors/profile", requireAuth, async (req, res) => {
+    try {
+      const email = req.query.email as string | undefined;
+      const name = req.query.name as string | undefined;
+      if (!email && !name) {
+        return res.status(400).json({ error: "email or name query param required" });
+      }
+      const profile = await storage.getVisitorProfile(email, name);
+      res.json(profile);
+    } catch (error) {
+      console.error("[visitors/profile]", error);
+      res.status(500).json({ error: "Failed to fetch visitor profile" });
+    }
+  });
+
   // List all visitors (protected)
   app.get("/api/visitors", requireAuth, async (req, res) => {
     try {
