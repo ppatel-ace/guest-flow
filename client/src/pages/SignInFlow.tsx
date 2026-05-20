@@ -1272,47 +1272,56 @@ function VisitorLogTab() {
                   <p className="text-sm text-muted-foreground py-4 text-center">No visits found.</p>
                 ) : (
                   <div className="rounded-md border overflow-hidden">
-                    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
-                      <span>Date &amp; Time</span>
-                      <span>Purpose / ACE POC</span>
-                      <span>Status</span>
-                      <span>Duration</span>
-                      <span>Source</span>
-                    </div>
-                    <div className="divide-y max-h-96 overflow-y-auto">
-                      {profile.visits.map((v) => (
-                        <div
-                          key={v.id}
-                          className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2.5 items-center text-xs"
-                          data-testid={`profile-visit-${v.id}`}
-                        >
-                          <div>
-                            <div className="font-medium text-foreground">
-                              {new Date(v.signedInAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                            </div>
-                            <div className="text-muted-foreground">
-                              {new Date(v.signedInAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                              {v.signedOutAt && (
-                                <> – {new Date(v.signedOutAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            {v.purpose ? <div className="font-medium text-foreground">{v.purpose}</div> : <div className="text-muted-foreground">—</div>}
-                            {v.acePoc && <div className="text-muted-foreground">{v.acePoc}</div>}
-                          </div>
-                          <div>
-                            {v.signedOutAt
-                              ? <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed out</Badge>
-                              : <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed in</Badge>
-                            }
-                          </div>
-                          <div className="text-muted-foreground whitespace-nowrap">
-                            {formatDuration(v.signedInAt, v.signedOutAt)}
-                          </div>
-                          <div>{sourceBadge(v.source)}</div>
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[700px]">
+                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                          <span>Date</span>
+                          <span>Signed In</span>
+                          <span>Signed Out</span>
+                          <span>Purpose</span>
+                          <span>ACE POC</span>
+                          <span>Status</span>
+                          <span>Duration</span>
+                          <span>Source</span>
                         </div>
-                      ))}
+                        <div className="divide-y max-h-96 overflow-y-auto">
+                          {profile.visits.map((v) => (
+                            <div
+                              key={v.id}
+                              className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs"
+                              data-testid={`profile-visit-${v.id}`}
+                            >
+                              <div className="font-medium text-foreground whitespace-nowrap">
+                                {new Date(v.signedInAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </div>
+                              <div className="text-muted-foreground whitespace-nowrap">
+                                {new Date(v.signedInAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              </div>
+                              <div className="text-muted-foreground whitespace-nowrap">
+                                {v.signedOutAt
+                                  ? new Date(v.signedOutAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                                  : "—"}
+                              </div>
+                              <div className="truncate text-muted-foreground">
+                                {v.purpose || "—"}
+                              </div>
+                              <div className="truncate text-muted-foreground">
+                                {v.acePoc || "—"}
+                              </div>
+                              <div>
+                                {v.signedOutAt
+                                  ? <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed out</Badge>
+                                  : <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed in</Badge>
+                                }
+                              </div>
+                              <div className="text-muted-foreground whitespace-nowrap">
+                                {formatDuration(v.signedInAt, v.signedOutAt)}
+                              </div>
+                              <div>{sourceBadge(v.source)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
