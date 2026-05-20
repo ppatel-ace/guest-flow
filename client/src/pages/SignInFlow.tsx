@@ -1065,7 +1065,7 @@ function VisitorLogTab() {
   });
 
   const { data: mergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
-    queryKey: ["/api/visitors/merge-events", notesLookupKey],
+    queryKey: [`/api/visitors/merge-events?key=${encodeURIComponent(notesLookupKey!)}`],
     enabled: notesLookupKey !== null,
   });
 
@@ -1703,7 +1703,7 @@ function ContactsTab() {
   });
 
   const { data: contactsMergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
-    queryKey: ["/api/visitors/merge-events", notesLookupKey],
+    queryKey: [`/api/visitors/merge-events?key=${encodeURIComponent(notesLookupKey!)}`],
     enabled: notesLookupKey !== null,
   });
 
