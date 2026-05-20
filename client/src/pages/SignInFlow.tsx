@@ -1684,6 +1684,13 @@ function ContactsTab() {
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [mergePickedPrimary, setMergePickedPrimary] = useState<string | null>(null);
   const [profileSelected, setProfileSelected] = useState<Visitor | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editContact, setEditContact] = useState<GroupedVisitor | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editCompany, setEditCompany] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteContact, setDeleteContact] = useState<GroupedVisitor | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [sortField, setSortField] = useState<SortField>("lastVisited");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -1847,6 +1854,48 @@ function ContactsTab() {
     mergeMutation.mutate({ primaryKey: mergePickedPrimary, secondaryKey: secondary.lookupKey });
   };
 
+  const editMutation = useMutation({
+    mutationFn: (vars: { lookupKey: string; fullName: string; email: string; company: string }) =>
+      apiRequest("PUT", "/api/visitors/by-key", vars),
+    onSuccess: () => {
+      toast({ title: "Contact updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      setEditDialogOpen(false);
+      setEditContact(null);
+    },
+    onError: () => toast({ title: "Failed to update contact", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (lookupKey: string) =>
+      apiRequest("DELETE", "/api/visitors/by-key", { lookupKey }),
+    onSuccess: (_, lookupKey) => {
+      toast({ title: "Contact deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      if (profileSelected && (profileSelected.email?.toLowerCase() === lookupKey.toLowerCase() || profileSelected.fullName.toLowerCase() === lookupKey.toLowerCase())) {
+        setProfileSelected(null);
+      }
+      setDeleteConfirmOpen(false);
+      setDeleteContact(null);
+    },
+    onError: () => toast({ title: "Failed to delete contact", variant: "destructive" }),
+  });
+
+  const handleOpenEdit = (g: GroupedVisitor, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditContact(g);
+    setEditName(g.fullName);
+    setEditEmail(g.email ?? "");
+    setEditCompany(g.company ?? "");
+    setEditDialogOpen(true);
+  };
+
+  const handleOpenDelete = (g: GroupedVisitor, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteContact(g);
+    setDeleteConfirmOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -1936,7 +1985,7 @@ function ContactsTab() {
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden">
-          <div className="hidden lg:grid grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+          <div className="hidden lg:grid grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px_64px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
             <span />
             <span />
             <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("name")} data-testid="th-contacts-name">
@@ -1954,12 +2003,13 @@ function ContactsTab() {
             <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("lastVisited")} data-testid="th-contacts-last">
               Last visited{sortIcon("lastVisited")}
             </button>
+            <span />
           </div>
           <div className="divide-y">
             {displayList.map(g => (
               <div
                 key={g.lookupKey}
-                className={`w-full px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer ${checkedKeys.has(g.lookupKey) ? "bg-primary/5 hover:bg-primary/10" : ""}`}
+                className={`w-full px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px_64px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer ${checkedKeys.has(g.lookupKey) ? "bg-primary/5 hover:bg-primary/10" : ""}`}
                 onClick={() => setProfileSelected(g.representative)}
                 data-testid={`row-contact-${g.lookupKey}`}
               >
@@ -2058,6 +2108,28 @@ function ContactsTab() {
                 </div>
                 <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                   {g.lastVisited.toLocaleDateString()}
+                </div>
+                <div className="hidden lg:flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    title="Edit contact"
+                    data-testid={`button-edit-contact-${g.lookupKey}`}
+                    onClick={e => handleOpenEdit(g, e)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    title="Delete contact"
+                    data-testid={`button-delete-contact-${g.lookupKey}`}
+                    onClick={e => handleOpenDelete(g, e)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -2281,6 +2353,91 @@ function ContactsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit contact dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={open => { setEditDialogOpen(open); if (!open) setEditContact(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit contact</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                placeholder="Full name"
+                data-testid="input-edit-contact-name"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editEmail}
+                onChange={e => setEditEmail(e.target.value)}
+                placeholder="email@example.com"
+                data-testid="input-edit-contact-email"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-company">Company</Label>
+              <Input
+                id="edit-company"
+                value={editCompany}
+                onChange={e => setEditCompany(e.target.value)}
+                placeholder="Company name"
+                data-testid="input-edit-contact-company"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditDialogOpen(false)} disabled={editMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              disabled={editMutation.isPending || !editName.trim()}
+              onClick={() => {
+                if (!editContact) return;
+                editMutation.mutate({
+                  lookupKey: editContact.lookupKey,
+                  fullName: editName.trim(),
+                  email: editEmail.trim(),
+                  company: editCompany.trim(),
+                });
+              }}
+              data-testid="button-save-edit-contact"
+            >
+              {editMutation.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={open => { setDeleteConfirmOpen(open); if (!open) setDeleteContact(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete contact?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{deleteContact?.fullName}</strong> and all their visit records. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending} data-testid="button-cancel-delete-contact">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => { if (deleteContact) deleteMutation.mutate(deleteContact.lookupKey); }}
+              data-testid="button-confirm-delete-contact"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete contact"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

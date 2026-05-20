@@ -221,6 +221,8 @@ export interface IStorage {
   upsertVisitorNotes(lookupKey: string, notes: string): Promise<VisitorNote>;
   mergeVisitorContacts(primaryKey: string, secondaryKey: string): Promise<{ merged: number }>;
   getVisitorMergeEvents(lookupKey: string): Promise<VisitorMergeEvent[]>;
+  updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null }): Promise<{ updated: number }>;
+  deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -989,6 +991,38 @@ export class DatabaseStorage implements IStorage {
       .from(visitorMergeEvents)
       .where(eq(visitorMergeEvents.primaryKey, lookupKey))
       .orderBy(desc(visitorMergeEvents.mergedAt));
+  }
+
+  async updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null }): Promise<{ updated: number }> {
+    const isEmail = lookupKey.includes('@');
+    let rows: { id: string }[];
+    if (isEmail) {
+      rows = await db.update(visitors)
+        .set(data)
+        .where(sql`LOWER(${visitors.email}) = ${lookupKey.toLowerCase()}`)
+        .returning({ id: visitors.id });
+    } else {
+      rows = await db.update(visitors)
+        .set(data)
+        .where(sql`LOWER(${visitors.fullName}) = ${lookupKey.toLowerCase()}`)
+        .returning({ id: visitors.id });
+    }
+    return { updated: rows.length };
+  }
+
+  async deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }> {
+    const isEmail = lookupKey.includes('@');
+    let rows: { id: string }[];
+    if (isEmail) {
+      rows = await db.delete(visitors)
+        .where(sql`LOWER(${visitors.email}) = ${lookupKey.toLowerCase()}`)
+        .returning({ id: visitors.id });
+    } else {
+      rows = await db.delete(visitors)
+        .where(sql`LOWER(${visitors.fullName}) = ${lookupKey.toLowerCase()}`)
+        .returning({ id: visitors.id });
+    }
+    return { deleted: rows.length };
   }
 
   async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {

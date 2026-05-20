@@ -1205,6 +1205,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update all visitor rows for a contact by lookup key (protected)
+  app.put("/api/visitors/by-key", requireAuth, async (req, res) => {
+    try {
+      const { lookupKey, fullName, email, company } = req.body;
+      if (!lookupKey || typeof lookupKey !== "string") {
+        return res.status(400).json({ error: "lookupKey is required" });
+      }
+      const data: { fullName?: string; email?: string | null; company?: string | null } = {};
+      if (typeof fullName === "string") data.fullName = fullName.trim();
+      if (email !== undefined) data.email = email?.trim().toLowerCase() || null;
+      if (company !== undefined) data.company = company?.trim() || null;
+      const result = await storage.updateVisitorsByKey(lookupKey.trim(), data);
+      res.json(result);
+    } catch (error) {
+      console.error("[visitors/by-key PUT]", error);
+      res.status(500).json({ error: "Failed to update contact" });
+    }
+  });
+
+  // Delete all visitor rows for a contact by lookup key (protected)
+  app.delete("/api/visitors/by-key", requireAuth, async (req, res) => {
+    try {
+      const { lookupKey } = req.body;
+      if (!lookupKey || typeof lookupKey !== "string") {
+        return res.status(400).json({ error: "lookupKey is required" });
+      }
+      const result = await storage.deleteVisitorsByKey(lookupKey.trim());
+      res.json(result);
+    } catch (error) {
+      console.error("[visitors/by-key DELETE]", error);
+      res.status(500).json({ error: "Failed to delete contact" });
+    }
+  });
+
   // Custom domain root redirect: registration.aceelectronics.com → /guest-check-in
   app.get("/", (req, res, next) => {
     const host = req.hostname || "";
