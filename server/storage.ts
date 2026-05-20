@@ -221,7 +221,7 @@ export interface IStorage {
   upsertVisitorNotes(lookupKey: string, notes: string): Promise<VisitorNote>;
   mergeVisitorContacts(primaryKey: string, secondaryKey: string): Promise<{ merged: number }>;
   getVisitorMergeEvents(lookupKey: string): Promise<VisitorMergeEvent[]>;
-  updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null }): Promise<{ updated: number }>;
+  updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null }): Promise<{ updated: number }>;
   deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }>;
 }
 
@@ -993,7 +993,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(visitorMergeEvents.mergedAt));
   }
 
-  async updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null }): Promise<{ updated: number }> {
+  async updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null }): Promise<{ updated: number }> {
     const isEmail = lookupKey.includes('@');
     let rows: { id: string }[];
     if (isEmail) {

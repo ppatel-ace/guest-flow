@@ -1461,12 +1461,13 @@ function VisitorLogTab() {
                 ) : (
                   <div className="rounded-md border overflow-hidden">
                     <div className="overflow-x-auto">
-                      <div className="min-w-[820px]">
-                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                      <div className="min-w-[885px]">
+                        <div className="grid grid-cols-[110px_80px_80px_90px_65px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
                           <span>Date</span>
                           <span>Signed In</span>
                           <span>Signed Out</span>
                           <span>Purpose</span>
+                          <span>Citizen?</span>
                           <span>ACE POC</span>
                           <span>Email</span>
                           <span>Status</span>
@@ -1477,7 +1478,7 @@ function VisitorLogTab() {
                           {profile.visits.map((v) => (
                             <div
                               key={v.id}
-                              className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs"
+                              className="grid grid-cols-[110px_80px_80px_90px_65px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs"
                               data-testid={`profile-visit-${v.id}`}
                             >
                               <div className="font-medium text-foreground whitespace-nowrap">
@@ -1493,6 +1494,9 @@ function VisitorLogTab() {
                               </div>
                               <div className="truncate text-muted-foreground">
                                 {v.purpose || "—"}
+                              </div>
+                              <div className="text-muted-foreground">
+                                {v.usCitizen || "—"}
                               </div>
                               <div className="truncate text-muted-foreground">
                                 {v.acePoc || "—"}
@@ -1689,12 +1693,25 @@ function ContactsTab() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editCompany, setEditCompany] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteContact, setDeleteContact] = useState<GroupedVisitor | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [sortField, setSortField] = useState<SortField>("lastVisited");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [showDupsOnly, setShowDupsOnly] = useState(false);
+  const [mergeCountdown, setMergeCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (mergeCountdown === null) return;
+    if (mergeCountdown <= 0) {
+      setShowDupsOnly(false);
+      setMergeCountdown(null);
+      return;
+    }
+    const t = setTimeout(() => setMergeCountdown(c => (c !== null ? c - 1 : null)), 1000);
+    return () => clearTimeout(t);
+  }, [mergeCountdown]);
 
   const { data: allVisitors = [], isLoading } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
@@ -1843,6 +1860,7 @@ function ContactsTab() {
       setCheckedKeys(new Set());
       setMergeDialogOpen(false);
       setMergePickedPrimary(null);
+      if (showDupsOnly) setMergeCountdown(5);
     },
     onError: () => toast({ title: "Merge failed", description: "Could not merge contacts.", variant: "destructive" }),
   });
@@ -1855,7 +1873,7 @@ function ContactsTab() {
   };
 
   const editMutation = useMutation({
-    mutationFn: (vars: { lookupKey: string; fullName: string; email: string; company: string }) =>
+    mutationFn: (vars: { lookupKey: string; fullName: string; email: string; company: string; phoneNumber: string }) =>
       apiRequest("PUT", "/api/visitors/by-key", vars),
     onSuccess: () => {
       toast({ title: "Contact updated" });
@@ -1887,6 +1905,7 @@ function ContactsTab() {
     setEditName(g.fullName);
     setEditEmail(g.email ?? "");
     setEditCompany(g.company ?? "");
+    setEditPhone(g.representative.phoneNumber ?? "");
     setEditDialogOpen(true);
   };
 
@@ -1972,6 +1991,17 @@ function ContactsTab() {
           </Button>
         )}
       </div>
+
+      {/* Post-merge countdown banner */}
+      {mergeCountdown !== null && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          <GitMerge className="h-4 w-4 shrink-0" />
+          <span>Merge complete. Returning to all contacts in {mergeCountdown}s…</span>
+          <button className="ml-auto text-xs underline hover:no-underline" onClick={() => { setShowDupsOnly(false); setMergeCountdown(null); }}>
+            Go now
+          </button>
+        </div>
+      )}
 
       {/* Contact list */}
       {isLoading ? (
@@ -2201,17 +2231,18 @@ function ContactsTab() {
                 ) : (
                   <div className="rounded-md border overflow-hidden">
                     <div className="overflow-x-auto">
-                      <div className="min-w-[820px]">
-                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
-                          <span>Date</span><span>Signed In</span><span>Signed Out</span><span>Purpose</span><span>ACE POC</span><span>Email</span><span>Status</span><span>Duration</span><span>Source</span>
+                      <div className="min-w-[885px]">
+                        <div className="grid grid-cols-[110px_80px_80px_90px_65px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                          <span>Date</span><span>Signed In</span><span>Signed Out</span><span>Purpose</span><span>Citizen?</span><span>ACE POC</span><span>Email</span><span>Status</span><span>Duration</span><span>Source</span>
                         </div>
                         <div className="divide-y max-h-96 overflow-y-auto">
                           {profile.visits.map(v => (
-                            <div key={v.id} className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs" data-testid={`contact-visit-${v.id}`}>
+                            <div key={v.id} className="grid grid-cols-[110px_80px_80px_90px_65px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs" data-testid={`contact-visit-${v.id}`}>
                               <div className="font-medium text-foreground whitespace-nowrap">{new Date(v.signedInAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                               <div className="text-muted-foreground whitespace-nowrap">{new Date(v.signedInAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</div>
                               <div className="text-muted-foreground whitespace-nowrap">{v.signedOutAt ? new Date(v.signedOutAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"}</div>
                               <div className="truncate text-muted-foreground">{v.purpose || "—"}</div>
+                              <div className="text-muted-foreground">{v.usCitizen || "—"}</div>
                               <div className="truncate text-muted-foreground">{v.acePoc || "—"}</div>
                               <div className="truncate text-muted-foreground">{v.email || "—"}</div>
                               <div>{v.signedOutAt
@@ -2392,6 +2423,17 @@ function ContactsTab() {
                 data-testid="input-edit-contact-company"
               />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-phone">Phone #</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editPhone}
+                onChange={e => setEditPhone(e.target.value)}
+                placeholder="+1 (555) 000-0000"
+                data-testid="input-edit-contact-phone"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditDialogOpen(false)} disabled={editMutation.isPending}>
@@ -2406,6 +2448,7 @@ function ContactsTab() {
                   fullName: editName.trim(),
                   email: editEmail.trim(),
                   company: editCompany.trim(),
+                  phoneNumber: editPhone.trim(),
                 });
               }}
               data-testid="button-save-edit-contact"

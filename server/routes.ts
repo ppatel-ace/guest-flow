@@ -1208,14 +1208,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update all visitor rows for a contact by lookup key (protected)
   app.put("/api/visitors/by-key", requireAuth, async (req, res) => {
     try {
-      const { lookupKey, fullName, email, company } = req.body;
+      const { lookupKey, fullName, email, company, phoneNumber } = req.body;
       if (!lookupKey || typeof lookupKey !== "string") {
         return res.status(400).json({ error: "lookupKey is required" });
       }
-      const data: { fullName?: string; email?: string | null; company?: string | null } = {};
+      const data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null } = {};
       if (typeof fullName === "string") data.fullName = fullName.trim();
       if (email !== undefined) data.email = email?.trim().toLowerCase() || null;
       if (company !== undefined) data.company = company?.trim() || null;
+      if (phoneNumber !== undefined) data.phoneNumber = phoneNumber?.trim() || null;
       const result = await storage.updateVisitorsByKey(lookupKey.trim(), data);
       res.json(result);
     } catch (error) {
