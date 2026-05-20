@@ -1824,6 +1824,7 @@ function ContactsTab() {
       toast({ title: "Contacts merged successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/visitors/notes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors/merge-events"] });
       setCheckedKeys(new Set());
       setMergeDialogOpen(false);
       setMergePickedPrimary(null);
