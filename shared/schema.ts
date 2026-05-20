@@ -243,3 +243,19 @@ export const visitorMergeEvents = pgTable("visitor_merge_events", {
 });
 
 export type VisitorMergeEvent = typeof visitorMergeEvents.$inferSelect;
+
+// ─── ACE POC roster ───────────────────────────────────────────────────────────
+
+export const acePocs = pgTable("ace_pocs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertAcePocSchema = createInsertSchema(acePocs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAcePoc = z.infer<typeof insertAcePocSchema>;
+export type AcePoc = typeof acePocs.$inferSelect;

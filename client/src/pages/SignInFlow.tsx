@@ -52,6 +52,7 @@ import {
   BookUser,
   ArrowUpDown,
   AlertTriangle,
+  UserCog,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -63,7 +64,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { FormField, Customer, Lead, Visitor } from "@shared/schema";
+import type { FormField, Customer, Lead, Visitor, AcePoc } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -2608,6 +2609,87 @@ function ExportDataTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── ACE POC Tab ─────────────────────────────────────────────────────────────
+
+function AcePocTab() {
+  const { toast } = useToast();
+  const [newName, setNewName] = useState("");
+
+  const { data: pocs = [], isLoading } = useQuery<AcePoc[]>({
+    queryKey: ["/api/ace-pocs"],
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (name: string) => apiRequest("POST", "/api/ace-pocs", { name }),
+    onSuccess: () => {
+      setNewName("");
+      queryClient.invalidateQueries({ queryKey: ["/api/ace-pocs"] });
+      toast({ title: "POC added" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to add", description: err.message ?? "An error occurred", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/ace-pocs/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ace-pocs"] });
+      toast({ title: "POC removed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove POC", variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input
+          placeholder="Enter full name (e.g. Jane Smith)"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && newName.trim()) addMutation.mutate(newName.trim());
+          }}
+          data-testid="input-ace-poc-name"
+        />
+        <Button
+          onClick={() => addMutation.mutate(newName.trim())}
+          disabled={!newName.trim() || addMutation.isPending}
+          data-testid="button-add-ace-poc"
+        >
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add
+        </Button>
+      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : pocs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No ACE POCs configured yet. Add one above.</p>
+      ) : (
+        <ul className="divide-y rounded-md border">
+          {pocs.map((poc) => (
+            <li key={poc.id} className="flex items-center justify-between px-3 py-2.5">
+              <span className="text-sm font-medium">{poc.name}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                onClick={() => deleteMutation.mutate(poc.id)}
+                disabled={deleteMutation.isPending}
+                data-testid={`button-delete-ace-poc-${poc.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function SignInFlow() {
   return (
     <div className="space-y-6">
@@ -2651,6 +2733,10 @@ export default function SignInFlow() {
           <TabsTrigger value="export-data" data-testid="tab-export-data">
             <Download className="h-4 w-4 mr-1.5" />
             Export Data
+          </TabsTrigger>
+          <TabsTrigger value="ace-pocs" data-testid="tab-ace-pocs">
+            <UserCog className="h-4 w-4 mr-1.5" />
+            ACE POC
           </TabsTrigger>
         </TabsList>
 
@@ -2746,6 +2832,18 @@ export default function SignInFlow() {
             </CardHeader>
             <CardContent>
               <ExportDataTab />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ace-pocs">
+          <Card>
+            <CardHeader>
+              <CardTitle>ACE POC Roster</CardTitle>
+              <CardDescription>Names that appear in the "ACE POC" dropdown on the kiosk sign-in form. Add or remove entries here.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AcePocTab />
             </CardContent>
           </Card>
         </TabsContent>

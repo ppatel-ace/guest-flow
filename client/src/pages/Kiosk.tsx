@@ -13,7 +13,7 @@ import {
 import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
-import type { FormField } from "@shared/schema";
+import type { FormField, AcePoc } from "@shared/schema";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,14 +49,6 @@ type FormStage = "email" | "fields";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ACE_POC_OPTIONS = [
-  "Jerry Parker",
-  "Larry Pomasan",
-  "Nish Patel",
-  "Craig Frost",
-  "Ashley Morris",
-  "Sanjay Parimi",
-];
 
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
@@ -173,6 +165,10 @@ export default function Kiosk() {
 
   const { data: customFields = [] } = useQuery<FormField[]>({
     queryKey: ["/api/form-fields"],
+  });
+
+  const { data: acePocOptions = [], isLoading: acePocLoading } = useQuery<AcePoc[]>({
+    queryKey: ["/api/ace-pocs"],
   });
 
   const timeoutSecs = settings?.kioskTimeoutSeconds ?? 30;
@@ -680,12 +676,12 @@ export default function Kiosk() {
                   className="space-y-1.5"
                 >
                   <Label className="text-base">Ace POC <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
-                  <Select value={acePoc} onValueChange={setAcePoc}>
+                  <Select value={acePoc} onValueChange={setAcePoc} disabled={acePocLoading}>
                     <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-ace-poc">
-                      <SelectValue placeholder="Select a POC" />
+                      <SelectValue placeholder={acePocLoading ? "Loading…" : "Select a POC"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {ACE_POC_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      {acePocOptions.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </motion.div>

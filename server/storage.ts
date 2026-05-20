@@ -1,6 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
-  documents, kioskDevices, visitors, visitorNotes, visitorMergeEvents,
+  documents, kioskDevices, visitors, visitorNotes, visitorMergeEvents, acePocs,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -13,6 +13,7 @@ import {
   type Visitor, type InsertVisitor,
   type VisitorNote,
   type VisitorMergeEvent,
+  type AcePoc,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, asc, desc } from "drizzle-orm";
@@ -224,6 +225,11 @@ export interface IStorage {
   getVisitorMergeEvents(lookupKey: string): Promise<VisitorMergeEvent[]>;
   updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null }): Promise<{ updated: number }>;
   deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }>;
+  // ACE POC roster
+  listAcePocs(): Promise<AcePoc[]>;
+  createAcePoc(name: string): Promise<AcePoc>;
+  deleteAcePoc(id: string): Promise<boolean>;
+  seedAcePocs(names: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1085,6 +1091,28 @@ export class DatabaseStorage implements IStorage {
       .from(visitors)
       .where(sql`${visitors.source} = 'envoy' AND (${visitors.usCitizen} IS NULL OR ${visitors.usCitizen} = '')`);
     return Number(row?.count ?? 0);
+  }
+
+  // ─── ACE POC roster ──────────────────────────────────────────────────────────
+
+  async listAcePocs(): Promise<AcePoc[]> {
+    return await db.select().from(acePocs).orderBy(asc(acePocs.name));
+  }
+
+  async createAcePoc(name: string): Promise<AcePoc> {
+    const [row] = await db.insert(acePocs).values({ name: name.trim() }).returning();
+    return row;
+  }
+
+  async deleteAcePoc(id: string): Promise<boolean> {
+    const result = await db.delete(acePocs).where(eq(acePocs.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async seedAcePocs(names: string[]): Promise<void> {
+    for (const name of names) {
+      await db.insert(acePocs).values({ name }).onConflictDoNothing();
+    }
   }
 
 }

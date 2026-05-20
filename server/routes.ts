@@ -1256,6 +1256,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── ACE POC roster ──────────────────────────────────────────────────────────
+
+  // GET is public so the kiosk can fetch the list without an admin session
+  app.get("/api/ace-pocs", async (req, res) => {
+    try {
+      const pocs = await storage.listAcePocs();
+      res.json(pocs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch ACE POCs" });
+    }
+  });
+
+  app.post("/api/ace-pocs", requireAuth, async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "name is required" });
+      }
+      const poc = await storage.createAcePoc(name.trim());
+      res.status(201).json(poc);
+    } catch (error: any) {
+      const msg = error?.message ?? "";
+      if (msg.includes("unique") || msg.includes("duplicate") || error?.code === "23505") {
+        return res.status(409).json({ error: "A POC with that name already exists" });
+      }
+      res.status(500).json({ error: "Failed to create ACE POC" });
+    }
+  });
+
+  app.delete("/api/ace-pocs/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteAcePoc(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "ACE POC not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete ACE POC" });
+    }
+  });
+
   // Custom domain root redirect: registration.aceelectronics.com → /guest-check-in
   app.get("/", (req, res, next) => {
     const host = req.hostname || "";
