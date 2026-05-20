@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown, Workflow } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -21,6 +21,7 @@ const mainMenuItems = [
   { title: "Import", url: "/import", icon: FileSpreadsheet },
   { title: "Public Pages", url: "/public-pages", icon: Globe },
   { title: "Export", url: "/export", icon: FileDown },
+  { title: "Sign-in Flow", url: "/sign-in-flow", icon: Workflow },
 ];
 
 export function AppSidebar() {

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, boolean, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -38,6 +38,9 @@ export const pageSettings = pgTable("page_settings", {
   eventLocation: text("event_location"),
   captchaBypassStart: text("captcha_bypass_start"),
   captchaBypassEnd: text("captcha_bypass_end"),
+  photoEnabled: boolean("photo_enabled").default(false),
+  plusOneEnabled: boolean("plus_one_enabled").default(false),
+  kioskTimeoutSeconds: integer("kiosk_timeout_seconds").default(30),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
@@ -79,6 +82,9 @@ export const leads = pgTable("leads", {
   eventName: text("event_name"),
   submittedAt: timestamp("submitted_at").notNull().default(sql`now()`),
   customerId: varchar("customer_id"),
+  photoData: text("photo_data"),
+  plusOneCount: integer("plus_one_count").default(0),
+  documentsAgreed: text("documents_agreed"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({
@@ -88,6 +94,46 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
+
+// ─── Documents table ──────────────────────────────────────────────────────────
+
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+
+// ─── Kiosk devices table ──────────────────────────────────────────────────────
+
+export const kioskDevices = pgTable("kiosk_devices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: text("device_id").notNull().unique(),
+  name: text("name"),
+  status: text("status").notNull().default('idle'),
+  lastSeen: timestamp("last_seen").notNull().default(sql`now()`),
+  userAgent: text("user_agent"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertKioskDeviceSchema = createInsertSchema(kioskDevices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertKioskDevice = z.infer<typeof insertKioskDeviceSchema>;
+export type KioskDevice = typeof kioskDevices.$inferSelect;
 
 // ─── CRM tables ───────────────────────────────────────────────────────────────
 

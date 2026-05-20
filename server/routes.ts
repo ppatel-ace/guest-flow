@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema } from "@shared/schema";
+import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
@@ -664,6 +664,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         company: body.company ?? null,
         acePoc: body.acePoc ?? null,
         eventName: body.eventName ?? null,
+        photoData: body.photoData ?? null,
+        plusOneCount: body.plusOneCount ?? 0,
+        documentsAgreed: body.documentsAgreed ?? null,
       });
       await storage.createLead(leadData);
 
@@ -787,6 +790,255 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(data);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch contact" });
+    }
+  });
+
+  // ── Documents endpoints ──────────────────────────────────────────────────────
+
+  // Get documents — public only for ?enabled=true (kiosk); full list requires auth
+  app.get("/api/documents", async (req, res) => {
+    try {
+      const enabledOnly = req.query.enabled === "true";
+      if (!enabledOnly && !(req as any).session?.authenticated) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const docs = enabledOnly ? await storage.getEnabledDocuments() : await storage.getAllDocuments();
+      res.json(docs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Create document (protected)
+  app.post("/api/documents", requireAuth, async (req, res) => {
+    try {
+      const data = insertDocumentSchema.parse(req.body);
+      const doc = await storage.createDocument(data);
+      res.status(201).json(doc);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid document data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create document" });
+    }
+  });
+
+  // Reorder documents (protected) — must come before /:id route
+  app.put("/api/documents/reorder", requireAuth, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: "ids must be an array" });
+      }
+      await storage.reorderDocuments(ids);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder documents" });
+    }
+  });
+
+  // Update document (protected)
+  app.put("/api/documents/:id", requireAuth, async (req, res) => {
+    try {
+      const data = insertDocumentSchema.partial().parse(req.body);
+      const doc = await storage.updateDocument(req.params.id, data);
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(doc);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid document data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update document" });
+    }
+  });
+
+  // Delete document (protected)
+  app.delete("/api/documents/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteDocument(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
+
+  // ── Kiosk check-in settings ───────────────────────────────────────────────────
+
+  // Get kiosk settings (public - for kiosk page)
+  app.get("/api/kiosk/settings", async (req, res) => {
+    try {
+      const settings = await storage.getKioskSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch kiosk settings" });
+    }
+  });
+
+  // Update kiosk settings (protected)
+  app.put("/api/kiosk/settings", requireAuth, async (req, res) => {
+    try {
+      const schema = z.object({
+        photoEnabled: z.boolean().optional(),
+        plusOneEnabled: z.boolean().optional(),
+        kioskTimeoutSeconds: z.number().int().min(5).max(300).optional(),
+      });
+      const data = schema.parse(req.body);
+      const settings = await storage.updateKioskSettings(data);
+      res.json(settings);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid settings data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update kiosk settings" });
+    }
+  });
+
+  // ── Kiosk device registry ─────────────────────────────────────────────────────
+
+  // Register a device (public - called on first kiosk load)
+  app.post("/api/kiosk/register", async (req, res) => {
+    try {
+      const { deviceId } = req.body;
+      if (!deviceId || typeof deviceId !== "string") {
+        return res.status(400).json({ error: "deviceId is required" });
+      }
+      const ua = req.headers["user-agent"];
+      const ip = req.ip;
+      const device = await storage.registerKioskDevice(deviceId, ua, ip);
+      res.json(device);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to register device" });
+    }
+  });
+
+  // Heartbeat (public - called every 30s by kiosk)
+  app.post("/api/kiosk/heartbeat", async (req, res) => {
+    try {
+      const { deviceId, status } = req.body;
+      if (!deviceId || typeof deviceId !== "string") {
+        return res.status(400).json({ error: "deviceId is required" });
+      }
+      const validStatus = ["idle", "active"].includes(status) ? status : "idle";
+      const device = await storage.heartbeatKioskDevice(deviceId, validStatus);
+      if (!device) {
+        // Device not found — re-register it
+        const ua = req.headers["user-agent"];
+        const ip = req.ip;
+        const registered = await storage.registerKioskDevice(deviceId, ua, ip);
+        return res.json(registered);
+      }
+      res.json(device);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send heartbeat" });
+    }
+  });
+
+  // List devices (protected)
+  app.get("/api/kiosk/devices", requireAuth, async (req, res) => {
+    try {
+      const devices = await storage.getAllKioskDevices();
+      // Compute status: offline if lastSeen > 2 minutes ago
+      const now = Date.now();
+      const enriched = devices.map((d) => {
+        const lastSeenMs = new Date(d.lastSeen).getTime();
+        const diffMs = now - lastSeenMs;
+        let computedStatus = d.status;
+        if (diffMs > 2 * 60 * 1000) computedStatus = "offline";
+        return { ...d, computedStatus };
+      });
+      res.json(enriched);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch devices" });
+    }
+  });
+
+  // Rename device (protected)
+  app.put("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
+    try {
+      const { name } = req.body;
+      const device = await storage.updateKioskDevice(req.params.id, { name: name ?? null });
+      if (!device) {
+        return res.status(404).json({ error: "Device not found" });
+      }
+      res.json(device);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update device" });
+    }
+  });
+
+  // Delete device (protected)
+  app.delete("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteKioskDevice(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Device not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete device" });
+    }
+  });
+
+  // ── Kiosk check-in submission (public, bypasses bot-protection) ──────────────
+  // This endpoint is for kiosk devices only. Anti-bot tokens (_hp, _ft, Turnstile)
+  // are not applicable on a supervised iPad at reception. Rate-limited per IP.
+  const kioskCheckinLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: "Too many requests. Please wait a moment." });
+    },
+  });
+
+  app.post("/api/kiosk/checkin", kioskCheckinLimiter, async (req, res) => {
+    try {
+      const body = req.body;
+      const leadData = insertLeadSchema.parse({
+        title: body.title ?? null,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phoneNumber: body.phoneNumber,
+        company: body.company ?? null,
+        acePoc: body.acePoc ?? null,
+        eventName: null,
+        photoData: body.photoData ?? null,
+        plusOneCount: body.plusOneCount ?? 0,
+        documentsAgreed: body.documentsAgreed ?? null,
+      });
+      await storage.createLead(leadData);
+
+      const fullName = `${leadData.firstName} ${leadData.lastName}`.trim();
+      let customer = null;
+      try {
+        const customerData = insertCustomerSchema.parse({
+          name: fullName,
+          email: body.email,
+          phone: body.phoneNumber || undefined,
+          status: "checked-in",
+        });
+        const created = await storage.createCustomer(customerData);
+        customer = await storage.checkInCustomer(created.id);
+      } catch {
+        const existing = await storage.getCustomerByEmail(body.email);
+        if (existing) {
+          customer = await storage.checkInCustomer(existing.id);
+        }
+      }
+
+      res.status(201).json(customer ?? { name: fullName });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to check in" });
     }
   });
 

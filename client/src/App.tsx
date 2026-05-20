@@ -20,6 +20,8 @@ import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
 import GuestCheckIn from "@/pages/GuestCheckIn";
 import PublicPages from "@/pages/PublicPages";
 import Export from "@/pages/Export";
+import SignInFlow from "@/pages/SignInFlow";
+import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
 
 function AdminLayout() {
@@ -60,6 +62,7 @@ function AdminLayout() {
                 <Route path="/import" component={Import} />
                 <Route path="/public-pages" component={PublicPages} />
                 <Route path="/export" component={Export} />
+                <Route path="/sign-in-flow" component={SignInFlow} />
                 <Route component={NotFound} />
               </Switch>
             </main>
@@ -78,6 +81,7 @@ function App() {
           <Route path="/ace-admin" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
+          <Route path="/kiosk" component={Kiosk} />
           <Route component={AdminLayout} />
         </Switch>
         <Toaster />

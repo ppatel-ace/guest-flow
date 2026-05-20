@@ -1,5 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
+  documents, kioskDevices,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -7,6 +8,8 @@ import {
   type Company, type InsertCompany,
   type Contact, type InsertContact,
   type Visit, type InsertVisit,
+  type Document, type InsertDocument,
+  type KioskDevice, type InsertKioskDevice,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, asc, desc } from "drizzle-orm";
@@ -85,6 +88,12 @@ export interface CompanyDetail {
   totalVisits: number;
 }
 
+export interface KioskCheckinSettings {
+  photoEnabled: boolean;
+  plusOneEnabled: boolean;
+  kioskTimeoutSeconds: number;
+}
+
 const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
   scan_page: {
     title: "Welcome!",
@@ -96,6 +105,9 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     eventLocation: null,
     captchaBypassStart: null,
     captchaBypassEnd: null,
+    photoEnabled: false,
+    plusOneEnabled: false,
+    kioskTimeoutSeconds: 30,
   },
   guest_checkin_page: {
     title: "Check-In",
@@ -107,6 +119,23 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     eventLocation: null,
     captchaBypassStart: null,
     captchaBypassEnd: null,
+    photoEnabled: false,
+    plusOneEnabled: false,
+    kioskTimeoutSeconds: 30,
+  },
+  kiosk_settings: {
+    title: "Kiosk",
+    description: "Tablet kiosk check-in",
+    successMessage: "Thank you for checking in!",
+    successTitle: "Welcome!",
+    eventName: null,
+    eventDate: null,
+    eventLocation: null,
+    captchaBypassStart: null,
+    captchaBypassEnd: null,
+    photoEnabled: false,
+    plusOneEnabled: false,
+    kioskTimeoutSeconds: 30,
   },
 };
 
@@ -137,6 +166,22 @@ export interface IStorage {
   createLead(data: InsertLead): Promise<Lead>;
   updateLead(id: string, data: Partial<InsertLead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<Lead | undefined>;
+  // Documents
+  getAllDocuments(): Promise<Document[]>;
+  getEnabledDocuments(): Promise<Document[]>;
+  createDocument(data: InsertDocument): Promise<Document>;
+  updateDocument(id: string, data: Partial<InsertDocument>): Promise<Document | undefined>;
+  deleteDocument(id: string): Promise<boolean>;
+  reorderDocuments(ids: string[]): Promise<void>;
+  // Kiosk settings
+  getKioskSettings(): Promise<KioskCheckinSettings>;
+  updateKioskSettings(data: Partial<KioskCheckinSettings>): Promise<KioskCheckinSettings>;
+  // Kiosk devices
+  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<KioskDevice>;
+  heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined>;
+  getAllKioskDevices(): Promise<KioskDevice[]>;
+  updateKioskDevice(id: string, data: { name?: string }): Promise<KioskDevice | undefined>;
+  deleteKioskDevice(id: string): Promise<boolean>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
   upsertCompanyByName(name: string): Promise<Company>;
@@ -379,18 +424,125 @@ export class DatabaseStorage implements IStorage {
     return deleted || undefined;
   }
 
+  // ─── Documents ───────────────────────────────────────────────────────────────
+
+  async getAllDocuments(): Promise<Document[]> {
+    return await db.select().from(documents).orderBy(asc(documents.sortOrder), asc(documents.createdAt));
+  }
+
+  async getEnabledDocuments(): Promise<Document[]> {
+    return await db
+      .select()
+      .from(documents)
+      .where(eq(documents.enabled, true))
+      .orderBy(asc(documents.sortOrder), asc(documents.createdAt));
+  }
+
+  async createDocument(data: InsertDocument): Promise<Document> {
+    const existing = await this.getAllDocuments();
+    const nextOrder = existing.length;
+    const [doc] = await db.insert(documents).values({ ...data, sortOrder: nextOrder }).returning();
+    return doc;
+  }
+
+  async updateDocument(id: string, data: Partial<InsertDocument>): Promise<Document | undefined> {
+    const [doc] = await db.update(documents).set(data).where(eq(documents.id, id)).returning();
+    return doc || undefined;
+  }
+
+  async deleteDocument(id: string): Promise<boolean> {
+    const result = await db.delete(documents).where(eq(documents.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async reorderDocuments(ids: string[]): Promise<void> {
+    for (let i = 0; i < ids.length; i++) {
+      await db.update(documents).set({ sortOrder: i }).where(eq(documents.id, ids[i]));
+    }
+  }
+
+  // ─── Kiosk settings ──────────────────────────────────────────────────────────
+
+  async getKioskSettings(): Promise<KioskCheckinSettings> {
+    const row = await this.getPageSettings('kiosk_settings');
+    return {
+      photoEnabled: row.photoEnabled ?? false,
+      plusOneEnabled: row.plusOneEnabled ?? false,
+      kioskTimeoutSeconds: row.kioskTimeoutSeconds ?? 30,
+    };
+  }
+
+  async updateKioskSettings(data: Partial<KioskCheckinSettings>): Promise<KioskCheckinSettings> {
+    const existing = await this.getKioskSettings();
+    const merged = { ...existing, ...data };
+    const defaults = PAGE_DEFAULTS['kiosk_settings'];
+    await this.upsertPageSettings('kiosk_settings', {
+      ...defaults,
+      photoEnabled: merged.photoEnabled,
+      plusOneEnabled: merged.plusOneEnabled,
+      kioskTimeoutSeconds: merged.kioskTimeoutSeconds,
+    });
+    return merged;
+  }
+
+  // ─── Kiosk devices ────────────────────────────────────────────────────────────
+
+  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<KioskDevice> {
+    const [existing] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
+    if (existing) {
+      const [updated] = await db
+        .update(kioskDevices)
+        .set({ lastSeen: new Date(), userAgent: userAgent ?? existing.userAgent, ipAddress: ipAddress ?? existing.ipAddress })
+        .where(eq(kioskDevices.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(kioskDevices).values({
+      deviceId,
+      name: null,
+      status: 'idle',
+      lastSeen: new Date(),
+      userAgent: userAgent ?? null,
+      ipAddress: ipAddress ?? null,
+    }).returning();
+    return created;
+  }
+
+  async heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined> {
+    const [device] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
+    if (!device) return undefined;
+    const [updated] = await db
+      .update(kioskDevices)
+      .set({ lastSeen: new Date(), status })
+      .where(eq(kioskDevices.id, device.id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getAllKioskDevices(): Promise<KioskDevice[]> {
+    return await db.select().from(kioskDevices).orderBy(desc(kioskDevices.lastSeen));
+  }
+
+  async updateKioskDevice(id: string, data: { name?: string }): Promise<KioskDevice | undefined> {
+    const [updated] = await db.update(kioskDevices).set(data).where(eq(kioskDevices.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteKioskDevice(id: string): Promise<boolean> {
+    const result = await db.delete(kioskDevices).where(eq(kioskDevices.id, id)).returning();
+    return result.length > 0;
+  }
+
   // ─── CRM ────────────────────────────────────────────────────────────────────
 
   async findContactByEmail(email: string): Promise<Contact | undefined> {
     const normalizedEmail = email.trim().toLowerCase();
-    // Use eq — email is always stored lowercase so this is exact + case-insensitive
     const [contact] = await db.select().from(contacts).where(eq(contacts.email, normalizedEmail));
     return contact ?? undefined;
   }
 
   async upsertCompanyByName(name: string): Promise<Company> {
     const normalized = name.trim();
-    // Use LOWER(name) = LOWER(value) for safe case-insensitive exact match (avoids ilike wildcards)
     const [existing] = await db
       .select()
       .from(companies)
@@ -402,23 +554,19 @@ export class DatabaseStorage implements IStorage {
 
   async upsertContactByEmail(data: InsertContact): Promise<Contact> {
     const normalizedEmail = data.email.trim().toLowerCase();
-    // Use eq — email is always stored lowercase so this is exact + case-insensitive
     const [existing] = await db
       .select()
       .from(contacts)
       .where(eq(contacts.email, normalizedEmail));
 
     if (existing) {
-      // Update mutable profile fields; NEVER reassign companyId if contact already has one
       const updateData: Partial<InsertContact> = {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone || existing.phone,
         title: data.title || existing.title,
-        // acePoc on the contact record reflects the most recent POC; visits snapshot each individually
         acePoc: data.acePoc || existing.acePoc,
       };
-      // Only assign company if the contact has none yet
       if (!existing.companyId && data.companyId) {
         updateData.companyId = data.companyId;
       }
@@ -498,7 +646,6 @@ export class DatabaseStorage implements IStorage {
       })
     );
 
-    // Ace POC frequency: use per-visit snapshot from visits.ace_poc
     const allVisits = await db
       .select({ acePoc: visits.acePoc })
       .from(visits)
