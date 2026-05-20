@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779289788711,
+      "tag": "0000_material_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779290491922,
+      "tag": "0001_backfill_legacy_columns",
+      "breakpoints": true
+    }
+  ]
+}

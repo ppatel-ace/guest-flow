@@ -1,101 +1,72 @@
-import { db } from "./db";
-import { sql } from "drizzle-orm";
+import path from "path";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
+import { migrate as neonMigrate } from "drizzle-orm/neon-serverless/migrator";
+import postgres from "postgres";
+import { drizzle as pgDrizzle } from "drizzle-orm/postgres-js";
+import { migrate as pgMigrate } from "drizzle-orm/postgres-js/migrator";
+import ws from "ws";
+
+const migrationsFolder = path.join(process.cwd(), "migrations");
+
+function buildDatabaseUrl(): string {
+  if (process.env.PGHOST) {
+    return `postgresql://${process.env.PGUSER ?? "postgres"}:${process.env.PGPASSWORD ?? ""}@${process.env.PGHOST}:${process.env.PGPORT ?? 5432}/${process.env.PGDATABASE ?? "postgres"}`;
+  }
+  return process.env.DATABASE_URL!;
+}
 
 /**
- * Runs idempotent schema migrations at startup to ensure the database is
- * always in sync with the Drizzle schema, regardless of which database
- * (local PGHOST or remote DATABASE_URL) the server connects to.
+ * Runs pending Drizzle migrations against the active database at server
+ * startup.  Migration SQL files use IF NOT EXISTS / DO…EXCEPTION blocks so
+ * they are safe to run against databases that were bootstrapped before the
+ * migration system existed — any objects that already exist are skipped
+ * rather than causing an error.
  *
- * Each statement uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS so re-runs are safe.
+ * A short-lived connection is created specifically for migration so the
+ * migrator can manage its own transactions independently of the main pool.
+ *
+ * Developer workflow: after changing shared/schema.ts, run
+ *   npx drizzle-kit generate
+ * and commit the new .sql file in migrations/.  The next server start will
+ * apply it automatically.
  */
 export async function runMigrations(): Promise<void> {
+  const databaseUrl = buildDatabaseUrl();
+  const hostname = new URL(databaseUrl).hostname;
+  const isNeon = hostname.endsWith("neon.tech");
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "helium" ||
+    hostname === "127.0.0.1";
+
+  console.log("[migrate] Applying pending database migrations…");
+
   try {
-    // Add columns to page_settings that were added in later schema versions
-    await db.execute(sql`
-      ALTER TABLE page_settings
-        ADD COLUMN IF NOT EXISTS captcha_bypass_start text,
-        ADD COLUMN IF NOT EXISTS captcha_bypass_end text,
-        ADD COLUMN IF NOT EXISTS photo_enabled boolean DEFAULT false,
-        ADD COLUMN IF NOT EXISTS plus_one_enabled boolean DEFAULT false,
-        ADD COLUMN IF NOT EXISTS kiosk_timeout_seconds integer DEFAULT 30;
-    `);
+    if (isNeon) {
+      neonConfig.webSocketConstructor = ws;
+      const pool = new Pool({ connectionString: databaseUrl });
+      const migDb = neonDrizzle({ client: pool });
+      await neonMigrate(migDb, { migrationsFolder });
+      await pool.end();
+    } else {
+      const sslOption = isLocal ? false : ("require" as const);
+      const client = postgres(databaseUrl, {
+        ssl: sslOption,
+        prepare: false,
+        max: 1,
+      });
+      const migDb = pgDrizzle(client);
+      await pgMigrate(migDb, { migrationsFolder });
+      await client.end();
+    }
 
-    // Add new columns to leads if they don't exist
-    await db.execute(sql`
-      ALTER TABLE leads
-        ADD COLUMN IF NOT EXISTS photo_data text,
-        ADD COLUMN IF NOT EXISTS plus_one_count integer DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS documents_agreed text;
-    `);
-
-    // Create documents table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS documents (
-        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-        title text NOT NULL,
-        content text NOT NULL,
-        enabled boolean NOT NULL DEFAULT true,
-        sort_order integer NOT NULL DEFAULT 0,
-        created_at timestamp NOT NULL DEFAULT now()
-      );
-    `);
-
-    // Create kiosk_devices table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS kiosk_devices (
-        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-        device_id text NOT NULL UNIQUE,
-        name text,
-        status text NOT NULL DEFAULT 'idle',
-        last_seen timestamp NOT NULL DEFAULT now(),
-        user_agent text,
-        ip_address text,
-        created_at timestamp NOT NULL DEFAULT now()
-      );
-    `);
-
-    // Create CRM: companies table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS companies (
-        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-        name text NOT NULL,
-        created_at timestamp NOT NULL DEFAULT now()
-      );
-    `);
-
-    // Create CRM: contacts table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS contacts (
-        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-        company_id varchar REFERENCES companies(id),
-        title text,
-        first_name text NOT NULL,
-        last_name text NOT NULL,
-        email text NOT NULL UNIQUE,
-        phone text,
-        ace_poc text,
-        created_at timestamp NOT NULL DEFAULT now()
-      );
-    `);
-
-    // Create CRM: visits table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS visits (
-        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-        contact_id varchar NOT NULL REFERENCES contacts(id),
-        company_id varchar REFERENCES companies(id),
-        event_name text,
-        event_date text,
-        event_location text,
-        ace_poc text,
-        visited_at timestamp NOT NULL DEFAULT now(),
-        custom_fields text
-      );
-    `);
-
-    console.log("[migrate] Schema is up to date");
-  } catch (error) {
-    console.error("[migrate] Migration failed:", error);
-    throw error;
+    console.log("[migrate] Database schema is up to date.");
+  } catch (err) {
+    console.error(
+      "[migrate] Migration failed — server cannot start safely:",
+      err
+    );
+    process.exit(1);
   }
 }
