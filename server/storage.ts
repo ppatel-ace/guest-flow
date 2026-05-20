@@ -20,6 +20,7 @@ import { randomUUID } from "crypto";
 export interface MonthlyCheckIn {
   month: string;
   count: number;
+  walkIns: number;
 }
 
 export interface VisitorAnalyticsPeriod {
@@ -303,33 +304,35 @@ export class DatabaseStorage implements IStorage {
   async getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsResult> {
     const b = bucket;
     const bucketLiteral = sql.raw(`'${b}'`);
+    const startStr = start.toISOString();
+    const endStr = end.toISOString();
 
     const [visitorRows, inviteRows, hourlyRows, durationRows] = await Promise.all([
       db.select({
-        period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${leads.submittedAt}), 'YYYY-MM-DD')`,
+        period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${visitors.signedInAt}), 'YYYY-MM-DD')`,
         count: sql<number>`COUNT(*)::int`,
-      }).from(leads)
-        .where(sql`${leads.submittedAt} >= ${start} AND ${leads.submittedAt} <= ${end}`)
-        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${leads.submittedAt})`),
+      }).from(visitors)
+        .where(sql`${visitors.signedInAt} >= ${startStr}::timestamptz AND ${visitors.signedInAt} <= ${endStr}::timestamptz`)
+        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${visitors.signedInAt})`),
 
       db.select({
         period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${customers.createdAt}), 'YYYY-MM-DD')`,
         count: sql<number>`COUNT(*)::int`,
       }).from(customers)
-        .where(sql`${customers.createdAt} >= ${start} AND ${customers.createdAt} <= ${end}`)
+        .where(sql`${customers.createdAt} >= ${startStr}::timestamptz AND ${customers.createdAt} <= ${endStr}::timestamptz`)
         .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${customers.createdAt})`),
 
       db.select({
-        hour: sql<number>`EXTRACT(HOUR FROM ${leads.submittedAt})::int`,
+        hour: sql<number>`EXTRACT(HOUR FROM ${visitors.signedInAt})::int`,
         count: sql<number>`COUNT(*)::int`,
-      }).from(leads)
-        .where(sql`${leads.submittedAt} >= ${start} AND ${leads.submittedAt} <= ${end}`)
-        .groupBy(sql`EXTRACT(HOUR FROM ${leads.submittedAt})`),
+      }).from(visitors)
+        .where(sql`${visitors.signedInAt} >= ${startStr}::timestamptz AND ${visitors.signedInAt} <= ${endStr}::timestamptz`)
+        .groupBy(sql`EXTRACT(HOUR FROM ${visitors.signedInAt})`),
 
       db.select({
         avgMinutes: sql<number | null>`AVG(EXTRACT(EPOCH FROM (${visitors.signedOutAt} - ${visitors.signedInAt})) / 60.0)`,
       }).from(visitors)
-        .where(sql`${visitors.signedOutAt} IS NOT NULL AND ${visitors.signedInAt} >= ${start} AND ${visitors.signedInAt} <= ${end}`),
+        .where(sql`${visitors.signedOutAt} IS NOT NULL AND ${visitors.signedInAt} >= ${startStr}::timestamptz AND ${visitors.signedInAt} <= ${endStr}::timestamptz`),
     ]);
 
     const periodsMap = new Map<string, { visitors: number; invites: number }>();
@@ -372,28 +375,43 @@ export class DatabaseStorage implements IStorage {
   async getMonthlyCheckIns(): Promise<MonthlyCheckIn[]> {
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+    const twelveMonthsAgoStr = twelveMonthsAgo.toISOString();
 
-    const results = await db
-      .select({
+    const [checkInResults, walkInResults] = await Promise.all([
+      db.select({
         month: sql<string>`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`,
         count: sql<number>`COUNT(*)::int`,
       })
       .from(customers)
-      .where(sql`${customers.checkedInAt} IS NOT NULL AND ${customers.checkedInAt} >= ${twelveMonthsAgo}`)
-      .groupBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`);
+      .where(sql`${customers.checkedInAt} IS NOT NULL AND ${customers.checkedInAt} >= ${twelveMonthsAgoStr}::timestamptz`)
+      .groupBy(sql`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`),
 
-    const monthsMap = new Map<string, number>();
+      db.select({
+        month: sql<string>`TO_CHAR(${visitors.signedInAt}, 'YYYY-MM')`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(visitors)
+      .where(sql`${visitors.signedInAt} >= ${twelveMonthsAgoStr}::timestamptz`)
+      .groupBy(sql`TO_CHAR(${visitors.signedInAt}, 'YYYY-MM')`),
+    ]);
+
+    const checkInsMap = new Map<string, number>();
+    const walkInsMap = new Map<string, number>();
     const now = new Date();
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      monthsMap.set(monthKey, 0);
+      checkInsMap.set(monthKey, 0);
+      walkInsMap.set(monthKey, 0);
     }
-    results.forEach(result => {
-      if (result.month) monthsMap.set(result.month, result.count);
-    });
-    return Array.from(monthsMap.entries()).map(([month, count]) => ({ month, count }));
+    checkInResults.forEach(r => { if (r.month) checkInsMap.set(r.month, r.count); });
+    walkInResults.forEach(r => { if (r.month) walkInsMap.set(r.month, r.count); });
+
+    return Array.from(checkInsMap.keys()).map(month => ({
+      month,
+      count: checkInsMap.get(month) ?? 0,
+      walkIns: walkInsMap.get(month) ?? 0,
+    }));
   }
 
   async initSchema(): Promise<void> {

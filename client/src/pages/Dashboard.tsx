@@ -3,12 +3,13 @@ import { StatsCard } from "@/components/StatsCard";
 import { CustomerTable, Customer } from "@/components/CustomerTable";
 import { Users, CheckCircle, Mail, Clock, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { Customer as CustomerType } from "@shared/schema";
 
 interface MonthlyCheckIn {
   month: string;
   count: number;
+  walkIns: number;
 }
 
 interface BotStats {
@@ -160,7 +161,7 @@ export default function Dashboard() {
     const [year, month] = stat.month.split("-");
     const date = new Date(parseInt(year), parseInt(month) - 1);
     const monthName = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-    return { month: monthName, checkIns: stat.count };
+    return { month: monthName, checkIns: stat.count, walkIns: stat.walkIns };
   });
 
   const recentCustomers: Customer[] = customers.slice(0, 5).map(c => ({
@@ -203,7 +204,7 @@ export default function Dashboard() {
       <Card data-testid="card-monthly-checkins">
         <CardHeader>
           <CardTitle>Monthly Check-Ins</CardTitle>
-          <CardDescription>Check-in activity over the last 12 months</CardDescription>
+          <CardDescription>QR check-ins and walk-in visitors over the last 12 months</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-80">
@@ -220,7 +221,9 @@ export default function Dashboard() {
                   }}
                   labelStyle={{ color: "hsl(var(--popover-foreground))" }}
                 />
-                <Line type="monotone" dataKey="checkIns" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-2))" }} name="Check-Ins" />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Line type="monotone" dataKey="checkIns" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-2))" }} name="QR Check-Ins" />
+                <Line type="monotone" dataKey="walkIns" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))" }} name="Walk-Ins" />
               </LineChart>
             </ResponsiveContainer>
           </div>
