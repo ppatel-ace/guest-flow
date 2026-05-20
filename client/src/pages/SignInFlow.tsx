@@ -974,6 +974,7 @@ const ENVOY_COL_MAP: Record<string, string> = {
   "signed_in_time_local": "signedInAt",
   "signed_out_time_local": "signedOutAt",
   "are_you_us_citizen_or_resident": "usCitizen",
+  "are_you_a_us_citizen_or_resident": "usCitizen",
   "purpose_of_visit": "purpose",
   "location_name": "location",
 };
