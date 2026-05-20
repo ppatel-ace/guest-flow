@@ -1231,10 +1231,11 @@ function VisitorLogTab() {
           </div>
         ) : (
           <div className="rounded-md border overflow-hidden">
-            <div className="hidden lg:grid grid-cols-[1fr_1fr_auto_auto_auto] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+            <div className="hidden lg:grid grid-cols-[2rem_1fr_1fr_72px_88px_88px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+              <span />
               <span>Name / Email</span>
               <span>Company</span>
-              <span>Total visits</span>
+              <span>Visits</span>
               <span>First visited</span>
               <span>Last visited</span>
             </div>
@@ -1242,7 +1243,7 @@ function VisitorLogTab() {
               {filteredGrouped.map((g) => (
                 <button
                   key={g.lookupKey}
-                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_1fr_1fr_72px_88px_88px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors"
                   onClick={() => setSelected(g.representative)}
                   data-testid={`row-grouped-${g.lookupKey}`}
                 >
@@ -1255,21 +1256,19 @@ function VisitorLogTab() {
                       </AvatarFallback>
                     )}
                   </Avatar>
-                  <div className="flex-1 min-w-0 grid lg:grid-cols-[1fr_1fr] gap-x-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{g.fullName}</div>
-                      <div className="text-xs text-muted-foreground truncate">{g.email || "—"}</div>
-                    </div>
-                    <div className="hidden lg:block text-sm text-muted-foreground truncate self-center">{g.company || "—"}</div>
+                  <div className="flex-1 lg:flex-none min-w-0">
+                    <div className="text-sm font-medium truncate">{g.fullName}</div>
+                    <div className="text-xs text-muted-foreground truncate">{g.email || "—"}</div>
                   </div>
-                  <div className="hidden lg:flex items-center gap-1 text-xs font-semibold shrink-0">
+                  <div className="hidden lg:block text-sm text-muted-foreground truncate">{g.company || "—"}</div>
+                  <div className="hidden lg:flex items-center gap-1 text-xs font-semibold">
                     <History className="h-3.5 w-3.5 text-muted-foreground" />
                     {g.totalVisits}
                   </div>
-                  <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                     {g.firstVisited.toLocaleDateString()}
                   </div>
-                  <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                     {g.lastVisited.toLocaleDateString()}
                   </div>
                 </button>
@@ -1288,7 +1287,8 @@ function VisitorLogTab() {
       ) : (
         /* ── By-visit: individual rows ── */
         <div className="rounded-md border overflow-hidden">
-          <div className="hidden lg:grid grid-cols-[1fr_1fr_1fr_auto_auto_auto_auto] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+          <div className="hidden lg:grid grid-cols-[2rem_1fr_1fr_1fr_88px_88px_56px_64px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+            <span />
             <span>Name / Email</span>
             <span>Company</span>
             <span>ACE POC</span>
@@ -1301,7 +1301,7 @@ function VisitorLogTab() {
             {filtered.map((visitor) => (
               <button
                 key={visitor.id}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
+                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_1fr_1fr_1fr_88px_88px_56px_64px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors"
                 onClick={() => setSelected(visitor)}
                 data-testid={`row-visitor-${visitor.id}`}
               >
@@ -1314,21 +1314,19 @@ function VisitorLogTab() {
                     </AvatarFallback>
                   )}
                 </Avatar>
-                <div className="flex-1 min-w-0 grid lg:grid-cols-[1fr_1fr_1fr] gap-x-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">{visitor.fullName}</div>
-                    <div className="text-xs text-muted-foreground truncate">{visitor.email || "—"}</div>
-                  </div>
-                  <div className="hidden lg:block text-sm text-muted-foreground truncate self-center">{visitor.company || "—"}</div>
-                  <div className="hidden lg:block text-sm text-muted-foreground truncate self-center">{visitor.acePoc || "—"}</div>
+                <div className="flex-1 lg:flex-none min-w-0">
+                  <div className="text-sm font-medium truncate">{visitor.fullName}</div>
+                  <div className="text-xs text-muted-foreground truncate">{visitor.email || "—"}</div>
                 </div>
-                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                <div className="hidden lg:block text-sm text-muted-foreground truncate">{visitor.company || "—"}</div>
+                <div className="hidden lg:block text-sm text-muted-foreground truncate">{visitor.acePoc || "—"}</div>
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                   {new Date(visitor.signedInAt).toLocaleDateString()}
                 </div>
-                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                   {visitor.signedOutAt ? new Date(visitor.signedOutAt).toLocaleDateString() : "—"}
                 </div>
-                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                   {formatDuration(visitor.signedInAt, visitor.signedOutAt)}
                 </div>
                 <div className="shrink-0">{sourceBadge(visitor.source)}</div>
