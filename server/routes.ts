@@ -825,6 +825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const docs = enabledOnly ? await storage.getEnabledDocuments() : await storage.getAllDocuments();
       res.json(docs);
     } catch (error) {
+      console.error("[documents GET]", error);
       res.status(500).json({ error: "Failed to fetch documents" });
     }
   });
@@ -836,6 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const doc = await storage.createDocument(data);
       res.status(201).json(doc);
     } catch (error) {
+      console.error("[documents POST]", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid document data", details: error.errors });
       }
@@ -853,6 +855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.reorderDocuments(ids);
       res.json({ success: true });
     } catch (error) {
+      console.error("[documents reorder]", error);
       res.status(500).json({ error: "Failed to reorder documents" });
     }
   });
@@ -867,6 +870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(doc);
     } catch (error) {
+      console.error("[documents PUT]", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid document data", details: error.errors });
       }
@@ -883,6 +887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(204).send();
     } catch (error) {
+      console.error("[documents DELETE]", error);
       res.status(500).json({ error: "Failed to delete document" });
     }
   });
@@ -895,6 +900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getKioskSettings();
       res.json(settings);
     } catch (error) {
+      console.error("[kiosk/settings GET]", error);
       res.status(500).json({ error: "Failed to fetch kiosk settings" });
     }
   });
@@ -911,6 +917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.updateKioskSettings(data);
       res.json(settings);
     } catch (error) {
+      console.error("[kiosk/settings PUT]", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid settings data", details: error.errors });
       }
@@ -932,6 +939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const device = await storage.registerKioskDevice(deviceId, ua, ip);
       res.json(device);
     } catch (error) {
+      console.error("[kiosk/register]", error);
       res.status(500).json({ error: "Failed to register device" });
     }
   });
@@ -954,6 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(device);
     } catch (error) {
+      console.error("[kiosk/heartbeat]", error);
       res.status(500).json({ error: "Failed to send heartbeat" });
     }
   });
@@ -973,6 +982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.json(enriched);
     } catch (error) {
+      console.error("[kiosk/devices GET]", error);
       res.status(500).json({ error: "Failed to fetch devices" });
     }
   });
@@ -987,6 +997,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(device);
     } catch (error) {
+      console.error("[kiosk/devices PUT]", error);
       res.status(500).json({ error: "Failed to update device" });
     }
   });
@@ -1000,6 +1011,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(204).send();
     } catch (error) {
+      console.error("[kiosk/devices DELETE]", error);
       res.status(500).json({ error: "Failed to delete device" });
     }
   });
@@ -1046,7 +1058,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         const created = await storage.createCustomer(customerData);
         customer = await storage.checkInCustomer(created.id);
-      } catch {
+      } catch (innerError) {
+        console.error("[kiosk/checkin] customer upsert error:", innerError);
         const existing = await storage.getCustomerByEmail(body.email);
         if (existing) {
           customer = await storage.checkInCustomer(existing.id);
@@ -1055,6 +1068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(customer ?? { name: fullName });
     } catch (error) {
+      console.error("[kiosk/checkin]", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }

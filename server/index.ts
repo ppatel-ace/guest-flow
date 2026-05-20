@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { runMigrations } from "./migrate";
 
 // Extend Express session
 declare module "express-session" {
@@ -106,6 +107,8 @@ app.use((req, res, next) => {
       console.warn("WARN: FINGERPRINT_HMAC_SECRET is not set — timing token enforcement is DISABLED");
     }
   }
+
+  await runMigrations();
 
   const server = await registerRoutes(app);
 

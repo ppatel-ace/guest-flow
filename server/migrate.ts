@@ -1,11 +1,20 @@
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
+/**
+ * Runs idempotent schema migrations at startup to ensure the database is
+ * always in sync with the Drizzle schema, regardless of which database
+ * (local PGHOST or remote DATABASE_URL) the server connects to.
+ *
+ * Each statement uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS so re-runs are safe.
+ */
 export async function runMigrations(): Promise<void> {
   try {
-    // Add new columns to page_settings if they don't exist
+    // Add columns to page_settings that were added in later schema versions
     await db.execute(sql`
       ALTER TABLE page_settings
+        ADD COLUMN IF NOT EXISTS captcha_bypass_start text,
+        ADD COLUMN IF NOT EXISTS captcha_bypass_end text,
         ADD COLUMN IF NOT EXISTS photo_enabled boolean DEFAULT false,
         ADD COLUMN IF NOT EXISTS plus_one_enabled boolean DEFAULT false,
         ADD COLUMN IF NOT EXISTS kiosk_timeout_seconds integer DEFAULT 30;
@@ -45,9 +54,48 @@ export async function runMigrations(): Promise<void> {
       );
     `);
 
-    console.log("[migrate] Schema migrations applied successfully");
+    // Create CRM: companies table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS companies (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+    `);
+
+    // Create CRM: contacts table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id varchar REFERENCES companies(id),
+        title text,
+        first_name text NOT NULL,
+        last_name text NOT NULL,
+        email text NOT NULL UNIQUE,
+        phone text,
+        ace_poc text,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+    `);
+
+    // Create CRM: visits table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS visits (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        contact_id varchar NOT NULL REFERENCES contacts(id),
+        company_id varchar REFERENCES companies(id),
+        event_name text,
+        event_date text,
+        event_location text,
+        ace_poc text,
+        visited_at timestamp NOT NULL DEFAULT now(),
+        custom_fields text
+      );
+    `);
+
+    console.log("[migrate] Schema is up to date");
   } catch (error) {
-    console.error("[migrate] Migration error:", error);
+    console.error("[migrate] Migration failed:", error);
     throw error;
   }
 }
