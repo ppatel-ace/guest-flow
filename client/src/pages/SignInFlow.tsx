@@ -1978,7 +1978,7 @@ function ContactsTab() {
                     <span className="text-sm font-medium truncate">{g.fullName}</span>
                     {duplicateKeys.has(g.lookupKey) && (
                       <Popover>
-                        <PopoverTrigger asChild onClick={e => e.stopPropagation()}>
+                        <PopoverTrigger onClick={e => e.stopPropagation()} className="contents">
                           <Badge variant="outline" className="text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap shrink-0 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors" data-testid={`badge-duplicate-${g.lookupKey}`}>
                             Possible duplicate
                           </Badge>
