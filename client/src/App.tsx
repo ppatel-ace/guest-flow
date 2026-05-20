@@ -64,7 +64,7 @@ function AdminLayout() {
                 <Route path="/public-pages" component={PublicPages} />
                 <Route path="/export" component={Export} />
                 <Route path="/sign-in-flow" component={SignInFlow} />
-                <Route path="/envoy-analytics" component={EnvoyAnalytics} />
+                <Route path="/analytics" component={EnvoyAnalytics} />
                 <Route component={NotFound} />
               </Switch>
             </main>

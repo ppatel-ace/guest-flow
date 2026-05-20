@@ -20,6 +20,12 @@ export interface MonthlyCheckIn {
   count: number;
 }
 
+export interface VisitorAnalyticsPeriod {
+  period: string;
+  visitors: number;
+  invites: number;
+}
+
 export interface ImportResult {
   inserted: number;
   skipped: number;
@@ -153,6 +159,7 @@ export interface IStorage {
   checkInCustomer(id: string): Promise<Customer | undefined>;
   sendInvitation(id: string): Promise<Customer | undefined>;
   getMonthlyCheckIns(): Promise<MonthlyCheckIn[]>;
+  getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsPeriod[]>;
   initSchema(): Promise<void>;
   importFromSQL(sql: string): Promise<ImportResult>;
   getPageSettings(key: string): Promise<PageSettings>;
@@ -273,6 +280,47 @@ export class DatabaseStorage implements IStorage {
   async deleteCustomer(id: string): Promise<boolean> {
     const result = await db.delete(customers).where(eq(customers.id, id)).returning();
     return result.length > 0;
+  }
+
+  async getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsPeriod[]> {
+    const b = bucket;
+    const bucketLiteral = sql.raw(`'${b}'`);
+
+    const [visitorRows, inviteRows] = await Promise.all([
+      db.select({
+        period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${leads.submittedAt}), 'YYYY-MM-DD')`,
+        count: sql<number>`COUNT(*)::int`,
+      }).from(leads)
+        .where(sql`${leads.submittedAt} >= ${start} AND ${leads.submittedAt} <= ${end}`)
+        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${leads.submittedAt})`),
+
+      db.select({
+        period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${customers.createdAt}), 'YYYY-MM-DD')`,
+        count: sql<number>`COUNT(*)::int`,
+      }).from(customers)
+        .where(sql`${customers.createdAt} >= ${start} AND ${customers.createdAt} <= ${end}`)
+        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${customers.createdAt})`),
+    ]);
+
+    const periodsMap = new Map<string, { visitors: number; invites: number }>();
+    visitorRows.forEach(r => {
+      if (r.period) {
+        const e = periodsMap.get(r.period) ?? { visitors: 0, invites: 0 };
+        e.visitors = r.count;
+        periodsMap.set(r.period, e);
+      }
+    });
+    inviteRows.forEach(r => {
+      if (r.period) {
+        const e = periodsMap.get(r.period) ?? { visitors: 0, invites: 0 };
+        e.invites = r.count;
+        periodsMap.set(r.period, e);
+      }
+    });
+
+    return Array.from(periodsMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, data]) => ({ period, ...data }));
   }
 
   async getMonthlyCheckIns(): Promise<MonthlyCheckIn[]> {

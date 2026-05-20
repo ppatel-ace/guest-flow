@@ -456,6 +456,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Visitor analytics (protected)
+  app.get("/api/analytics/visitors", requireAuth, async (req, res) => {
+    try {
+      const { start, end, bucket = "day" } = req.query as Record<string, string>;
+      if (!start || !end) return res.status(400).json({ error: "start and end are required" });
+      const validBuckets = ["day", "week", "month"];
+      if (!validBuckets.includes(bucket)) return res.status(400).json({ error: "Invalid bucket" });
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+      const data = await storage.getVisitorAnalytics(startDate, endDate, bucket as "day" | "week" | "month");
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   // Get monthly check-in statistics (public - allows viewing stats without login)
   app.get("/api/stats/monthly-checkins", async (req, res) => {
     try {

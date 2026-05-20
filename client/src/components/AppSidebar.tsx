@@ -22,7 +22,7 @@ const mainMenuItems = [
   { title: "Public Pages", url: "/public-pages", icon: Globe },
   { title: "Export", url: "/export", icon: FileDown },
   { title: "Sign-in Flow", url: "/sign-in-flow", icon: Workflow },
-  { title: "Envoy Analytics", url: "/envoy-analytics", icon: BarChart2 },
+  { title: "Analytics", url: "/analytics", icon: BarChart2 },
 ];
 
 export function AppSidebar() {
