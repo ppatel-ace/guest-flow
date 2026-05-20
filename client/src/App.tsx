@@ -21,6 +21,7 @@ import GuestCheckIn from "@/pages/GuestCheckIn";
 import PublicPages from "@/pages/PublicPages";
 import Export from "@/pages/Export";
 import SignInFlow from "@/pages/SignInFlow";
+import EnvoyAnalytics from "@/pages/EnvoyAnalytics";
 import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
 
@@ -63,6 +64,7 @@ function AdminLayout() {
                 <Route path="/public-pages" component={PublicPages} />
                 <Route path="/export" component={Export} />
                 <Route path="/sign-in-flow" component={SignInFlow} />
+                <Route path="/envoy-analytics" component={EnvoyAnalytics} />
                 <Route component={NotFound} />
               </Switch>
             </main>
