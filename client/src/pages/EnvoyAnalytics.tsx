@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useRef, Fragment } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import {
   Upload, Users, UserCheck, Clock, ShieldCheck, Building2,
-  ChevronDown, ChevronRight, Search, X, BarChart2,
+  ChevronDown, ChevronRight, Search, X, BarChart2, Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -238,6 +239,62 @@ export default function EnvoyAnalytics() {
     });
   };
 
+  const exportToExcel = useCallback(() => {
+    const headers = ["Name", "Email", "Host", "Company", "Sign-in", "Sign-out", "Duration", "US Citizen", "Companion Count", "Type"];
+    const sheetRows: (string | number)[][] = [headers];
+
+    groups.forEach(({ primary, companions }) => {
+      const signIn = primary.signed_in_time_local
+        ? new Date(primary.signed_in_time_local).toLocaleString("en-US")
+        : "";
+      const signOut = primary.signed_out_time_local?.trim()
+        ? new Date(primary.signed_out_time_local).toLocaleString("en-US")
+        : "";
+      sheetRows.push([
+        primary.your_full_name || "",
+        primary.your_email_address || "",
+        primary.host || "",
+        primary["organization/company"] || "",
+        signIn,
+        signOut,
+        parseDuration(primary.signed_in_time_local, primary.signed_out_time_local),
+        isCitizen(primary.are_you_us_citizen_or_resident) ? "Yes" : "No",
+        companions.length,
+        "Primary",
+      ]);
+      companions.forEach(comp => {
+        const cIn = comp.signed_in_time_local
+          ? new Date(comp.signed_in_time_local).toLocaleString("en-US")
+          : "";
+        const cOut = comp.signed_out_time_local?.trim()
+          ? new Date(comp.signed_out_time_local).toLocaleString("en-US")
+          : "";
+        sheetRows.push([
+          comp.your_full_name || "",
+          "",
+          comp.host || "",
+          "",
+          cIn,
+          cOut,
+          parseDuration(comp.signed_in_time_local, comp.signed_out_time_local),
+          isCitizen(comp.are_you_us_citizen_or_resident) ? "Yes" : "No",
+          0,
+          "Companion",
+        ]);
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+    ws["!cols"] = [
+      { wch: 28 }, { wch: 30 }, { wch: 22 }, { wch: 22 },
+      { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 10 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Visitors");
+    const location = rows[0]?.location_name?.replace(/[^a-z0-9]/gi, "_") || "Envoy";
+    XLSX.writeFile(wb, `${location}_visitor_log.xlsx`);
+  }, [groups, rows]);
+
   const handleData = useCallback((data: EnvoyRow[]) => {
     setRows(data);
     setSearch("");
@@ -257,10 +314,16 @@ export default function EnvoyAnalytics() {
           </p>
         </div>
         {hasData && (
-          <Button variant="outline" size="sm" onClick={() => setRows([])} data-testid="button-clear-data">
-            <X className="h-3.5 w-3.5 mr-1.5" />
-            Clear
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="button-export-xlsx">
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export .xlsx
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setRows([])} data-testid="button-clear-data">
+              <X className="h-3.5 w-3.5 mr-1.5" />
+              Clear
+            </Button>
+          </div>
         )}
       </div>
 
