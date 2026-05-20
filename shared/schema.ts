@@ -218,3 +218,14 @@ export const insertVisitorSchema = createInsertSchema(visitors).omit({
 
 export type InsertVisitor = z.infer<typeof insertVisitorSchema>;
 export type Visitor = typeof visitors.$inferSelect;
+
+// ─── Visitor notes (internal staff notes per visitor profile) ─────────────────
+
+export const visitorNotes = pgTable("visitor_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  lookupKey: text("lookup_key").notNull().unique(),
+  notes: text("notes").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export type VisitorNote = typeof visitorNotes.$inferSelect;

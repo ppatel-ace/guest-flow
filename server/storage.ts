@@ -1,6 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
-  documents, kioskDevices, visitors,
+  documents, kioskDevices, visitors, visitorNotes,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -11,6 +11,7 @@ import {
   type Document, type InsertDocument,
   type KioskDevice, type InsertKioskDevice,
   type Visitor, type InsertVisitor,
+  type VisitorNote,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, asc, desc } from "drizzle-orm";
@@ -213,6 +214,8 @@ export interface IStorage {
     stats: { totalVisits: number; firstVisited: Date | null; lastVisited: Date | null; avgDurationMinutes: number | null };
     visits: Visitor[];
   }>;
+  getVisitorNotes(lookupKey: string): Promise<VisitorNote | undefined>;
+  upsertVisitorNotes(lookupKey: string, notes: string): Promise<VisitorNote>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -862,6 +865,26 @@ export class DatabaseStorage implements IStorage {
       stats: { totalVisits: rows.length, firstVisited, lastVisited, avgDurationMinutes },
       visits: rows,
     };
+  }
+
+  async getVisitorNotes(lookupKey: string): Promise<VisitorNote | undefined> {
+    const [row] = await db.select().from(visitorNotes).where(eq(visitorNotes.lookupKey, lookupKey));
+    return row;
+  }
+
+  async upsertVisitorNotes(lookupKey: string, notes: string): Promise<VisitorNote> {
+    const existing = await this.getVisitorNotes(lookupKey);
+    if (existing) {
+      const [updated] = await db.update(visitorNotes)
+        .set({ notes, updatedAt: new Date() })
+        .where(eq(visitorNotes.lookupKey, lookupKey))
+        .returning();
+      return updated;
+    }
+    const [inserted] = await db.insert(visitorNotes)
+      .values({ lookupKey, notes, updatedAt: new Date() })
+      .returning();
+    return inserted;
   }
 
   async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {

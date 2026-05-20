@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,8 @@ import {
   Clock,
   Calendar,
   History,
+  StickyNote,
+  ListFilter,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -992,6 +994,18 @@ interface VisitorProfileResult {
   visits: Visitor[];
 }
 
+interface GroupedVisitor {
+  lookupKey: string;
+  fullName: string;
+  email: string | null;
+  company: string | null;
+  photoData: string | null;
+  totalVisits: number;
+  firstVisited: Date;
+  lastVisited: Date;
+  representative: Visitor;
+}
+
 type ImportPreviewRow = {
   fullName: string;
   email: string;
@@ -999,10 +1013,16 @@ type ImportPreviewRow = {
   signedInAt: string;
 };
 
+function visitorLookupKey(v: Visitor): string {
+  return v.email?.toLowerCase().trim() || v.fullName.toLowerCase().trim();
+}
+
 function VisitorLogTab() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"by-visit" | "by-visitor">("by-visit");
   const [selected, setSelected] = useState<Visitor | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [previewRows, setPreviewRows] = useState<ImportPreviewRow[]>([]);
@@ -1025,12 +1045,71 @@ function VisitorLogTab() {
     enabled: profileQueryKey !== null,
   });
 
+  const notesLookupKey = selected ? visitorLookupKey(selected) : null;
+
+  const { data: notesData, isLoading: notesLoading } = useQuery<{ lookupKey: string; notes: string }>({
+    queryKey: ["/api/visitors/notes", notesLookupKey],
+    enabled: notesLookupKey !== null,
+  });
+
+  const saveNotesMutation = useMutation({
+    mutationFn: ({ key, notes }: { key: string; notes: string }) =>
+      apiRequest("PUT", "/api/visitors/notes", { key, notes }),
+    onSuccess: () => {
+      toast({ title: "Notes saved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors/notes", notesLookupKey] });
+    },
+    onError: () => toast({ title: "Failed to save notes", variant: "destructive" }),
+  });
+
+  useEffect(() => {
+    setNotesDraft(notesData?.notes ?? "");
+  }, [notesData, selected]);
+
+  // Group all visitors by person (email → fullName fallback) for "by-visitor" view
+  const groupedVisitors = useMemo<GroupedVisitor[]>(() => {
+    const map = new Map<string, GroupedVisitor>();
+    for (const v of allVisitors) {
+      const key = visitorLookupKey(v);
+      const vDate = new Date(v.signedInAt);
+      if (map.has(key)) {
+        const g = map.get(key)!;
+        g.totalVisits++;
+        if (vDate < g.firstVisited) g.firstVisited = vDate;
+        if (vDate > g.lastVisited) { g.lastVisited = vDate; g.representative = v; }
+      } else {
+        map.set(key, {
+          lookupKey: key,
+          fullName: v.fullName,
+          email: v.email,
+          company: v.company,
+          photoData: v.photoData,
+          totalVisits: 1,
+          firstVisited: vDate,
+          lastVisited: vDate,
+          representative: v,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.lastVisited.getTime() - a.lastVisited.getTime());
+  }, [allVisitors]);
+
   const filtered = allVisitors.filter((v) => {
     const q = search.toLowerCase();
     return (
       v.fullName.toLowerCase().includes(q) ||
       v.email?.toLowerCase().includes(q) ||
       v.company?.toLowerCase().includes(q) ||
+      false
+    );
+  });
+
+  const filteredGrouped = groupedVisitors.filter((g) => {
+    const q = search.toLowerCase();
+    return (
+      g.fullName.toLowerCase().includes(q) ||
+      g.email?.toLowerCase().includes(q) ||
+      g.company?.toLowerCase().includes(q) ||
       false
     );
   });
@@ -1083,6 +1162,11 @@ function VisitorLogTab() {
     setImporting(false);
   };
 
+  const displayCount = isLoading ? null
+    : viewMode === "by-visitor"
+      ? `${filteredGrouped.length} unique visitor${filteredGrouped.length !== 1 ? "s" : ""}`
+      : `${filtered.length} visit${filtered.length !== 1 ? "s" : ""}`;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -1096,8 +1180,26 @@ function VisitorLogTab() {
             data-testid="input-visitor-search"
           />
         </div>
-        <span className="text-sm text-muted-foreground whitespace-nowrap flex-1">
-          {isLoading ? "Loading…" : `${filtered.length} visitor${filtered.length !== 1 ? "s" : ""}`}
+        {/* View mode toggle */}
+        <div className="flex gap-1 rounded-md border p-0.5 bg-muted/30">
+          <button
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${viewMode === "by-visit" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setViewMode("by-visit")}
+            data-testid="button-view-by-visit"
+          >
+            By visit
+          </button>
+          <button
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded font-medium transition-colors ${viewMode === "by-visitor" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setViewMode("by-visitor")}
+            data-testid="button-view-by-visitor"
+          >
+            <ListFilter className="h-3 w-3" />
+            By visitor
+          </button>
+        </div>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {isLoading ? "Loading…" : displayCount}
         </span>
         <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-refresh-visitors">
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -1111,7 +1213,65 @@ function VisitorLogTab() {
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Loading visitors…</div>
+      ) : viewMode === "by-visitor" ? (
+        /* ── By-visitor grouped list ── */
+        filteredGrouped.length === 0 ? (
+          <div className="py-12 text-center border border-dashed rounded-md space-y-2">
+            <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              {search ? "No visitors match your search." : "No visitors yet."}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-md border overflow-hidden">
+            <div className="hidden lg:grid grid-cols-[1fr_1fr_auto_auto_auto] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+              <span>Name / Email</span>
+              <span>Company</span>
+              <span>Total visits</span>
+              <span>First visited</span>
+              <span>Last visited</span>
+            </div>
+            <div className="divide-y">
+              {filteredGrouped.map((g) => (
+                <button
+                  key={g.lookupKey}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
+                  onClick={() => setSelected(g.representative)}
+                  data-testid={`row-grouped-${g.lookupKey}`}
+                >
+                  <Avatar className="h-8 w-8 shrink-0">
+                    {g.photoData ? (
+                      <img src={g.photoData} alt={g.fullName} className="h-full w-full rounded-full object-cover" />
+                    ) : (
+                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                        {getInitials(g.fullName).toUpperCase()}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex-1 min-w-0 grid lg:grid-cols-[1fr_1fr] gap-x-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{g.fullName}</div>
+                      <div className="text-xs text-muted-foreground truncate">{g.email || "—"}</div>
+                    </div>
+                    <div className="hidden lg:block text-sm text-muted-foreground truncate self-center">{g.company || "—"}</div>
+                  </div>
+                  <div className="hidden lg:flex items-center gap-1 text-xs font-semibold shrink-0">
+                    <History className="h-3.5 w-3.5 text-muted-foreground" />
+                    {g.totalVisits}
+                  </div>
+                  <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                    {g.firstVisited.toLocaleDateString()}
+                  </div>
+                  <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                    {g.lastVisited.toLocaleDateString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
       ) : filtered.length === 0 ? (
+        /* ── By-visit: empty state ── */
         <div className="py-12 text-center border border-dashed rounded-md space-y-2">
           <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">
@@ -1119,6 +1279,7 @@ function VisitorLogTab() {
           </p>
         </div>
       ) : (
+        /* ── By-visit: individual rows ── */
         <div className="rounded-md border overflow-hidden">
           <div className="hidden lg:grid grid-cols-[1fr_1fr_1fr_auto_auto_auto_auto] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
             <span>Name / Email</span>
@@ -1326,13 +1487,44 @@ function VisitorLogTab() {
                   </div>
                 )}
 
-                {/* Notes (from the clicked visit, if any) */}
+                {/* Per-visit notes from kiosk form */}
                 {selected.notes && (
                   <div className="pt-2 space-y-1">
                     <div className="text-sm font-medium text-muted-foreground">Notes (this visit)</div>
                     <p className="text-sm">{selected.notes}</p>
                   </div>
                 )}
+              </div>
+
+              {/* Internal staff notes */}
+              <div className="space-y-2 pt-4 border-t mt-4">
+                <div className="flex items-center gap-2">
+                  <StickyNote className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">Internal notes</span>
+                  <span className="text-xs text-muted-foreground ml-auto">Only visible to your team</span>
+                </div>
+                {notesLoading ? (
+                  <div className="h-20 rounded-md bg-muted/30 animate-pulse" />
+                ) : (
+                  <Textarea
+                    placeholder="Add notes for your team about this visitor…"
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    className="resize-none text-sm"
+                    rows={3}
+                    data-testid="textarea-visitor-notes"
+                  />
+                )}
+                <Button
+                  size="sm"
+                  disabled={saveNotesMutation.isPending || notesLoading}
+                  onClick={() => {
+                    if (notesLookupKey) saveNotesMutation.mutate({ key: notesLookupKey, notes: notesDraft });
+                  }}
+                  data-testid="button-save-visitor-notes"
+                >
+                  {saveNotesMutation.isPending ? "Saving…" : "Save notes"}
+                </Button>
               </div>
             </>
           )}

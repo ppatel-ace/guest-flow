@@ -1063,6 +1063,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Visitors (walk-ins from kiosk / Envoy) ────────────────────────────────
 
+  // Internal notes for a visitor profile (protected)
+  app.get("/api/visitors/notes", requireAuth, async (req, res) => {
+    try {
+      const key = (req.query.key as string | undefined)?.trim();
+      if (!key) return res.status(400).json({ error: "key query param required" });
+      const note = await storage.getVisitorNotes(key);
+      res.json(note ?? { lookupKey: key, notes: "" });
+    } catch (error) {
+      console.error("[visitors/notes GET]", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  app.put("/api/visitors/notes", requireAuth, async (req, res) => {
+    try {
+      const { key, notes } = req.body;
+      if (!key || typeof notes !== "string") {
+        return res.status(400).json({ error: "key and notes are required" });
+      }
+      const note = await storage.upsertVisitorNotes(key.trim(), notes);
+      res.json(note);
+    } catch (error) {
+      console.error("[visitors/notes PUT]", error);
+      res.status(500).json({ error: "Failed to save notes" });
+    }
+  });
+
   // Visitor profile — all visits for a person (protected)
   app.get("/api/visitors/profile", requireAuth, async (req, res) => {
     try {
