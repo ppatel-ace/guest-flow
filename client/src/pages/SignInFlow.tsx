@@ -968,25 +968,37 @@ function parseEnvoyRows(rows: Record<string, string>[]): Record<string, string>[
   });
 }
 
+function formatDuration(signedInAt: string | Date, signedOutAt: string | Date | null): string {
+  if (!signedOutAt) return "—";
+  const diffMs = new Date(signedOutAt).getTime() - new Date(signedInAt).getTime();
+  if (diffMs <= 0) return "—";
+  const totalMinutes = Math.round(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hours === 0) return `${mins}m`;
+  return `${hours}h ${mins}m`;
+}
+
+type ImportPreviewRow = {
+  fullName: string;
+  email: string;
+  company: string;
+  signedInAt: string;
+};
+
 function VisitorLogTab() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Visitor | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [previewRows, setPreviewRows] = useState<ImportPreviewRow[]>([]);
+  const [allParsedRows, setAllParsedRows] = useState<Record<string, string>[]>([]);
+  const [skipCount, setSkipCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: allVisitors = [], isLoading, refetch } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/visitors/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
-      setSelected(null);
-      toast({ title: "Visitor removed" });
-    },
   });
 
   const filtered = allVisitors.filter((v) => {
@@ -999,23 +1011,48 @@ function VisitorLogTab() {
     );
   });
 
-  const handleEnvoyFile = async (file: File) => {
-    setImporting(true);
+  const resetImport = () => {
+    setPreviewRows([]);
+    setAllParsedRows([]);
+    setSkipCount(0);
+  };
+
+  const handleEnvoyFileSelect = async (file: File) => {
     try {
       const Papa = (await import("papaparse")).default;
       const text = await file.text();
       const parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
       if (parsed.errors.length > 0) {
         toast({ title: "CSV parse error", description: parsed.errors[0].message, variant: "destructive" });
-        setImporting(false);
         return;
       }
       const rows = parseEnvoyRows(parsed.data);
-      const res = await apiRequest("POST", "/api/visitors/import", { rows });
+      const skipped = rows.filter((r) => !r.fullName && !r.email).length;
+      const valid = rows.filter((r) => r.fullName || r.email);
+      setSkipCount(skipped);
+      setAllParsedRows(valid);
+      setPreviewRows(
+        valid.slice(0, 5).map((r) => ({
+          fullName: r.fullName ?? "",
+          email: r.email ?? "",
+          company: r.company ?? "",
+          signedInAt: r.signedInAt ?? "",
+        }))
+      );
+    } catch (err: any) {
+      toast({ title: "Failed to read file", description: err?.message ?? "Unknown error", variant: "destructive" });
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    setImporting(true);
+    try {
+      const res = await apiRequest("POST", "/api/visitors/bulk-import", { rows: allParsedRows });
       const result = await res.json();
       toast({ title: "Import complete", description: result.message });
       queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
       setImportOpen(false);
+      resetImport();
     } catch (err: any) {
       toast({ title: "Import failed", description: err?.message ?? "Unknown error", variant: "destructive" });
     }
@@ -1042,7 +1079,7 @@ function VisitorLogTab() {
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
           Refresh
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-envoy">
+        <Button size="sm" variant="outline" onClick={() => { resetImport(); setImportOpen(true); }} data-testid="button-import-envoy">
           <Upload className="h-3.5 w-3.5 mr-1.5" />
           Import Envoy CSV
         </Button>
@@ -1059,18 +1096,20 @@ function VisitorLogTab() {
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden">
-          <div className="hidden sm:grid grid-cols-[1fr_1fr_1fr_auto_auto] gap-x-4 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+          <div className="hidden lg:grid grid-cols-[1fr_1fr_1fr_auto_auto_auto_auto] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
             <span>Name / Email</span>
             <span>Company</span>
             <span>ACE POC</span>
             <span>Signed In</span>
+            <span>Signed Out</span>
+            <span>Duration</span>
             <span>Source</span>
           </div>
           <div className="divide-y">
             {filtered.map((visitor) => (
               <button
                 key={visitor.id}
-                className="w-full text-left px-4 py-3 flex items-center gap-4 hover:bg-muted/30 transition-colors"
+                className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
                 onClick={() => setSelected(visitor)}
                 data-testid={`row-visitor-${visitor.id}`}
               >
@@ -1083,16 +1122,22 @@ function VisitorLogTab() {
                     </AvatarFallback>
                   )}
                 </Avatar>
-                <div className="flex-1 min-w-0 grid sm:grid-cols-[1fr_1fr_1fr] gap-x-4">
+                <div className="flex-1 min-w-0 grid lg:grid-cols-[1fr_1fr_1fr] gap-x-3">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{visitor.fullName}</div>
                     <div className="text-xs text-muted-foreground truncate">{visitor.email || "—"}</div>
                   </div>
-                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">{visitor.company || "—"}</div>
-                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">{visitor.acePoc || "—"}</div>
+                  <div className="hidden lg:block text-sm text-muted-foreground truncate self-center">{visitor.company || "—"}</div>
+                  <div className="hidden lg:block text-sm text-muted-foreground truncate self-center">{visitor.acePoc || "—"}</div>
                 </div>
-                <div className="hidden sm:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
                   {new Date(visitor.signedInAt).toLocaleDateString()}
+                </div>
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  {visitor.signedOutAt ? new Date(visitor.signedOutAt).toLocaleDateString() : "—"}
+                </div>
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  {formatDuration(visitor.signedInAt, visitor.signedOutAt)}
                 </div>
                 <div className="shrink-0">{sourceBadge(visitor.source)}</div>
               </button>
@@ -1133,7 +1178,14 @@ function VisitorLogTab() {
                   {selected.location && (<><span className="text-muted-foreground font-medium">Location</span><span>{selected.location}</span></>)}
                   <span className="text-muted-foreground font-medium">Signed In</span>
                   <span>{new Date(selected.signedInAt).toLocaleString()}</span>
-                  {selected.signedOutAt && (<><span className="text-muted-foreground font-medium">Signed Out</span><span>{new Date(selected.signedOutAt).toLocaleString()}</span></>)}
+                  {selected.signedOutAt && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Signed Out</span>
+                      <span>{new Date(selected.signedOutAt).toLocaleString()}</span>
+                      <span className="text-muted-foreground font-medium">Duration</span>
+                      <span>{formatDuration(selected.signedInAt, selected.signedOutAt)}</span>
+                    </>
+                  )}
                 </div>
 
                 {selected.notes && (
@@ -1142,19 +1194,6 @@ function VisitorLogTab() {
                     <p className="text-sm">{selected.notes}</p>
                   </div>
                 )}
-
-                <div className="pt-2 border-t">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => deleteMutation.mutate(selected.id)}
-                    disabled={deleteMutation.isPending}
-                    data-testid="button-delete-visitor"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Remove visitor
-                  </Button>
-                </div>
               </div>
             </>
           )}
@@ -1162,38 +1201,78 @@ function VisitorLogTab() {
       </Sheet>
 
       {/* Envoy import dialog */}
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) resetImport(); }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Import Envoy CSV</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Upload a visitor log exported from Envoy. Duplicate entries (same name + date) will be skipped automatically.
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEnvoyFile(f); e.target.value = ""; }}
-              data-testid="input-envoy-file"
-            />
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              data-testid="button-choose-envoy-file"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {importing ? "Importing…" : "Choose CSV file"}
-            </Button>
+            {previewRows.length === 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Upload a visitor log exported from Envoy. Duplicate entries (same name + date) will be skipped automatically.
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEnvoyFileSelect(f); e.target.value = ""; }}
+                  data-testid="input-envoy-file"
+                />
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  data-testid="button-choose-envoy-file"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Choose CSV file
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="font-medium">{allParsedRows.length} row{allParsedRows.length !== 1 ? "s" : ""} ready to import</span>
+                  {skipCount > 0 && (
+                    <span className="text-muted-foreground">{skipCount} row{skipCount !== 1 ? "s" : ""} skipped (missing name and email)</span>
+                  )}
+                </div>
+                <div className="rounded-md border overflow-hidden">
+                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr] gap-x-3 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                    <span>Full Name</span>
+                    <span>Email</span>
+                    <span>Company</span>
+                    <span>Signed In</span>
+                  </div>
+                  <div className="divide-y max-h-52 overflow-y-auto">
+                    {previewRows.map((row, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_1fr_1fr_1fr] gap-x-3 px-3 py-2 text-sm">
+                        <span className="truncate">{row.fullName || "—"}</span>
+                        <span className="truncate text-muted-foreground">{row.email || "—"}</span>
+                        <span className="truncate text-muted-foreground">{row.company || "—"}</span>
+                        <span className="truncate text-muted-foreground">{row.signedInAt || "—"}</span>
+                      </div>
+                    ))}
+                    {allParsedRows.length > 5 && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground italic">
+                        …and {allParsedRows.length - 5} more row{allParsedRows.length - 5 !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setImportOpen(false)} disabled={importing} data-testid="button-cancel-import">
+            <Button variant="ghost" onClick={() => { setImportOpen(false); resetImport(); }} disabled={importing} data-testid="button-cancel-import">
               Cancel
             </Button>
+            {previewRows.length > 0 && (
+              <Button onClick={handleConfirmImport} disabled={importing} data-testid="button-confirm-import">
+                {importing ? "Importing…" : `Import ${allParsedRows.length} row${allParsedRows.length !== 1 ? "s" : ""}`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1208,123 +1287,84 @@ function ExportDataTab() {
   const [exporting, setExporting] = useState(false);
 
   const { data: visitors = [] } = useQuery<Visitor[]>({ queryKey: ["/api/visitors"] });
-  const { data: leads = [] } = useQuery<Lead[]>({ queryKey: ["/api/leads"] });
 
-  const downloadCsv = (filename: string, rows: string[][], headers: string[]) => {
-    const lines = [headers, ...rows].map((row) =>
-      row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
-    );
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const dateRange = (() => {
+    if (visitors.length === 0) return null;
+    const dates = visitors.map((v) => new Date(v.signedInAt).getTime());
+    const min = new Date(Math.min(...dates));
+    const max = new Date(Math.max(...dates));
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return min.toDateString() === max.toDateString() ? fmt(min) : `${fmt(min)} – ${fmt(max)}`;
+  })();
 
-  const exportVisitors = () => {
+  const exportVisitorsXlsx = async () => {
     setExporting(true);
-    const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Source", "US Citizen", "Purpose", "Location", "Notes"];
-    const rows = visitors.map((v) => [
-      v.fullName,
-      v.email ?? "",
-      v.company ?? "",
-      v.acePoc ?? "",
-      new Date(v.signedInAt).toLocaleString(),
-      v.signedOutAt ? new Date(v.signedOutAt).toLocaleString() : "",
-      v.source,
-      v.usCitizen ?? "",
-      v.purpose ?? "",
-      v.location ?? "",
-      v.notes ?? "",
-    ]);
-    const date = new Date().toISOString().slice(0, 10);
-    downloadCsv(`visitor-log-${date}.csv`, rows, headers);
-    toast({ title: "Exported", description: `${visitors.length} visitor${visitors.length !== 1 ? "s" : ""} exported.` });
-    setExporting(false);
-  };
-
-  const exportLeads = () => {
-    setExporting(true);
-    const headers = ["First Name", "Last Name", "Email", "Phone", "Company", "ACE POC", "Event", "Submitted At", "Plus One Count"];
-    const rows = (leads as Lead[]).map((l) => [
-      l.firstName,
-      l.lastName,
-      l.email,
-      l.phoneNumber,
-      l.company ?? "",
-      l.acePoc ?? "",
-      l.eventName ?? "",
-      l.submittedAt ? new Date(l.submittedAt).toLocaleString() : "",
-      String(l.plusOneCount ?? 0),
-    ]);
-    const date = new Date().toISOString().slice(0, 10);
-    downloadCsv(`event-leads-${date}.csv`, rows, headers);
-    toast({ title: "Exported", description: `${leads.length} lead${leads.length !== 1 ? "s" : ""} exported.` });
+    try {
+      const XLSX = (await import("xlsx")).default;
+      const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Duration", "US Citizen", "Purpose", "Location", "Source"];
+      const rows = visitors.map((v) => [
+        v.fullName,
+        v.email ?? "",
+        v.company ?? "",
+        v.acePoc ?? "",
+        new Date(v.signedInAt).toLocaleString(),
+        v.signedOutAt ? new Date(v.signedOutAt).toLocaleString() : "",
+        formatDuration(v.signedInAt, v.signedOutAt),
+        v.usCitizen ?? "",
+        v.purpose ?? "",
+        v.location ?? "",
+        v.source,
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const colWidths = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length));
+        return { wch: Math.min(maxLen + 2, 40) };
+      });
+      ws["!cols"] = colWidths;
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Visitor Log");
+      const date = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `visitor-log-${date}.xlsx`);
+      toast({ title: "Exported", description: `${visitors.length} visitor${visitors.length !== 1 ? "s" : ""} exported to Excel.` });
+    } catch (err: any) {
+      toast({ title: "Export failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+    }
     setExporting(false);
   };
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Download data as CSV for use in spreadsheets or other tools.
+        Download visitor records as an Excel file for use in spreadsheets or other tools.
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card>
-          <CardContent className="pt-5 pb-4 space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg p-2 bg-muted shrink-0">
-                <UserCheck className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Visitor Log</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {visitors.length} kiosk / Envoy walk-in{visitors.length !== 1 ? "s" : ""}
-                </p>
-              </div>
+      <Card>
+        <CardContent className="pt-5 pb-4 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg p-2 bg-muted shrink-0">
+              <UserCheck className="h-5 w-5 text-muted-foreground" />
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              onClick={exportVisitors}
-              disabled={exporting || visitors.length === 0}
-              data-testid="button-export-visitors"
-            >
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-              Export CSV
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5 pb-4 space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg p-2 bg-muted shrink-0">
-                <ClipboardList className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Event Leads</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {leads.length} guest check-in{leads.length !== 1 ? "s" : ""} from events
-                </p>
-              </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Visitor Log</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {visitors.length} record{visitors.length !== 1 ? "s" : ""}
+                {dateRange && <span className="ml-1">· {dateRange}</span>}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Columns: Full Name, Email, Company, ACE POC, Signed In, Signed Out, Duration, US Citizen, Purpose, Location, Source
+              </p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              onClick={exportLeads}
-              disabled={exporting || leads.length === 0}
-              data-testid="button-export-leads"
-            >
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-              Export CSV
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={exportVisitorsXlsx}
+            disabled={exporting || visitors.length === 0}
+            data-testid="button-export-visitors"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            {exporting ? "Exporting…" : "Download Excel"}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

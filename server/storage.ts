@@ -30,6 +30,7 @@ export interface VisitorAnalyticsPeriod {
 export interface VisitorAnalyticsResult {
   periods: VisitorAnalyticsPeriod[];
   hourly: { hour: number; label: string; count: number }[];
+  avgVisitDurationMinutes: number | null;
 }
 
 export interface ImportResult {
@@ -208,7 +209,6 @@ export interface IStorage {
   createVisitor(data: InsertVisitor): Promise<Visitor>;
   getAllVisitors(): Promise<Visitor[]>;
   bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }>;
-  deleteVisitor(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -297,7 +297,7 @@ export class DatabaseStorage implements IStorage {
     const b = bucket;
     const bucketLiteral = sql.raw(`'${b}'`);
 
-    const [visitorRows, inviteRows, hourlyRows] = await Promise.all([
+    const [visitorRows, inviteRows, hourlyRows, durationRows] = await Promise.all([
       db.select({
         period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${leads.submittedAt}), 'YYYY-MM-DD')`,
         count: sql<number>`COUNT(*)::int`,
@@ -318,6 +318,11 @@ export class DatabaseStorage implements IStorage {
       }).from(leads)
         .where(sql`${leads.submittedAt} >= ${start} AND ${leads.submittedAt} <= ${end}`)
         .groupBy(sql`EXTRACT(HOUR FROM ${leads.submittedAt})`),
+
+      db.select({
+        avgMinutes: sql<number | null>`AVG(EXTRACT(EPOCH FROM (${visitors.signedOutAt} - ${visitors.signedInAt})) / 60.0)`,
+      }).from(visitors)
+        .where(sql`${visitors.signedOutAt} IS NOT NULL AND ${visitors.signedInAt} >= ${start} AND ${visitors.signedInAt} <= ${end}`),
     ]);
 
     const periodsMap = new Map<string, { visitors: number; invites: number }>();
@@ -343,11 +348,17 @@ export class DatabaseStorage implements IStorage {
       return { hour: h, label, count: hourlyMap.get(h) ?? 0 };
     });
 
+    const rawAvg = durationRows[0]?.avgMinutes;
+    const avgVisitDurationMinutes = (rawAvg != null && !isNaN(Number(rawAvg)))
+      ? Math.round(Number(rawAvg))
+      : null;
+
     return {
       periods: Array.from(periodsMap.entries())
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([period, data]) => ({ period, ...data })),
       hourly,
+      avgVisitDurationMinutes,
     };
   }
 
@@ -840,10 +851,6 @@ export class DatabaseStorage implements IStorage {
     return { inserted, skipped };
   }
 
-  async deleteVisitor(id: string): Promise<boolean> {
-    const result = await db.delete(visitors).where(eq(visitors.id, id)).returning();
-    return result.length > 0;
-  }
 }
 
 export const storage = new DatabaseStorage();

@@ -20,6 +20,7 @@ interface VisitorAnalyticsPeriod {
 interface VisitorAnalyticsResult {
   periods: VisitorAnalyticsPeriod[];
   hourly: { hour: number; label: string; count: number }[];
+  avgVisitDurationMinutes: number | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -227,8 +228,15 @@ export default function Analytics() {
         <StatCard
           icon={Clock}
           label="Avg visit duration"
-          value="N/A"
-          sub="no sign-out tracking"
+          value={data?.avgVisitDurationMinutes != null
+            ? (() => {
+                const h = Math.floor(data.avgVisitDurationMinutes / 60);
+                const m = data.avgVisitDurationMinutes % 60;
+                return h > 0 ? `${h}h ${m}m` : `${m}m`;
+              })()
+            : "—"
+          }
+          sub={data?.avgVisitDurationMinutes != null ? "from Envoy sign-outs" : "no sign-out data yet"}
         />
       </div>
 

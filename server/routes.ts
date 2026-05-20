@@ -1075,7 +1075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bulk import from Envoy CSV (protected)
-  app.post("/api/visitors/import", requireAuth, async (req, res) => {
+  app.post("/api/visitors/bulk-import", requireAuth, async (req, res) => {
     try {
       const { rows } = req.body;
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -1107,17 +1107,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete a visitor (protected)
-  app.delete("/api/visitors/:id", requireAuth, async (req, res) => {
-    try {
-      const deleted = await storage.deleteVisitor(req.params.id);
-      if (!deleted) return res.status(404).json({ error: "Visitor not found" });
-      res.status(204).send();
-    } catch (error) {
-      console.error("[visitors DELETE]", error);
-      res.status(500).json({ error: "Failed to delete visitor" });
-    }
-  });
 
   // Custom domain root redirect: registration.aceelectronics.com → /guest-check-in
   app.get("/", (req, res, next) => {
