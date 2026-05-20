@@ -1013,6 +1013,13 @@ export class DatabaseStorage implements IStorage {
   async deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }> {
     const isEmail = lookupKey.includes('@');
     let rows: { id: string }[];
+
+    await db.delete(visitorNotes)
+      .where(sql`LOWER(${visitorNotes.lookupKey}) = ${lookupKey.toLowerCase()}`);
+
+    await db.delete(visitorMergeEvents)
+      .where(sql`LOWER(${visitorMergeEvents.primaryKey}) = ${lookupKey.toLowerCase()}`);
+
     if (isEmail) {
       rows = await db.delete(visitors)
         .where(sql`LOWER(${visitors.email}) = ${lookupKey.toLowerCase()}`)
