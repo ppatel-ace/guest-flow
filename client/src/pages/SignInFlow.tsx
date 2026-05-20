@@ -1622,7 +1622,7 @@ function VisitorLogTab() {
 // ─── Contacts Tab ─────────────────────────────────────────────────────────────
 
 function ContactsTab() {
-  type SortField = "lastVisited" | "firstVisited" | "name" | "visits";
+  type SortField = "lastVisited" | "firstVisited" | "name" | "company" | "visits";
   type SortDir = "asc" | "desc";
 
   const { toast } = useToast();
@@ -1719,6 +1719,7 @@ function ContactsTab() {
       let cmp = 0;
       switch (sortField) {
         case "name": cmp = a.fullName.localeCompare(b.fullName); break;
+        case "company": cmp = (a.company ?? "").localeCompare(b.company ?? ""); break;
         case "visits": cmp = a.totalVisits - b.totalVisits; break;
         case "firstVisited": cmp = a.firstVisited.getTime() - b.firstVisited.getTime(); break;
         default: cmp = a.lastVisited.getTime() - b.lastVisited.getTime();
@@ -1737,7 +1738,7 @@ function ContactsTab() {
       setSortDir(d => d === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDir(field === "name" ? "asc" : "desc");
+      setSortDir(field === "name" || field === "company" ? "asc" : "desc");
     }
   };
 
@@ -1810,6 +1811,8 @@ function ContactsTab() {
             <SelectItem value="firstVisited:desc">First visited (newest)</SelectItem>
             <SelectItem value="name:asc">Name A → Z</SelectItem>
             <SelectItem value="name:desc">Name Z → A</SelectItem>
+            <SelectItem value="company:asc">Company A → Z</SelectItem>
+            <SelectItem value="company:desc">Company Z → A</SelectItem>
             <SelectItem value="visits:desc">Most visits</SelectItem>
             <SelectItem value="visits:asc">Fewest visits</SelectItem>
           </SelectContent>
@@ -1873,7 +1876,9 @@ function ContactsTab() {
             <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("name")} data-testid="th-contacts-name">
               Name / Email{sortIcon("name")}
             </button>
-            <span>Company</span>
+            <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("company")} data-testid="th-contacts-company">
+              Company{sortIcon("company")}
+            </button>
             <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("visits")} data-testid="th-contacts-visits">
               Visits{sortIcon("visits")}
             </button>
