@@ -37,11 +37,20 @@ import {
   ClipboardList,
   Monitor,
   RefreshCw,
+  Search,
+  UserCheck,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { FormField } from "@shared/schema";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { FormField, Customer, Lead } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -83,6 +92,7 @@ interface KioskDevice {
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   text: "Text",
+  email: "Email",
   tel: "Phone",
   number: "Number",
   select: "Dropdown",
@@ -335,12 +345,14 @@ function SignInFieldsTab() {
           <div key={f.label} className="flex items-center gap-3 rounded-md border bg-muted/40 px-3 py-2.5">
             <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="text-sm flex-1 text-muted-foreground">{f.label}</span>
-            <Badge variant="secondary" className="text-xs">{FIELD_TYPE_LABELS[f.type] ?? f.type}</Badge>
-            {f.required ? (
-              <Badge variant="outline" className="text-xs">Required</Badge>
-            ) : (
-              <span className="text-xs text-muted-foreground">Optional</span>
-            )}
+            <Badge variant="secondary" className="text-xs w-16 justify-center">{FIELD_TYPE_LABELS[f.type] ?? f.type}</Badge>
+            <div className="w-16 flex justify-end">
+              {f.required ? (
+                <Badge variant="outline" className="text-xs">Required</Badge>
+              ) : (
+                <span className="text-xs text-muted-foreground">Optional</span>
+              )}
+            </div>
           </div>
         ))}
 
@@ -362,12 +374,14 @@ function SignInFieldsTab() {
                 </Button>
               </div>
               <span className="text-sm flex-1 font-medium">{field.label}</span>
-              <Badge variant="secondary" className="text-xs shrink-0">{FIELD_TYPE_LABELS[field.fieldType] ?? field.fieldType}</Badge>
-              {field.required ? (
-                <Badge variant="outline" className="text-xs shrink-0">Required</Badge>
-              ) : (
-                <span className="text-xs text-muted-foreground shrink-0">Optional</span>
-              )}
+              <Badge variant="secondary" className="text-xs shrink-0 w-16 justify-center">{FIELD_TYPE_LABELS[field.fieldType] ?? field.fieldType}</Badge>
+              <div className="w-16 flex justify-end shrink-0">
+                {field.required ? (
+                  <Badge variant="outline" className="text-xs">Required</Badge>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Optional</span>
+                )}
+              </div>
               <div className="flex gap-1 shrink-0">
                 <Button size="icon" variant="ghost" onClick={() => setDialogState({ open: true, mode: "edit", field })} data-testid={`button-sf-edit-field-${field.id}`}>
                   <Pencil className="h-3.5 w-3.5" />
@@ -913,6 +927,257 @@ function DevicesTab() {
   );
 }
 
+// ─── Visitor Log Tab ──────────────────────────────────────────────────────────
+
+type VisitorStatus = "checked-in" | "invited" | "walk-in";
+
+interface VisitorRow {
+  lead: Lead;
+  customer: Customer | null;
+  status: VisitorStatus;
+}
+
+function getInitials(firstName: string, lastName: string): string {
+  return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
+}
+
+function VisitorLogTab() {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<VisitorRow | null>(null);
+
+  const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
+    queryKey: ["/api/leads"],
+  });
+
+  const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
+    queryKey: ["/api/customers"],
+  });
+
+  const isLoading = leadsLoading || customersLoading;
+
+  const rows: VisitorRow[] = leads.map((lead) => {
+    const customer = customers.find(
+      (c) => c.email?.toLowerCase() === lead.email?.toLowerCase()
+    ) ?? null;
+    const status: VisitorStatus = customer?.status === "checked-in"
+      ? "checked-in"
+      : customer
+      ? "invited"
+      : "walk-in";
+    return { lead, customer, status };
+  });
+
+  const filtered = rows.filter(({ lead }) => {
+    const q = search.toLowerCase();
+    return (
+      `${lead.firstName} ${lead.lastName}`.toLowerCase().includes(q) ||
+      lead.email?.toLowerCase().includes(q) ||
+      lead.company?.toLowerCase().includes(q) ||
+      false
+    );
+  });
+
+  const statusBadge = (s: VisitorStatus) => {
+    if (s === "checked-in")
+      return <Badge className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">Checked In</Badge>;
+    if (s === "invited")
+      return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">Invited</Badge>;
+    return <Badge variant="outline" className="text-xs">Walk-in</Badge>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="Search by name, email, or company…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            data-testid="input-visitor-search"
+          />
+        </div>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {isLoading ? "Loading…" : `${filtered.length} visitor${filtered.length !== 1 ? "s" : ""}`}
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground py-8 text-center">Loading visitors…</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center border border-dashed rounded-md space-y-2">
+          <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
+          <p className="text-sm text-muted-foreground">
+            {search ? "No visitors match your search." : "No check-ins yet."}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-md border overflow-hidden">
+          <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_1fr_auto_auto] gap-x-4 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+            <span />
+            <span>Name / Email</span>
+            <span>Company</span>
+            <span>ACE POC</span>
+            <span>Visited</span>
+            <span>Status</span>
+          </div>
+          <div className="divide-y">
+            {filtered.map(({ lead, customer, status }) => (
+              <button
+                key={lead.id}
+                className="w-full text-left px-4 py-3 flex items-center gap-4 hover:bg-muted/30 transition-colors"
+                onClick={() => setSelected({ lead, customer, status })}
+                data-testid={`row-visitor-${lead.id}`}
+              >
+                <Avatar className="h-8 w-8 shrink-0">
+                  {lead.photoData ? (
+                    <img
+                      src={lead.photoData}
+                      alt={`${lead.firstName} ${lead.lastName}`}
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                      {getInitials(lead.firstName, lead.lastName)}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="flex-1 min-w-0 grid sm:grid-cols-[1fr_1fr_1fr] gap-x-4">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      {lead.title ? `${lead.title} ` : ""}{lead.firstName} {lead.lastName}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">{lead.email}</div>
+                  </div>
+                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">
+                    {lead.company || "—"}
+                  </div>
+                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">
+                    {lead.acePoc || "—"}
+                  </div>
+                </div>
+                <div className="hidden sm:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  {lead.submittedAt
+                    ? new Date(lead.submittedAt).toLocaleDateString()
+                    : "—"}
+                </div>
+                <div className="shrink-0">{statusBadge(status)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {selected && (
+            <>
+              <SheetHeader className="pb-4">
+                <SheetTitle>Visitor Details</SheetTitle>
+              </SheetHeader>
+              <div className="space-y-5">
+                <div className="flex items-center gap-4">
+                  {selected.lead.photoData ? (
+                    <img
+                      src={selected.lead.photoData}
+                      alt="Visitor photo"
+                      className="h-20 w-20 rounded-full object-cover border shrink-0"
+                    />
+                  ) : (
+                    <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border">
+                      <span className="text-2xl font-semibold text-primary">
+                        {getInitials(selected.lead.firstName, selected.lead.lastName)}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-lg font-semibold">
+                      {selected.lead.title ? `${selected.lead.title} ` : ""}
+                      {selected.lead.firstName} {selected.lead.lastName}
+                    </div>
+                    <div className="text-sm text-muted-foreground">{selected.lead.email}</div>
+                    <div className="mt-1">{statusBadge(selected.status)}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {selected.lead.phoneNumber && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Phone</span>
+                      <span>{selected.lead.phoneNumber}</span>
+                    </>
+                  )}
+                  {selected.lead.company && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Company</span>
+                      <span>{selected.lead.company}</span>
+                    </>
+                  )}
+                  {selected.lead.acePoc && (
+                    <>
+                      <span className="text-muted-foreground font-medium">ACE POC</span>
+                      <span>{selected.lead.acePoc}</span>
+                    </>
+                  )}
+                  {selected.lead.eventName && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Event</span>
+                      <span>{selected.lead.eventName}</span>
+                    </>
+                  )}
+                  {(selected.lead.plusOneCount ?? 0) > 0 && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Group size</span>
+                      <span>{(selected.lead.plusOneCount ?? 0) + 1} people</span>
+                    </>
+                  )}
+                  {selected.lead.submittedAt && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Visited</span>
+                      <span>{new Date(selected.lead.submittedAt).toLocaleString()}</span>
+                    </>
+                  )}
+                  {selected.customer?.checkedInAt && (
+                    <>
+                      <span className="text-muted-foreground font-medium">Checked in</span>
+                      <span>{new Date(selected.customer.checkedInAt).toLocaleString()}</span>
+                    </>
+                  )}
+                </div>
+
+                {selected.lead.documentsAgreed && (() => {
+                  try {
+                    const docs: string[] = JSON.parse(selected.lead.documentsAgreed as string);
+                    if (docs.length > 0) {
+                      return (
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium text-muted-foreground">Documents agreed</div>
+                          <ul className="text-sm space-y-0.5">
+                            {docs.map((d, i) => (
+                              <li key={i} className="flex items-center gap-1.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                                {d}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                  return null;
+                })()}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SignInFlow() {
@@ -946,6 +1211,10 @@ export default function SignInFlow() {
           <TabsTrigger value="devices" data-testid="tab-devices">
             <Monitor className="h-4 w-4 mr-1.5" />
             Devices
+          </TabsTrigger>
+          <TabsTrigger value="visitor-log" data-testid="tab-visitor-log">
+            <UserCheck className="h-4 w-4 mr-1.5" />
+            Visitor Log
           </TabsTrigger>
         </TabsList>
 
@@ -1005,6 +1274,18 @@ export default function SignInFlow() {
             </CardHeader>
             <CardContent>
               <DevicesTab />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="visitor-log">
+          <Card>
+            <CardHeader>
+              <CardTitle>Visitor Log</CardTitle>
+              <CardDescription>Everyone who has submitted the kiosk check-in form. Click a row to see full details.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VisitorLogTab />
             </CardContent>
           </Card>
         </TabsContent>
