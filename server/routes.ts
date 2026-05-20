@@ -1166,7 +1166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.bulkImportVisitors(parsed);
       const parts: string[] = [];
       if (result.inserted > 0) parts.push(`${result.inserted} new visitor${result.inserted !== 1 ? "s" : ""} imported`);
-      if (result.backfilled > 0) parts.push(`${result.backfilled} record${result.backfilled !== 1 ? "s" : ""} backfilled with US Citizen answer`);
+      if (result.backfilled > 0) parts.push(`${result.backfilled} record${result.backfilled !== 1 ? "s" : ""} backfilled with missing fields`);
       if (result.skipped > 0) parts.push(`${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped`);
       if (parts.length === 0) parts.push("No new records to import");
       res.json({

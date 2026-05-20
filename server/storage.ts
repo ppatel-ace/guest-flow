@@ -1042,17 +1042,30 @@ export class DatabaseStorage implements IStorage {
       const signedInDate = row.signedInAt ? new Date(row.signedInAt) : new Date();
       const dateStr = signedInDate.toISOString().slice(0, 10);
       const [existing] = await db
-        .select({ id: visitors.id, usCitizen: visitors.usCitizen })
+        .select({
+          id: visitors.id,
+          usCitizen: visitors.usCitizen,
+          purpose: visitors.purpose,
+          location: visitors.location,
+          acePoc: visitors.acePoc,
+          company: visitors.company,
+        })
         .from(visitors)
         .where(
           sql`LOWER(${visitors.fullName}) = LOWER(${row.fullName}) AND DATE(${visitors.signedInAt}) = ${dateStr}::date`
         );
       if (existing) {
-        // If the existing record is missing usCitizen and the incoming row has it, backfill
-        if (!existing.usCitizen && row.usCitizen) {
+        // Backfill any nullable Envoy fields that are missing on the existing record
+        const patch: Partial<typeof row> = {};
+        if (!existing.usCitizen && row.usCitizen) patch.usCitizen = row.usCitizen;
+        if (!existing.purpose && row.purpose) patch.purpose = row.purpose;
+        if (!existing.location && row.location) patch.location = row.location;
+        if (!existing.acePoc && row.acePoc) patch.acePoc = row.acePoc;
+        if (!existing.company && row.company) patch.company = row.company;
+        if (Object.keys(patch).length > 0) {
           await db
             .update(visitors)
-            .set({ usCitizen: row.usCitizen })
+            .set(patch)
             .where(eq(visitors.id, existing.id));
           backfilled++;
         } else {
