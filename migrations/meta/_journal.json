@@ -15,6 +15,13 @@
       "when": 1779290491922,
       "tag": "0001_backfill_legacy_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748000000000,
+      "tag": "0002_visitors_table",
+      "breakpoints": true
     }
   ]
 }

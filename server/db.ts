@@ -11,13 +11,12 @@ if (!process.env.DATABASE_URL && !process.env.PGHOST) {
   );
 }
 
-// Prefer the local Helium PostgreSQL (PGHOST) if available, since DATABASE_URL
-// may point to an external service (Supabase) that could be paused or unavailable.
+// Prefer DATABASE_URL (Neon) if available; fall back to local Helium PostgreSQL.
 const localUrl = process.env.PGHOST
   ? `postgresql://${process.env.PGUSER ?? "postgres"}:${process.env.PGPASSWORD ?? ""}@${process.env.PGHOST}:${process.env.PGPORT ?? 5432}/${process.env.PGDATABASE ?? "postgres"}`
   : null;
 
-const databaseUrl = localUrl ?? process.env.DATABASE_URL!;
+const databaseUrl = process.env.DATABASE_URL ?? localUrl!;
 const hostname = new URL(databaseUrl).hostname;
 const isNeon = hostname.endsWith("neon.tech");
 

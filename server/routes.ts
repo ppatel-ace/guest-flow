@@ -1032,47 +1032,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/kiosk/checkin", kioskCheckinLimiter, async (req, res) => {
     try {
       const body = req.body;
-      const leadData = insertLeadSchema.parse({
-        title: body.title ?? null,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        email: body.email,
-        phoneNumber: body.phoneNumber,
-        company: body.company ?? null,
-        acePoc: body.acePoc ?? null,
-        eventName: null,
+      if (!body.firstName || !body.lastName) {
+        return res.status(400).json({ error: "firstName and lastName are required" });
+      }
+      const fullName = `${String(body.firstName).trim()} ${String(body.lastName).trim()}`.trim();
+      const visitor = await storage.createVisitor({
+        fullName,
+        email: body.email?.trim().toLowerCase() || null,
+        company: body.company?.trim() || null,
+        acePoc: body.acePoc || null,
+        signedInAt: new Date(),
+        signedOutAt: null,
+        usCitizen: null,
+        purpose: null,
+        location: null,
+        source: "kiosk",
+        notes: null,
         photoData: body.photoData ?? null,
-        plusOneCount: body.plusOneCount ?? 0,
         documentsAgreed: body.documentsAgreed ?? null,
       });
-      await storage.createLead(leadData);
-
-      const fullName = `${leadData.firstName} ${leadData.lastName}`.trim();
-      let customer = null;
-      try {
-        const customerData = insertCustomerSchema.parse({
-          name: fullName,
-          email: body.email,
-          phone: body.phoneNumber || undefined,
-          status: "checked-in",
-        });
-        const created = await storage.createCustomer(customerData);
-        customer = await storage.checkInCustomer(created.id);
-      } catch (innerError) {
-        console.error("[kiosk/checkin] customer upsert error:", innerError);
-        const existing = await storage.getCustomerByEmail(body.email);
-        if (existing) {
-          customer = await storage.checkInCustomer(existing.id);
-        }
-      }
-
-      res.status(201).json(customer ?? { name: fullName });
+      res.status(201).json(visitor);
     } catch (error) {
       console.error("[kiosk/checkin]", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to check in" });
+    }
+  });
+
+  // ── Visitors (walk-ins from kiosk / Envoy) ────────────────────────────────
+
+  // List all visitors (protected)
+  app.get("/api/visitors", requireAuth, async (req, res) => {
+    try {
+      const all = await storage.getAllVisitors();
+      res.json(all);
+    } catch (error) {
+      console.error("[visitors GET]", error);
+      res.status(500).json({ error: "Failed to fetch visitors" });
+    }
+  });
+
+  // Bulk import from Envoy CSV (protected)
+  app.post("/api/visitors/import", requireAuth, async (req, res) => {
+    try {
+      const { rows } = req.body;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ error: "rows array is required" });
+      }
+      const parsed: any[] = rows.map((r: any) => ({
+        fullName: r.fullName ?? r.full_name ?? "",
+        email: r.email?.trim().toLowerCase() || null,
+        company: r.company?.trim() || null,
+        acePoc: r.acePoc ?? r.ace_poc ?? null,
+        signedInAt: r.signedInAt ? new Date(r.signedInAt) : new Date(),
+        signedOutAt: r.signedOutAt ? new Date(r.signedOutAt) : null,
+        usCitizen: r.usCitizen ?? r.us_citizen ?? null,
+        purpose: r.purpose?.trim() || null,
+        location: r.location?.trim() || null,
+        source: "envoy",
+        notes: r.notes?.trim() || null,
+        photoData: null,
+        documentsAgreed: null,
+      })).filter((r) => r.fullName);
+      const result = await storage.bulkImportVisitors(parsed);
+      res.json({
+        message: `Imported ${result.inserted} visitor${result.inserted !== 1 ? "s" : ""}${result.skipped > 0 ? `, ${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped` : ""}`,
+        ...result,
+      });
+    } catch (error) {
+      console.error("[visitors/import]", error);
+      res.status(500).json({ error: "Failed to import visitors" });
+    }
+  });
+
+  // Delete a visitor (protected)
+  app.delete("/api/visitors/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteVisitor(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Visitor not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("[visitors DELETE]", error);
+      res.status(500).json({ error: "Failed to delete visitor" });
     }
   });
 

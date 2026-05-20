@@ -10,10 +10,13 @@ import ws from "ws";
 const migrationsFolder = path.join(process.cwd(), "migrations");
 
 function buildDatabaseUrl(): string {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
   if (process.env.PGHOST) {
     return `postgresql://${process.env.PGUSER ?? "postgres"}:${process.env.PGPASSWORD ?? ""}@${process.env.PGHOST}:${process.env.PGPORT ?? 5432}/${process.env.PGDATABASE ?? "postgres"}`;
   }
-  return process.env.DATABASE_URL!;
+  throw new Error("DATABASE_URL must be set.");
 }
 
 /**

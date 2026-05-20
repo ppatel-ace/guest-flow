@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,9 @@ import {
   RefreshCw,
   Search,
   UserCheck,
+  Download,
+  Upload,
+  X,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -50,7 +53,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { FormField, Customer, Lead } from "@shared/schema";
+import type { FormField, Customer, Lead, Visitor } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -929,66 +932,100 @@ function DevicesTab() {
 
 // ─── Visitor Log Tab ──────────────────────────────────────────────────────────
 
-type VisitorStatus = "checked-in" | "invited" | "walk-in";
-
-interface VisitorRow {
-  lead: Lead;
-  customer: Customer | null;
-  status: VisitorStatus;
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
 }
 
-function getInitials(firstName: string, lastName: string): string {
-  return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
+function sourceBadge(source: string) {
+  if (source === "envoy")
+    return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">Envoy</Badge>;
+  return <Badge variant="outline" className="text-xs">Kiosk</Badge>;
+}
+
+// Envoy CSV column mapping
+const ENVOY_COL_MAP: Record<string, string> = {
+  "your_full_name": "fullName",
+  "your_email_address": "email",
+  "organization_company": "company",
+  "host": "acePoc",
+  "signed_in_time_local": "signedInAt",
+  "signed_out_time_local": "signedOutAt",
+  "are_you_us_citizen_or_resident": "usCitizen",
+  "purpose_of_visit": "purpose",
+  "location_name": "location",
+};
+
+function parseEnvoyRows(rows: Record<string, string>[]): Record<string, string>[] {
+  return rows.map((row) => {
+    const mapped: Record<string, string> = {};
+    for (const [rawKey, value] of Object.entries(row)) {
+      const normalized = rawKey.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+      const mappedKey = ENVOY_COL_MAP[normalized] ?? normalized;
+      mapped[mappedKey] = value;
+    }
+    return mapped;
+  });
 }
 
 function VisitorLogTab() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<VisitorRow | null>(null);
+  const [selected, setSelected] = useState<Visitor | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
-    queryKey: ["/api/leads"],
+  const { data: allVisitors = [], isLoading, refetch } = useQuery<Visitor[]>({
+    queryKey: ["/api/visitors"],
   });
 
-  const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
-    queryKey: ["/api/customers"],
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/visitors/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      setSelected(null);
+      toast({ title: "Visitor removed" });
+    },
   });
 
-  const isLoading = leadsLoading || customersLoading;
-
-  const rows: VisitorRow[] = leads.map((lead) => {
-    const customer = customers.find(
-      (c) => c.email?.toLowerCase() === lead.email?.toLowerCase()
-    ) ?? null;
-    const status: VisitorStatus = customer?.status === "checked-in"
-      ? "checked-in"
-      : customer
-      ? "invited"
-      : "walk-in";
-    return { lead, customer, status };
-  });
-
-  const filtered = rows.filter(({ lead }) => {
+  const filtered = allVisitors.filter((v) => {
     const q = search.toLowerCase();
     return (
-      `${lead.firstName} ${lead.lastName}`.toLowerCase().includes(q) ||
-      lead.email?.toLowerCase().includes(q) ||
-      lead.company?.toLowerCase().includes(q) ||
+      v.fullName.toLowerCase().includes(q) ||
+      v.email?.toLowerCase().includes(q) ||
+      v.company?.toLowerCase().includes(q) ||
       false
     );
   });
 
-  const statusBadge = (s: VisitorStatus) => {
-    if (s === "checked-in")
-      return <Badge className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">Checked In</Badge>;
-    if (s === "invited")
-      return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">Invited</Badge>;
-    return <Badge variant="outline" className="text-xs">Walk-in</Badge>;
+  const handleEnvoyFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const Papa = (await import("papaparse")).default;
+      const text = await file.text();
+      const parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
+      if (parsed.errors.length > 0) {
+        toast({ title: "CSV parse error", description: parsed.errors[0].message, variant: "destructive" });
+        setImporting(false);
+        return;
+      }
+      const rows = parseEnvoyRows(parsed.data);
+      const res = await apiRequest("POST", "/api/visitors/import", { rows });
+      const result = await res.json();
+      toast({ title: "Import complete", description: result.message });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      setImportOpen(false);
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+    }
+    setImporting(false);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -998,9 +1035,17 @@ function VisitorLogTab() {
             data-testid="input-visitor-search"
           />
         </div>
-        <span className="text-sm text-muted-foreground whitespace-nowrap">
+        <span className="text-sm text-muted-foreground whitespace-nowrap flex-1">
           {isLoading ? "Loading…" : `${filtered.length} visitor${filtered.length !== 1 ? "s" : ""}`}
         </span>
+        <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-refresh-visitors">
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Refresh
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-envoy">
+          <Upload className="h-3.5 w-3.5 mr-1.5" />
+          Import Envoy CSV
+        </Button>
       </div>
 
       {isLoading ? (
@@ -1009,66 +1054,54 @@ function VisitorLogTab() {
         <div className="py-12 text-center border border-dashed rounded-md space-y-2">
           <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">
-            {search ? "No visitors match your search." : "No check-ins yet."}
+            {search ? "No visitors match your search." : "No kiosk check-ins yet."}
           </p>
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden">
-          <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_1fr_auto_auto] gap-x-4 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
-            <span />
+          <div className="hidden sm:grid grid-cols-[1fr_1fr_1fr_auto_auto] gap-x-4 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
             <span>Name / Email</span>
             <span>Company</span>
             <span>ACE POC</span>
-            <span>Visited</span>
-            <span>Status</span>
+            <span>Signed In</span>
+            <span>Source</span>
           </div>
           <div className="divide-y">
-            {filtered.map(({ lead, customer, status }) => (
+            {filtered.map((visitor) => (
               <button
-                key={lead.id}
+                key={visitor.id}
                 className="w-full text-left px-4 py-3 flex items-center gap-4 hover:bg-muted/30 transition-colors"
-                onClick={() => setSelected({ lead, customer, status })}
-                data-testid={`row-visitor-${lead.id}`}
+                onClick={() => setSelected(visitor)}
+                data-testid={`row-visitor-${visitor.id}`}
               >
                 <Avatar className="h-8 w-8 shrink-0">
-                  {lead.photoData ? (
-                    <img
-                      src={lead.photoData}
-                      alt={`${lead.firstName} ${lead.lastName}`}
-                      className="h-full w-full rounded-full object-cover"
-                    />
+                  {visitor.photoData ? (
+                    <img src={visitor.photoData} alt={visitor.fullName} className="h-full w-full rounded-full object-cover" />
                   ) : (
                     <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                      {getInitials(lead.firstName, lead.lastName)}
+                      {getInitials(visitor.fullName).toUpperCase()}
                     </AvatarFallback>
                   )}
                 </Avatar>
                 <div className="flex-1 min-w-0 grid sm:grid-cols-[1fr_1fr_1fr] gap-x-4">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {lead.title ? `${lead.title} ` : ""}{lead.firstName} {lead.lastName}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">{lead.email}</div>
+                    <div className="text-sm font-medium truncate">{visitor.fullName}</div>
+                    <div className="text-xs text-muted-foreground truncate">{visitor.email || "—"}</div>
                   </div>
-                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">
-                    {lead.company || "—"}
-                  </div>
-                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">
-                    {lead.acePoc || "—"}
-                  </div>
+                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">{visitor.company || "—"}</div>
+                  <div className="hidden sm:block text-sm text-muted-foreground truncate self-center">{visitor.acePoc || "—"}</div>
                 </div>
                 <div className="hidden sm:block text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                  {lead.submittedAt
-                    ? new Date(lead.submittedAt).toLocaleDateString()
-                    : "—"}
+                  {new Date(visitor.signedInAt).toLocaleDateString()}
                 </div>
-                <div className="shrink-0">{statusBadge(status)}</div>
+                <div className="shrink-0">{sourceBadge(visitor.source)}</div>
               </button>
             ))}
           </div>
         </div>
       )}
 
+      {/* Detail sheet */}
       <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           {selected && (
@@ -1078,102 +1111,220 @@ function VisitorLogTab() {
               </SheetHeader>
               <div className="space-y-5">
                 <div className="flex items-center gap-4">
-                  {selected.lead.photoData ? (
-                    <img
-                      src={selected.lead.photoData}
-                      alt="Visitor photo"
-                      className="h-20 w-20 rounded-full object-cover border shrink-0"
-                    />
+                  {selected.photoData ? (
+                    <img src={selected.photoData} alt="Visitor photo" className="h-20 w-20 rounded-full object-cover border shrink-0" />
                   ) : (
                     <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border">
-                      <span className="text-2xl font-semibold text-primary">
-                        {getInitials(selected.lead.firstName, selected.lead.lastName)}
-                      </span>
+                      <span className="text-2xl font-semibold text-primary">{getInitials(selected.fullName).toUpperCase()}</span>
                     </div>
                   )}
                   <div>
-                    <div className="text-lg font-semibold">
-                      {selected.lead.title ? `${selected.lead.title} ` : ""}
-                      {selected.lead.firstName} {selected.lead.lastName}
-                    </div>
-                    <div className="text-sm text-muted-foreground">{selected.lead.email}</div>
-                    <div className="mt-1">{statusBadge(selected.status)}</div>
+                    <div className="text-lg font-semibold">{selected.fullName}</div>
+                    <div className="text-sm text-muted-foreground">{selected.email || "No email"}</div>
+                    <div className="mt-1">{sourceBadge(selected.source)}</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  {selected.lead.phoneNumber && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Phone</span>
-                      <span>{selected.lead.phoneNumber}</span>
-                    </>
-                  )}
-                  {selected.lead.company && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Company</span>
-                      <span>{selected.lead.company}</span>
-                    </>
-                  )}
-                  {selected.lead.acePoc && (
-                    <>
-                      <span className="text-muted-foreground font-medium">ACE POC</span>
-                      <span>{selected.lead.acePoc}</span>
-                    </>
-                  )}
-                  {selected.lead.eventName && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Event</span>
-                      <span>{selected.lead.eventName}</span>
-                    </>
-                  )}
-                  {(selected.lead.plusOneCount ?? 0) > 0 && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Group size</span>
-                      <span>{(selected.lead.plusOneCount ?? 0) + 1} people</span>
-                    </>
-                  )}
-                  {selected.lead.submittedAt && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Visited</span>
-                      <span>{new Date(selected.lead.submittedAt).toLocaleString()}</span>
-                    </>
-                  )}
-                  {selected.customer?.checkedInAt && (
-                    <>
-                      <span className="text-muted-foreground font-medium">Checked in</span>
-                      <span>{new Date(selected.customer.checkedInAt).toLocaleString()}</span>
-                    </>
-                  )}
+                  {selected.company && (<><span className="text-muted-foreground font-medium">Company</span><span>{selected.company}</span></>)}
+                  {selected.acePoc && (<><span className="text-muted-foreground font-medium">ACE POC</span><span>{selected.acePoc}</span></>)}
+                  {selected.purpose && (<><span className="text-muted-foreground font-medium">Purpose</span><span>{selected.purpose}</span></>)}
+                  {selected.usCitizen && (<><span className="text-muted-foreground font-medium">US Citizen</span><span>{selected.usCitizen}</span></>)}
+                  {selected.location && (<><span className="text-muted-foreground font-medium">Location</span><span>{selected.location}</span></>)}
+                  <span className="text-muted-foreground font-medium">Signed In</span>
+                  <span>{new Date(selected.signedInAt).toLocaleString()}</span>
+                  {selected.signedOutAt && (<><span className="text-muted-foreground font-medium">Signed Out</span><span>{new Date(selected.signedOutAt).toLocaleString()}</span></>)}
                 </div>
 
-                {selected.lead.documentsAgreed && (() => {
-                  try {
-                    const docs: string[] = JSON.parse(selected.lead.documentsAgreed as string);
-                    if (docs.length > 0) {
-                      return (
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium text-muted-foreground">Documents agreed</div>
-                          <ul className="text-sm space-y-0.5">
-                            {docs.map((d, i) => (
-                              <li key={i} className="flex items-center gap-1.5">
-                                <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
-                                {d}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      );
-                    }
-                  } catch {
-                    /* ignore */
-                  }
-                  return null;
-                })()}
+                {selected.notes && (
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-muted-foreground">Notes</div>
+                    <p className="text-sm">{selected.notes}</p>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => deleteMutation.mutate(selected.id)}
+                    disabled={deleteMutation.isPending}
+                    data-testid="button-delete-visitor"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Remove visitor
+                  </Button>
+                </div>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Envoy import dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Envoy CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Upload a visitor log exported from Envoy. Duplicate entries (same name + date) will be skipped automatically.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEnvoyFile(f); e.target.value = ""; }}
+              data-testid="input-envoy-file"
+            />
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              data-testid="button-choose-envoy-file"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {importing ? "Importing…" : "Choose CSV file"}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setImportOpen(false)} disabled={importing} data-testid="button-cancel-import">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Export Data Tab ───────────────────────────────────────────────────────────
+
+function ExportDataTab() {
+  const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  const { data: visitors = [] } = useQuery<Visitor[]>({ queryKey: ["/api/visitors"] });
+  const { data: leads = [] } = useQuery<Lead[]>({ queryKey: ["/api/leads"] });
+
+  const downloadCsv = (filename: string, rows: string[][], headers: string[]) => {
+    const lines = [headers, ...rows].map((row) =>
+      row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
+    );
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportVisitors = () => {
+    setExporting(true);
+    const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Source", "US Citizen", "Purpose", "Location", "Notes"];
+    const rows = visitors.map((v) => [
+      v.fullName,
+      v.email ?? "",
+      v.company ?? "",
+      v.acePoc ?? "",
+      new Date(v.signedInAt).toLocaleString(),
+      v.signedOutAt ? new Date(v.signedOutAt).toLocaleString() : "",
+      v.source,
+      v.usCitizen ?? "",
+      v.purpose ?? "",
+      v.location ?? "",
+      v.notes ?? "",
+    ]);
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCsv(`visitor-log-${date}.csv`, rows, headers);
+    toast({ title: "Exported", description: `${visitors.length} visitor${visitors.length !== 1 ? "s" : ""} exported.` });
+    setExporting(false);
+  };
+
+  const exportLeads = () => {
+    setExporting(true);
+    const headers = ["First Name", "Last Name", "Email", "Phone", "Company", "ACE POC", "Event", "Submitted At", "Plus One Count"];
+    const rows = (leads as Lead[]).map((l) => [
+      l.firstName,
+      l.lastName,
+      l.email,
+      l.phoneNumber,
+      l.company ?? "",
+      l.acePoc ?? "",
+      l.eventName ?? "",
+      l.submittedAt ? new Date(l.submittedAt).toLocaleString() : "",
+      String(l.plusOneCount ?? 0),
+    ]);
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCsv(`event-leads-${date}.csv`, rows, headers);
+    toast({ title: "Exported", description: `${leads.length} lead${leads.length !== 1 ? "s" : ""} exported.` });
+    setExporting(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Download data as CSV for use in spreadsheets or other tools.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardContent className="pt-5 pb-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg p-2 bg-muted shrink-0">
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Visitor Log</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {visitors.length} kiosk / Envoy walk-in{visitors.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={exportVisitors}
+              disabled={exporting || visitors.length === 0}
+              data-testid="button-export-visitors"
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export CSV
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5 pb-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg p-2 bg-muted shrink-0">
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Event Leads</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {leads.length} guest check-in{leads.length !== 1 ? "s" : ""} from events
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={exportLeads}
+              disabled={exporting || leads.length === 0}
+              data-testid="button-export-leads"
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export CSV
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -1215,6 +1366,10 @@ export default function SignInFlow() {
           <TabsTrigger value="visitor-log" data-testid="tab-visitor-log">
             <UserCheck className="h-4 w-4 mr-1.5" />
             Visitor Log
+          </TabsTrigger>
+          <TabsTrigger value="export-data" data-testid="tab-export-data">
+            <Download className="h-4 w-4 mr-1.5" />
+            Export Data
           </TabsTrigger>
         </TabsList>
 
@@ -1282,10 +1437,22 @@ export default function SignInFlow() {
           <Card>
             <CardHeader>
               <CardTitle>Visitor Log</CardTitle>
-              <CardDescription>Everyone who has submitted the kiosk check-in form. Click a row to see full details.</CardDescription>
+              <CardDescription>Walk-in visitors from the kiosk and Envoy imports. Click a row to see full details.</CardDescription>
             </CardHeader>
             <CardContent>
               <VisitorLogTab />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="export-data">
+          <Card>
+            <CardHeader>
+              <CardTitle>Export Data</CardTitle>
+              <CardDescription>Download visitor log and event lead data as CSV files.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ExportDataTab />
             </CardContent>
           </Card>
         </TabsContent>

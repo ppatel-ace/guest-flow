@@ -1,6 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
-  documents, kioskDevices,
+  documents, kioskDevices, visitors,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -10,6 +10,7 @@ import {
   type Visit, type InsertVisit,
   type Document, type InsertDocument,
   type KioskDevice, type InsertKioskDevice,
+  type Visitor, type InsertVisitor,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, asc, desc } from "drizzle-orm";
@@ -203,6 +204,11 @@ export interface IStorage {
   getCompanyById(id: string): Promise<CompanyDetail | undefined>;
   getAllContacts(): Promise<ContactWithStats[]>;
   getContactById(id: string): Promise<ContactDetail | undefined>;
+  // Visitors (kiosk / Envoy walk-ins)
+  createVisitor(data: InsertVisitor): Promise<Visitor>;
+  getAllVisitors(): Promise<Visitor[]>;
+  bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }>;
+  deleteVisitor(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -798,6 +804,45 @@ export class DatabaseStorage implements IStorage {
         visitedAt: v.visitedAt,
       })),
     };
+  }
+
+  // ─── Visitors (kiosk / Envoy walk-ins) ───────────────────────────────────────
+
+  async createVisitor(data: InsertVisitor): Promise<Visitor> {
+    const [visitor] = await db.insert(visitors).values(data).returning();
+    return visitor;
+  }
+
+  async getAllVisitors(): Promise<Visitor[]> {
+    return await db.select().from(visitors).orderBy(desc(visitors.signedInAt));
+  }
+
+  async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {
+    let inserted = 0;
+    let skipped = 0;
+    for (const row of rows) {
+      // Deduplicate by (fullName, date of signedInAt)
+      const signedInDate = row.signedInAt ? new Date(row.signedInAt) : new Date();
+      const dateStr = signedInDate.toISOString().slice(0, 10);
+      const [existing] = await db
+        .select({ id: visitors.id })
+        .from(visitors)
+        .where(
+          sql`LOWER(${visitors.fullName}) = LOWER(${row.fullName}) AND DATE(${visitors.signedInAt}) = ${dateStr}::date`
+        );
+      if (existing) {
+        skipped++;
+      } else {
+        await db.insert(visitors).values(row);
+        inserted++;
+      }
+    }
+    return { inserted, skipped };
+  }
+
+  async deleteVisitor(id: string): Promise<boolean> {
+    const result = await db.delete(visitors).where(eq(visitors.id, id)).returning();
+    return result.length > 0;
   }
 }
 

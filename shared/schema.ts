@@ -190,3 +190,31 @@ export const insertVisitSchema = createInsertSchema(visits).omit({
 
 export type InsertVisit = z.infer<typeof insertVisitSchema>;
 export type Visit = typeof visits.$inferSelect;
+
+// ─── Visitors table (kiosk / Envoy walk-ins) ──────────────────────────────────
+
+export const visitors = pgTable("visitors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fullName: text("full_name").notNull(),
+  email: text("email"),
+  company: text("company"),
+  acePoc: text("ace_poc"),
+  signedInAt: timestamp("signed_in_at").notNull().default(sql`now()`),
+  signedOutAt: timestamp("signed_out_at"),
+  usCitizen: text("us_citizen"),
+  purpose: text("purpose"),
+  location: text("location"),
+  source: text("source").notNull().default("kiosk"),
+  notes: text("notes"),
+  photoData: text("photo_data"),
+  documentsAgreed: text("documents_agreed"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertVisitorSchema = createInsertSchema(visitors).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertVisitor = z.infer<typeof insertVisitorSchema>;
+export type Visitor = typeof visitors.$inferSelect;
