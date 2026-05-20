@@ -49,6 +49,7 @@ import {
   ListFilter,
   GitMerge,
   BookUser,
+  ArrowUpDown,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1621,6 +1622,9 @@ function VisitorLogTab() {
 // ─── Contacts Tab ─────────────────────────────────────────────────────────────
 
 function ContactsTab() {
+  type SortField = "lastVisited" | "firstVisited" | "name" | "visits";
+  type SortDir = "asc" | "desc";
+
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
@@ -1628,6 +1632,9 @@ function ContactsTab() {
   const [mergePickedPrimary, setMergePickedPrimary] = useState<string | null>(null);
   const [profileSelected, setProfileSelected] = useState<Visitor | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
+  const [sortField, setSortField] = useState<SortField>("lastVisited");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [showDupsOnly, setShowDupsOnly] = useState(false);
 
   const { data: allVisitors = [], isLoading } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
@@ -1690,6 +1697,57 @@ function ContactsTab() {
     return g.fullName.toLowerCase().includes(q) || g.email?.toLowerCase().includes(q) || g.company?.toLowerCase().includes(q) || false;
   });
 
+  // Duplicate detection: flag contacts whose normalized name matches another contact's name
+  const duplicateKeys = useMemo(() => {
+    const nameMap = new Map<string, string[]>();
+    for (const g of groupedVisitors) {
+      const n = g.fullName.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!nameMap.has(n)) nameMap.set(n, []);
+      nameMap.get(n)!.push(g.lookupKey);
+    }
+    const flagged = new Set<string>();
+    for (const [, keys] of nameMap) {
+      if (keys.length > 1) keys.forEach(k => flagged.add(k));
+    }
+    return flagged;
+  }, [groupedVisitors]);
+
+  // Sort the filtered list
+  const sortedFiltered = useMemo(() => {
+    const arr = [...filteredGrouped];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name": cmp = a.fullName.localeCompare(b.fullName); break;
+        case "visits": cmp = a.totalVisits - b.totalVisits; break;
+        case "firstVisited": cmp = a.firstVisited.getTime() - b.firstVisited.getTime(); break;
+        default: cmp = a.lastVisited.getTime() - b.lastVisited.getTime();
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [filteredGrouped, sortField, sortDir]);
+
+  const displayList = showDupsOnly
+    ? sortedFiltered.filter(g => duplicateKeys.has(g.lookupKey))
+    : sortedFiltered;
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir(field === "name" ? "asc" : "desc");
+    }
+  };
+
+  const sortIcon = (field: SortField) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-0.5 opacity-40 inline-block" />;
+    return sortDir === "asc"
+      ? <ChevronUp className="h-3 w-3 ml-0.5 text-primary inline-block" />
+      : <ChevronDown className="h-3 w-3 ml-0.5 text-primary inline-block" />;
+  };
+
   const checkedContacts = groupedVisitors.filter(g => checkedKeys.has(g.lookupKey));
 
   const toggleCheck = (key: string, e: React.MouseEvent) => {
@@ -1736,9 +1794,46 @@ function ContactsTab() {
             data-testid="input-contacts-search"
           />
         </div>
+
+        {/* Sort control */}
+        <Select value={`${sortField}:${sortDir}`} onValueChange={v => {
+          const [f, d] = v.split(":") as [SortField, SortDir];
+          setSortField(f); setSortDir(d);
+        }}>
+          <SelectTrigger className="h-9 w-44 text-xs" data-testid="select-contacts-sort">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="lastVisited:desc">Last visited (newest)</SelectItem>
+            <SelectItem value="lastVisited:asc">Last visited (oldest)</SelectItem>
+            <SelectItem value="firstVisited:asc">First visited (oldest)</SelectItem>
+            <SelectItem value="firstVisited:desc">First visited (newest)</SelectItem>
+            <SelectItem value="name:asc">Name A → Z</SelectItem>
+            <SelectItem value="name:desc">Name Z → A</SelectItem>
+            <SelectItem value="visits:desc">Most visits</SelectItem>
+            <SelectItem value="visits:asc">Fewest visits</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Possible duplicates toggle */}
+        {duplicateKeys.size > 0 && (
+          <button
+            className={`flex items-center gap-1.5 h-9 px-3 rounded-md border text-xs font-medium transition-colors ${showDupsOnly ? "bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/30 dark:border-amber-700 dark:text-amber-300" : "border-input text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"}`}
+            onClick={() => setShowDupsOnly(v => !v)}
+            data-testid="button-show-duplicates"
+          >
+            <ListFilter className="h-3.5 w-3.5" />
+            Possible duplicates
+            <span className={`rounded-full px-1.5 py-0 text-[10px] font-semibold ${showDupsOnly ? "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100" : "bg-muted text-muted-foreground"}`}>
+              {duplicateKeys.size}
+            </span>
+          </button>
+        )}
+
         <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {isLoading ? "Loading…" : `${filteredGrouped.length} contact${filteredGrouped.length !== 1 ? "s" : ""}`}
+          {isLoading ? "Loading…" : `${displayList.length} contact${displayList.length !== 1 ? "s" : ""}`}
         </span>
+
         {checkedKeys.size === 2 && (
           <Button
             size="sm"
@@ -1763,11 +1858,11 @@ function ContactsTab() {
       {/* Contact list */}
       {isLoading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Loading contacts…</div>
-      ) : filteredGrouped.length === 0 ? (
+      ) : displayList.length === 0 ? (
         <div className="py-12 text-center border border-dashed rounded-md space-y-2">
           <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">
-            {search ? "No contacts match your search." : "No contacts yet."}
+            {showDupsOnly ? "No possible duplicates found." : search ? "No contacts match your search." : "No contacts yet."}
           </p>
         </div>
       ) : (
@@ -1775,14 +1870,22 @@ function ContactsTab() {
           <div className="hidden lg:grid grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
             <span />
             <span />
-            <span>Name / Email</span>
+            <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("name")} data-testid="th-contacts-name">
+              Name / Email{sortIcon("name")}
+            </button>
             <span>Company</span>
-            <span>Visits</span>
-            <span>First visited</span>
-            <span>Last visited</span>
+            <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("visits")} data-testid="th-contacts-visits">
+              Visits{sortIcon("visits")}
+            </button>
+            <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("firstVisited")} data-testid="th-contacts-first">
+              First visited{sortIcon("firstVisited")}
+            </button>
+            <button className="flex items-center text-left hover:text-foreground transition-colors" onClick={() => handleSort("lastVisited")} data-testid="th-contacts-last">
+              Last visited{sortIcon("lastVisited")}
+            </button>
           </div>
           <div className="divide-y">
-            {filteredGrouped.map(g => (
+            {displayList.map(g => (
               <div
                 key={g.lookupKey}
                 className={`w-full px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer ${checkedKeys.has(g.lookupKey) ? "bg-primary/5 hover:bg-primary/10" : ""}`}
@@ -1809,7 +1912,14 @@ function ContactsTab() {
                   )}
                 </Avatar>
                 <div className="flex-1 lg:flex-none min-w-0">
-                  <div className="text-sm font-medium truncate">{g.fullName}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-medium truncate">{g.fullName}</span>
+                    {duplicateKeys.has(g.lookupKey) && (
+                      <Badge variant="outline" className="text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap shrink-0">
+                        Possible duplicate
+                      </Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground truncate">{g.email || "—"}</div>
                 </div>
                 <div className="hidden lg:block text-sm text-muted-foreground truncate">{g.company || "—"}</div>
