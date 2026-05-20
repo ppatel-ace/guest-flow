@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, Camera, ChevronRight, Users, X } from "lucide-react";
+import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import logoPath from "@assets/Blue AEDS_1760039355599.png";
 import type { FormField } from "@shared/schema";
@@ -35,7 +36,16 @@ interface AcknowledgedDoc {
   acknowledgedAt: string;
 }
 
+interface VisitorLookupResult {
+  fullName: string;
+  email: string | null;
+  phoneNumber: string | null;
+  company: string | null;
+  acePoc: string | null;
+}
+
 type KioskStep = "idle" | "form" | "documents" | "photo" | "thanks";
+type FormStage = "email" | "fields";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -85,12 +95,35 @@ async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promi
   }
 }
 
+// ─── Animation variants ───────────────────────────────────────────────────────
+
+const fieldVariants = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.3, delay: i * 0.07, ease: "easeOut" },
+  }),
+  exit: { opacity: 0, y: -12, transition: { duration: 0.2 } },
+};
+
+const welcomeBadgeVariants = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
+  exit: { opacity: 0, scale: 0.9, transition: { duration: 0.2 } },
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Kiosk() {
   const deviceId = useRef<string>(getOrCreateDeviceId());
   const [step, setStep] = useState<KioskStep>("idle");
   const [visitorName, setVisitorName] = useState("");
+
+  // Two-stage form state
+  const [formStage, setFormStage] = useState<FormStage>("email");
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [welcomeFirstName, setWelcomeFirstName] = useState<string | null>(null);
 
   // Form state
   const [formTitle, setFormTitle] = useState("");
@@ -170,6 +203,9 @@ export default function Kiosk() {
       streamRef.current = null;
     }
     // Reset form
+    setFormStage("email");
+    setWelcomeFirstName(null);
+    setIsLookingUp(false);
     setFormTitle(""); setFirstName(""); setLastName(""); setEmail("");
     setPhone(""); setCompany(""); setAcePoc(""); setPlusOneCount(1);
     setCustomFieldValues({}); setPhotoData(null); setCameraError(false);
@@ -266,6 +302,7 @@ export default function Kiosk() {
 
   const startFlow = () => {
     setStep("form");
+    setFormStage("email");
     sendHeartbeat(deviceId.current, "active");
   };
 
@@ -277,6 +314,68 @@ export default function Kiosk() {
       setStep("photo");
     } else {
       submitCheckin(null, []);
+    }
+  };
+
+  // ── Two-stage form logic ──────────────────────────────────────────────────────
+
+  const handleEmailContinue = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return;
+
+    setIsLookingUp(true);
+    try {
+      const res = await fetch(`/api/kiosk/visitor-lookup?email=${encodeURIComponent(trimmedEmail)}`);
+      if (res.ok) {
+        const data: VisitorLookupResult | null = await res.json();
+        if (data) {
+          // Returning visitor — pre-fill fields
+          const nameParts = data.fullName.trim().split(/\s+/);
+          const fn = nameParts[0] ?? "";
+          const ln = nameParts.slice(1).join(" ");
+          setFirstName(fn);
+          setLastName(ln);
+          if (data.phoneNumber) setPhone(data.phoneNumber);
+          if (data.company) setCompany(data.company);
+          if (data.acePoc) setAcePoc(data.acePoc);
+          setWelcomeFirstName(fn);
+        } else {
+          // New visitor — clear any stale pre-fill
+          setFirstName("");
+          setLastName("");
+          setCompany("");
+          setAcePoc("");
+          setPhone("");
+          setWelcomeFirstName(null);
+        }
+      }
+    } catch {
+      // Lookup failed silently — proceed as new visitor
+      setWelcomeFirstName(null);
+    } finally {
+      setIsLookingUp(false);
+      setFormStage("fields");
+    }
+  };
+
+  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleEmailContinue();
+    }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    // If already in fields stage, reset back to email stage
+    if (formStage === "fields") {
+      setFormStage("email");
+      setWelcomeFirstName(null);
+      setFirstName("");
+      setLastName("");
+      setCompany("");
+      setAcePoc("");
+      setPhone("");
     }
   };
 
@@ -417,122 +516,265 @@ export default function Kiosk() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Sign In</h1>
-              <p className="text-muted-foreground text-sm mt-1">Please fill in your details below.</p>
+              <p className="text-muted-foreground text-sm mt-1">
+                {formStage === "email"
+                  ? "Enter your email address to get started."
+                  : "Please confirm your details below."}
+              </p>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-base">Title</Label>
-                <Select value={formTitle} onValueChange={setFormTitle}>
-                  <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-title">
-                    <SelectValue placeholder="Select title (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TITLE_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            {/* ── Stage 1: Email only ── */}
+            {formStage === "email" && (
+              <div className="space-y-4">
+                <motion.div
+                  layoutId="kiosk-email-field"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Email <span className="text-destructive">*</span></Label>
+                  <Input
+                    className="h-16 text-lg"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={handleEmailKeyDown}
+                    placeholder="your@email.com"
+                    autoFocus
+                    data-testid="input-kiosk-email"
+                  />
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: 0.05 }}
+                >
+                  <Button
+                    className="w-full h-16 text-xl font-bold"
+                    onClick={handleEmailContinue}
+                    disabled={!email.trim() || isLookingUp}
+                    data-testid="button-kiosk-email-continue"
+                  >
+                    {isLookingUp ? (
+                      <>
+                        <div className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin mr-2" />
+                        Looking up…
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </>
+                    )}
+                  </Button>
+                </motion.div>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-base">First Name <span className="text-destructive">*</span></Label>
-                  <Input className="h-14 text-base" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" required data-testid="input-kiosk-first-name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-base">Last Name <span className="text-destructive">*</span></Label>
-                  <Input className="h-14 text-base" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" required data-testid="input-kiosk-last-name" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-base">Email <span className="text-destructive">*</span></Label>
-                <Input className="h-14 text-base" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" required data-testid="input-kiosk-email" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-base">Phone Number <span className="text-destructive">*</span></Label>
-                <Input className="h-14 text-base" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" required data-testid="input-kiosk-phone" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-base">Company <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
-                <Input className="h-14 text-base" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" data-testid="input-kiosk-company" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-base">Ace POC <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
-                <Select value={acePoc} onValueChange={setAcePoc}>
-                  <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-ace-poc">
-                    <SelectValue placeholder="Select a POC" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACE_POC_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Custom fields */}
-              {customFields.map((field) => (
-                <div key={field.id} className="space-y-1.5">
-                  <Label className="text-base">
-                    {field.label}
-                    {field.required && <span className="text-destructive"> *</span>}
-                    {!field.required && <span className="text-muted-foreground text-sm font-normal"> (Optional)</span>}
-                  </Label>
-                  {field.fieldType === "select" ? (
-                    <Select value={customFieldValues[field.id] ?? ""} onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}>
-                      <SelectTrigger className="h-14 text-base" data-testid={`select-kiosk-custom-${field.id}`}>
-                        <SelectValue placeholder={field.placeholder ?? "Select an option"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          try {
-                            const opts = JSON.parse(field.options ?? "[]");
-                            return opts.map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>);
-                          } catch {
-                            return null;
-                          }
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      className="h-14 text-base"
-                      type={field.fieldType}
-                      value={customFieldValues[field.id] ?? ""}
-                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-                      placeholder={field.placeholder ?? ""}
-                      required={field.required}
-                      data-testid={`input-kiosk-custom-${field.id}`}
-                    />
-                  )}
-                </div>
-              ))}
-
-              {/* Plus one */}
-              {plusOneEnabled && (
-                <div className="space-y-1.5">
-                  <Label className="text-base">
-                    <Users className="inline h-4 w-4 mr-1.5" />
-                    Group size
-                  </Label>
+            {/* ── Stage 2: Email + all fields ── */}
+            {formStage === "fields" && (
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                {/* Email field — shared layout animation slides it upward from Stage 1 */}
+                <motion.div
+                  layoutId="kiosk-email-field"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Email <span className="text-destructive">*</span></Label>
                   <Input
                     className="h-14 text-base"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={plusOneCount}
-                    onChange={(e) => setPlusOneCount(Number(e.target.value))}
-                    data-testid="input-kiosk-plus-one"
+                    type="email"
+                    value={email}
+                    onChange={handleEmailChange}
+                    placeholder="your@email.com"
+                    required
+                    data-testid="input-kiosk-email"
                   />
-                </div>
-              )}
+                </motion.div>
 
-              <Button type="submit" className="w-full h-16 text-xl font-bold mt-4" data-testid="button-kiosk-continue">
-                Continue
-                <ChevronRight className="ml-2 h-5 w-5" />
-              </Button>
-            </form>
+                {/* Welcome back badge */}
+                <AnimatePresence>
+                  {welcomeFirstName && (
+                    <motion.div
+                      key="welcome-badge"
+                      variants={welcomeBadgeVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-4 py-2.5"
+                      data-testid="badge-kiosk-welcome-back"
+                    >
+                      <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                      <p className="text-sm font-medium text-primary">
+                        Welcome back, {welcomeFirstName}! Your details have been pre-filled.
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Remaining fields — staggered reveal */}
+                <motion.div
+                  key="field-title"
+                  custom={0}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Title</Label>
+                  <Select value={formTitle} onValueChange={setFormTitle}>
+                    <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-title">
+                      <SelectValue placeholder="Select title (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TITLE_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+
+                <motion.div
+                  key="field-name"
+                  custom={1}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="grid grid-cols-2 gap-3"
+                >
+                  <div className="space-y-1.5">
+                    <Label className="text-base">First Name <span className="text-destructive">*</span></Label>
+                    <Input className="h-14 text-base" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" required data-testid="input-kiosk-first-name" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-base">Last Name <span className="text-destructive">*</span></Label>
+                    <Input className="h-14 text-base" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" required data-testid="input-kiosk-last-name" />
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  key="field-phone"
+                  custom={2}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Phone Number <span className="text-destructive">*</span></Label>
+                  <Input className="h-14 text-base" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" required data-testid="input-kiosk-phone" />
+                </motion.div>
+
+                <motion.div
+                  key="field-company"
+                  custom={3}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Company <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
+                  <Input className="h-14 text-base" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" data-testid="input-kiosk-company" />
+                </motion.div>
+
+                <motion.div
+                  key="field-poc"
+                  custom={4}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Ace POC <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
+                  <Select value={acePoc} onValueChange={setAcePoc}>
+                    <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-ace-poc">
+                      <SelectValue placeholder="Select a POC" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACE_POC_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+
+                {/* Custom fields */}
+                {customFields.map((field, idx) => (
+                  <motion.div
+                    key={`field-custom-${field.id}`}
+                    custom={5 + idx}
+                    variants={fieldVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="space-y-1.5"
+                  >
+                    <Label className="text-base">
+                      {field.label}
+                      {field.required && <span className="text-destructive"> *</span>}
+                      {!field.required && <span className="text-muted-foreground text-sm font-normal"> (Optional)</span>}
+                    </Label>
+                    {field.fieldType === "select" ? (
+                      <Select value={customFieldValues[field.id] ?? ""} onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}>
+                        <SelectTrigger className="h-14 text-base" data-testid={`select-kiosk-custom-${field.id}`}>
+                          <SelectValue placeholder={field.placeholder ?? "Select an option"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            try {
+                              const opts = JSON.parse(field.options ?? "[]");
+                              return opts.map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>);
+                            } catch {
+                              return null;
+                            }
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="h-14 text-base"
+                        type={field.fieldType}
+                        value={customFieldValues[field.id] ?? ""}
+                        onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+                        placeholder={field.placeholder ?? ""}
+                        required={field.required}
+                        data-testid={`input-kiosk-custom-${field.id}`}
+                      />
+                    )}
+                  </motion.div>
+                ))}
+
+                {/* Plus one */}
+                {plusOneEnabled && (
+                  <motion.div
+                    key="field-plusone"
+                    custom={5 + customFields.length}
+                    variants={fieldVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="space-y-1.5"
+                  >
+                    <Label className="text-base">
+                      <Users className="inline h-4 w-4 mr-1.5" />
+                      Group size
+                    </Label>
+                    <Input
+                      className="h-14 text-base"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={plusOneCount}
+                      onChange={(e) => setPlusOneCount(Number(e.target.value))}
+                      data-testid="input-kiosk-plus-one"
+                    />
+                  </motion.div>
+                )}
+
+                <motion.div
+                  key="field-submit"
+                  custom={6 + customFields.length + (plusOneEnabled ? 1 : 0)}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <Button type="submit" className="w-full h-16 text-xl font-bold mt-2" data-testid="button-kiosk-continue">
+                    Continue
+                    <ChevronRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </motion.div>
+              </form>
+            )}
           </div>
         </div>
       )}

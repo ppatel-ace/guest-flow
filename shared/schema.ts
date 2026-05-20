@@ -197,6 +197,7 @@ export const visitors = pgTable("visitors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fullName: text("full_name").notNull(),
   email: text("email"),
+  phoneNumber: text("phone_number"),
   company: text("company"),
   acePoc: text("ace_poc"),
   signedInAt: timestamp("signed_in_at").notNull().default(sql`now()`),

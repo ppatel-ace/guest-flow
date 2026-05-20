@@ -209,6 +209,7 @@ export interface IStorage {
   getAllContacts(): Promise<ContactWithStats[]>;
   getContactById(id: string): Promise<ContactDetail | undefined>;
   // Visitors (kiosk / Envoy walk-ins)
+  lookupVisitorByEmail(email: string): Promise<{ fullName: string; email: string | null; phoneNumber: string | null; company: string | null; acePoc: string | null } | null>;
   createVisitor(data: InsertVisitor): Promise<Visitor>;
   getAllVisitors(): Promise<Visitor[]>;
   bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }>;
@@ -846,6 +847,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Visitors (kiosk / Envoy walk-ins) ───────────────────────────────────────
+
+  async lookupVisitorByEmail(email: string): Promise<{ fullName: string; email: string | null; phoneNumber: string | null; company: string | null; acePoc: string | null } | null> {
+    const normalized = email.trim().toLowerCase();
+    const [row] = await db
+      .select()
+      .from(visitors)
+      .where(sql`LOWER(${visitors.email}) = ${normalized}`)
+      .orderBy(desc(visitors.signedInAt))
+      .limit(1);
+    if (!row) return null;
+    return {
+      fullName: row.fullName,
+      email: row.email,
+      phoneNumber: row.phoneNumber ?? null,
+      company: row.company,
+      acePoc: row.acePoc,
+    };
+  }
 
   async createVisitor(data: InsertVisitor): Promise<Visitor> {
     const [visitor] = await db.insert(visitors).values(data).returning();

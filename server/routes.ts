@@ -1029,6 +1029,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
+  // Visitor lookup by email (public - used by kiosk for returning-visitor autofill)
+  // Rate-limited to reduce PII enumeration risk
+  const visitorLookupLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: "Too many requests. Please wait a moment." });
+    },
+  });
+  app.get("/api/kiosk/visitor-lookup", visitorLookupLimiter, async (req, res) => {
+    try {
+      const email = (req.query.email as string | undefined)?.trim();
+      if (!email) return res.status(400).json({ error: "email query param required" });
+      const result = await storage.lookupVisitorByEmail(email);
+      res.json(result ?? null);
+    } catch (error) {
+      console.error("[kiosk/visitor-lookup]", error);
+      res.status(500).json({ error: "Lookup failed" });
+    }
+  });
+
   app.post("/api/kiosk/checkin", kioskCheckinLimiter, async (req, res) => {
     try {
       const body = req.body;
@@ -1039,6 +1062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const visitor = await storage.createVisitor({
         fullName,
         email: body.email?.trim().toLowerCase() || null,
+        phoneNumber: body.phoneNumber?.trim() || null,
         company: body.company?.trim() || null,
         acePoc: body.acePoc || null,
         signedInAt: new Date(),
