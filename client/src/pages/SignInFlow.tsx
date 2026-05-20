@@ -1457,13 +1457,14 @@ function VisitorLogTab() {
                 ) : (
                   <div className="rounded-md border overflow-hidden">
                     <div className="overflow-x-auto">
-                      <div className="min-w-[700px]">
-                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                      <div className="min-w-[820px]">
+                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
                           <span>Date</span>
                           <span>Signed In</span>
                           <span>Signed Out</span>
                           <span>Purpose</span>
                           <span>ACE POC</span>
+                          <span>Email</span>
                           <span>Status</span>
                           <span>Duration</span>
                           <span>Source</span>
@@ -1472,7 +1473,7 @@ function VisitorLogTab() {
                           {profile.visits.map((v) => (
                             <div
                               key={v.id}
-                              className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs"
+                              className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs"
                               data-testid={`profile-visit-${v.id}`}
                             >
                               <div className="font-medium text-foreground whitespace-nowrap">
@@ -1491,6 +1492,9 @@ function VisitorLogTab() {
                               </div>
                               <div className="truncate text-muted-foreground">
                                 {v.acePoc || "—"}
+                              </div>
+                              <div className="truncate text-muted-foreground">
+                                {v.email || "—"}
                               </div>
                               <div>
                                 {v.signedOutAt
@@ -2005,19 +2009,35 @@ function ContactsTab() {
                               </div>
                             ))}
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-3 w-full text-xs h-7"
-                            data-testid={`button-select-both-${g.lookupKey}`}
-                            onClick={e => {
-                              e.stopPropagation();
-                              const others = duplicateGroups.get(g.lookupKey) ?? [];
-                              setCheckedKeys(new Set([g.lookupKey, ...others.slice(0, 1).map(o => o.lookupKey)]));
-                            }}
-                          >
-                            Select both
-                          </Button>
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-xs h-7"
+                              data-testid={`button-select-both-${g.lookupKey}`}
+                              onClick={e => {
+                                e.stopPropagation();
+                                const others = duplicateGroups.get(g.lookupKey) ?? [];
+                                setCheckedKeys(new Set([g.lookupKey, ...others.slice(0, 1).map(o => o.lookupKey)]));
+                              }}
+                            >
+                              Select both
+                            </Button>
+                            {checkedKeys.has(g.lookupKey) && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="flex-1 text-xs h-7 text-muted-foreground"
+                                data-testid={`button-unselect-${g.lookupKey}`}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setCheckedKeys(prev => { const s = new Set(prev); s.delete(g.lookupKey); return s; });
+                                }}
+                              >
+                                Unselect
+                              </Button>
+                            )}
+                          </div>
                         </PopoverContent>
                       </Popover>
                     )}
@@ -2105,18 +2125,19 @@ function ContactsTab() {
                 ) : (
                   <div className="rounded-md border overflow-hidden">
                     <div className="overflow-x-auto">
-                      <div className="min-w-[700px]">
-                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
-                          <span>Date</span><span>Signed In</span><span>Signed Out</span><span>Purpose</span><span>ACE POC</span><span>Status</span><span>Duration</span><span>Source</span>
+                      <div className="min-w-[820px]">
+                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                          <span>Date</span><span>Signed In</span><span>Signed Out</span><span>Purpose</span><span>ACE POC</span><span>Email</span><span>Status</span><span>Duration</span><span>Source</span>
                         </div>
                         <div className="divide-y max-h-96 overflow-y-auto">
                           {profile.visits.map(v => (
-                            <div key={v.id} className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs" data-testid={`contact-visit-${v.id}`}>
+                            <div key={v.id} className="grid grid-cols-[110px_80px_80px_90px_90px_150px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs" data-testid={`contact-visit-${v.id}`}>
                               <div className="font-medium text-foreground whitespace-nowrap">{new Date(v.signedInAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                               <div className="text-muted-foreground whitespace-nowrap">{new Date(v.signedInAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</div>
                               <div className="text-muted-foreground whitespace-nowrap">{v.signedOutAt ? new Date(v.signedOutAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"}</div>
                               <div className="truncate text-muted-foreground">{v.purpose || "—"}</div>
                               <div className="truncate text-muted-foreground">{v.acePoc || "—"}</div>
+                              <div className="truncate text-muted-foreground">{v.email || "—"}</div>
                               <div>{v.signedOutAt
                                 ? <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed out</Badge>
                                 : <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed in</Badge>
