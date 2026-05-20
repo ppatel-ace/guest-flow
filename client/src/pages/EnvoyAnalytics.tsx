@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, Fragment } from "react";
 import Papa from "papaparse";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -165,12 +165,15 @@ function StatCard({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 25;
+
 export default function EnvoyAnalytics() {
   const [rows, setRows] = useState<EnvoyRow[]>([]);
   const [timeMode, setTimeMode] = useState<"week" | "month">("week");
   const [hostFilter, setHostFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
 
   const hasData = rows.length > 0;
 
@@ -181,6 +184,7 @@ export default function EnvoyAnalytics() {
   const primaryCount = groups.length;
   const totalPeople = groups.reduce((acc, g) => acc + 1 + g.companions.length, 0);
   const signedOutCount = rows.filter(r => r.signed_out_time_local?.trim()).length;
+  const stillInsideCount = totalSignIns - signedOutCount;
   const citizenCount = rows.filter(r => isCitizen(r.are_you_us_citizen_or_resident)).length;
   const citizenPct = totalSignIns > 0 ? Math.round((citizenCount / totalSignIns) * 100) : 0;
 
@@ -223,6 +227,9 @@ export default function EnvoyAnalytics() {
     return g;
   }, [groups, hostFilter, search]);
 
+  const totalPages = Math.ceil(filteredGroups.length / PAGE_SIZE);
+  const pagedGroups = filteredGroups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
@@ -236,6 +243,7 @@ export default function EnvoyAnalytics() {
     setSearch("");
     setHostFilter(null);
     setExpanded(new Set());
+    setPage(0);
   }, []);
 
   return (
@@ -282,7 +290,7 @@ export default function EnvoyAnalytics() {
             <StatCard icon={BarChart2} label="Total sign-ins" value={totalSignIns} sub="all rows" />
             <StatCard icon={Users} label="Primary visitors" value={primaryCount} sub="excluding companions" />
             <StatCard icon={Building2} label="Total people" value={totalPeople} sub="incl. companions" />
-            <StatCard icon={UserCheck} label="Signed out" value={signedOutCount} sub={`${Math.round((signedOutCount / totalSignIns) * 100)}% of sign-ins`} />
+            <StatCard icon={UserCheck} label="Signed out" value={signedOutCount} sub={`${stillInsideCount} still inside`} />
             <StatCard icon={ShieldCheck} label="US citizens" value={`${citizenPct}%`} sub={`${citizenCount} of ${totalSignIns}`} />
           </div>
 
@@ -385,7 +393,7 @@ export default function EnvoyAnalytics() {
                     className="pl-8 h-8 text-sm"
                     placeholder="Name, email, host, company…"
                     value={search}
-                    onChange={e => setSearch(e.target.value)}
+                    onChange={e => { setSearch(e.target.value); setPage(0); }}
                     data-testid="input-visitor-table-search"
                   />
                 </div>
@@ -395,95 +403,138 @@ export default function EnvoyAnalytics() {
               {filteredGroups.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">No visitors match your search.</div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-6" />
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Host</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Sign-in</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead className="text-center">US</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredGroups.map(({ primary, companions }) => {
-                      const isOpen = expanded.has(primary.id);
-                      const hasCompanions = companions.length > 0;
-                      return (
-                        <>
-                          <TableRow
-                            key={primary.id}
-                            className={hasCompanions ? "cursor-pointer hover:bg-muted/30" : ""}
-                            onClick={() => hasCompanions && toggleExpand(primary.id)}
-                            data-testid={`row-visitor-${primary.id}`}
-                          >
-                            <TableCell className="pr-0">
-                              {hasCompanions ? (
-                                isOpen
-                                  ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                                  : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <span>{primary.your_full_name}</span>
-                              {hasCompanions && (
-                                <Badge variant="secondary" className="ml-2 text-xs">+{companions.length}</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {primary.your_email_address || "—"}
-                            </TableCell>
-                            <TableCell className="text-sm">{primary.host || "—"}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {primary["organization/company"] || "—"}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                              {primary.signed_in_time_local
-                                ? new Date(primary.signed_in_time_local).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {parseDuration(primary.signed_in_time_local, primary.signed_out_time_local)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {isCitizen(primary.are_you_us_citizen_or_resident) ? (
-                                <span className="text-green-600 dark:text-green-400 text-xs font-medium">✓</span>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-
-                          {isOpen && companions.map(comp => (
-                            <TableRow key={comp.id} className="bg-muted/20" data-testid={`row-companion-${comp.id}`}>
-                              <TableCell />
-                              <TableCell className="pl-6 text-sm text-muted-foreground italic">
-                                {comp.your_full_name}
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-6" />
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Host</TableHead>
+                        <TableHead>Company</TableHead>
+                        <TableHead>Sign-in</TableHead>
+                        <TableHead>Sign-out</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead className="text-center">US</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedGroups.map(({ primary, companions }) => {
+                        const isOpen = expanded.has(primary.id);
+                        const hasCompanions = companions.length > 0;
+                        return (
+                          <Fragment key={primary.id}>
+                            <TableRow
+                              className={hasCompanions ? "cursor-pointer hover:bg-muted/30" : ""}
+                              onClick={() => hasCompanions && toggleExpand(primary.id)}
+                              data-testid={`row-visitor-${primary.id}`}
+                            >
+                              <TableCell className="pr-0">
+                                {hasCompanions ? (
+                                  isOpen
+                                    ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                    : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                ) : null}
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">—</TableCell>
-                              <TableCell />
-                              <TableCell />
-                              <TableCell />
+                              <TableCell className="font-medium">
+                                <span>{primary.your_full_name}</span>
+                                {hasCompanions && (
+                                  <Badge variant="secondary" className="ml-2 text-xs">+{companions.length}</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {primary.your_email_address || "—"}
+                              </TableCell>
+                              <TableCell className="text-sm">{primary.host || "—"}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">
-                                {parseDuration(comp.signed_in_time_local, comp.signed_out_time_local)}
+                                {primary["organization/company"] || "—"}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                {primary.signed_in_time_local
+                                  ? new Date(primary.signed_in_time_local).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                {primary.signed_out_time_local?.trim()
+                                  ? new Date(primary.signed_out_time_local).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                                  : <span className="italic text-amber-500 dark:text-amber-400 text-xs">Inside</span>}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {parseDuration(primary.signed_in_time_local, primary.signed_out_time_local)}
                               </TableCell>
                               <TableCell className="text-center">
-                                {isCitizen(comp.are_you_us_citizen_or_resident) ? (
+                                {isCitizen(primary.are_you_us_citizen_or_resident) ? (
                                   <span className="text-green-600 dark:text-green-400 text-xs font-medium">✓</span>
                                 ) : (
                                   <span className="text-muted-foreground text-xs">—</span>
                                 )}
                               </TableCell>
                             </TableRow>
-                          ))}
-                        </>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+
+                            {isOpen && companions.map(comp => (
+                              <TableRow key={comp.id} className="bg-muted/20" data-testid={`row-companion-${comp.id}`}>
+                                <TableCell />
+                                <TableCell className="pl-6 text-sm text-muted-foreground italic">
+                                  {comp.your_full_name}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">—</TableCell>
+                                <TableCell />
+                                <TableCell />
+                                <TableCell />
+                                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                  {comp.signed_out_time_local?.trim()
+                                    ? new Date(comp.signed_out_time_local).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                                    : <span className="italic text-amber-500 dark:text-amber-400 text-xs">Inside</span>}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {parseDuration(comp.signed_in_time_local, comp.signed_out_time_local)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {isCitizen(comp.are_you_us_citizen_or_resident) ? (
+                                    <span className="text-green-600 dark:text-green-400 text-xs font-medium">✓</span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+                      <span>
+                        Page {page + 1} of {totalPages} &mdash; {filteredGroups.length} visitors
+                      </span>
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2.5 text-xs"
+                          disabled={page === 0}
+                          onClick={() => setPage(p => p - 1)}
+                          data-testid="button-page-prev"
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2.5 text-xs"
+                          disabled={page >= totalPages - 1}
+                          onClick={() => setPage(p => p + 1)}
+                          data-testid="button-page-next"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
