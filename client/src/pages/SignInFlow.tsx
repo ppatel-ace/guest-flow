@@ -99,6 +99,15 @@ interface KioskDevice {
   ipAddress: string | null;
 }
 
+interface VisitorMergeEvent {
+  id: string;
+  primaryKey: string;
+  secondaryName: string;
+  secondaryEmail: string | null;
+  visitsMoved: number;
+  mergedAt: string;
+}
+
 // ─── Re-used from PublicPages: FormFieldsManager ──────────────────────────────
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -1055,6 +1064,11 @@ function VisitorLogTab() {
     enabled: notesLookupKey !== null,
   });
 
+  const { data: mergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
+    queryKey: ["/api/visitors/merge-events", notesLookupKey],
+    enabled: notesLookupKey !== null,
+  });
+
   const saveNotesMutation = useMutation({
     mutationFn: ({ key, notes }: { key: string; notes: string }) =>
       apiRequest("PUT", "/api/visitors/notes", { key, notes }),
@@ -1504,6 +1518,36 @@ function VisitorLogTab() {
                 )}
               </div>
 
+              {/* Merge history */}
+              {mergeEvents.length > 0 && (
+                <div className="space-y-2 pt-4 border-t mt-4">
+                  <div className="flex items-center gap-2">
+                    <GitMerge className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold">Merge history</span>
+                  </div>
+                  <div className="rounded-md border divide-y">
+                    {mergeEvents.map(ev => (
+                      <div key={ev.id} className="px-3 py-2.5 text-xs space-y-0.5" data-testid={`merge-event-${ev.id}`}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-foreground">{ev.secondaryName}</span>
+                          {ev.secondaryEmail && (
+                            <span className="text-muted-foreground">{ev.secondaryEmail}</span>
+                          )}
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-auto shrink-0">
+                            {ev.visitsMoved} visit{ev.visitsMoved !== 1 ? "s" : ""} absorbed
+                          </Badge>
+                        </div>
+                        <div className="text-muted-foreground">
+                          {new Date(ev.mergedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {" at "}
+                          {new Date(ev.mergedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Internal staff notes */}
               <div className="space-y-2 pt-4 border-t mt-4">
                 <div className="flex items-center gap-2">
@@ -1655,6 +1699,11 @@ function ContactsTab() {
 
   const { data: notesData, isLoading: notesLoading } = useQuery<{ lookupKey: string; notes: string }>({
     queryKey: ["/api/visitors/notes", notesLookupKey],
+    enabled: notesLookupKey !== null,
+  });
+
+  const { data: contactsMergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
+    queryKey: ["/api/visitors/merge-events", notesLookupKey],
     enabled: notesLookupKey !== null,
   });
 
@@ -2040,6 +2089,36 @@ function ContactsTab() {
                   </div>
                 )}
               </div>
+              {/* Merge history */}
+              {contactsMergeEvents.length > 0 && (
+                <div className="space-y-2 pt-4 border-t mt-4">
+                  <div className="flex items-center gap-2">
+                    <GitMerge className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold">Merge history</span>
+                  </div>
+                  <div className="rounded-md border divide-y">
+                    {contactsMergeEvents.map(ev => (
+                      <div key={ev.id} className="px-3 py-2.5 text-xs space-y-0.5" data-testid={`contacts-merge-event-${ev.id}`}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-foreground">{ev.secondaryName}</span>
+                          {ev.secondaryEmail && (
+                            <span className="text-muted-foreground">{ev.secondaryEmail}</span>
+                          )}
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-auto shrink-0">
+                            {ev.visitsMoved} visit{ev.visitsMoved !== 1 ? "s" : ""} absorbed
+                          </Badge>
+                        </div>
+                        <div className="text-muted-foreground">
+                          {new Date(ev.mergedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {" at "}
+                          {new Date(ev.mergedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2 pt-4 border-t mt-4">
                 <div className="flex items-center gap-2">
                   <StickyNote className="h-4 w-4 text-muted-foreground" />

@@ -229,3 +229,16 @@ export const visitorNotes = pgTable("visitor_notes", {
 });
 
 export type VisitorNote = typeof visitorNotes.$inferSelect;
+
+// ─── Visitor merge events (audit trail) ───────────────────────────────────────
+
+export const visitorMergeEvents = pgTable("visitor_merge_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  primaryKey: text("primary_key").notNull(),
+  secondaryName: text("secondary_name").notNull(),
+  secondaryEmail: text("secondary_email"),
+  visitsMoved: integer("visits_moved").notNull(),
+  mergedAt: timestamp("merged_at").notNull().default(sql`now()`),
+});
+
+export type VisitorMergeEvent = typeof visitorMergeEvents.$inferSelect;

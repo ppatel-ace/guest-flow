@@ -1,6 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
-  documents, kioskDevices, visitors, visitorNotes,
+  documents, kioskDevices, visitors, visitorNotes, visitorMergeEvents,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -12,6 +12,7 @@ import {
   type KioskDevice, type InsertKioskDevice,
   type Visitor, type InsertVisitor,
   type VisitorNote,
+  type VisitorMergeEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, asc, desc } from "drizzle-orm";
@@ -218,6 +219,7 @@ export interface IStorage {
   getVisitorNotes(lookupKey: string): Promise<VisitorNote | undefined>;
   upsertVisitorNotes(lookupKey: string, notes: string): Promise<VisitorNote>;
   mergeVisitorContacts(primaryKey: string, secondaryKey: string): Promise<{ merged: number }>;
+  getVisitorMergeEvents(lookupKey: string): Promise<VisitorMergeEvent[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -915,6 +917,12 @@ export class DatabaseStorage implements IStorage {
     if (primaryRows.length === 0) throw new Error('Primary contact not found');
     const primaryRep = primaryRows[0];
 
+    // Capture secondary identity BEFORE updating rows (for audit record)
+    const secondaryRows = secondaryKey.includes('@')
+      ? await db.select().from(visitors).where(sql`LOWER(${visitors.email}) = ${secondaryKey}`).orderBy(desc(visitors.signedInAt))
+      : await db.select().from(visitors).where(sql`LOWER(${visitors.fullName}) = ${secondaryKey}`).orderBy(desc(visitors.signedInAt));
+    const secondaryRep = secondaryRows[0] ?? null;
+
     // Update all secondary visitor rows to use the primary's identity
     let updatedRows: { id: string }[] = [];
     if (secondaryKey.includes('@')) {
@@ -942,7 +950,26 @@ export class DatabaseStorage implements IStorage {
       await this.upsertVisitorNotes(secondaryKey, '');
     }
 
+    // Write merge audit record
+    if (secondaryRep) {
+      await db.insert(visitorMergeEvents).values({
+        primaryKey,
+        secondaryName: secondaryRep.fullName,
+        secondaryEmail: secondaryRep.email ?? null,
+        visitsMoved: updatedRows.length,
+        mergedAt: new Date(),
+      });
+    }
+
     return { merged: updatedRows.length };
+  }
+
+  async getVisitorMergeEvents(lookupKey: string): Promise<VisitorMergeEvent[]> {
+    return await db
+      .select()
+      .from(visitorMergeEvents)
+      .where(eq(visitorMergeEvents.primaryKey, lookupKey))
+      .orderBy(desc(visitorMergeEvents.mergedAt));
   }
 
   async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {

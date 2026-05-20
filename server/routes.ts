@@ -1151,6 +1151,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Get merge history for a visitor contact (protected)
+  app.get("/api/visitors/merge-events", requireAuth, async (req, res) => {
+    try {
+      const key = req.query.key as string;
+      if (!key) return res.status(400).json({ error: "key is required" });
+      const events = await storage.getVisitorMergeEvents(key);
+      res.json(events);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch merge events" });
+    }
+  });
+
   // Merge two visitor contacts (protected)
   app.post("/api/visitors/merge", requireAuth, async (req, res) => {
     try {
