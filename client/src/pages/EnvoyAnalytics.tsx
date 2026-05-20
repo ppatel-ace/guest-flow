@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
-import { CalendarDays, Users, UserCheck, TrendingUp } from "lucide-react";
+import { CalendarDays, Users, UserCheck, TrendingUp, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -213,7 +213,7 @@ export default function Analytics() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard icon={Users} label="Total visitors" value={totalVisitors} sub="check-ins submitted" />
         <StatCard icon={CalendarDays} label="Total invites" value={totalInvites} sub="invites created" />
         <StatCard icon={TrendingUp} label={`Avg / ${bucket}`} value={avgPerPeriod} sub="visitor check-ins" />
@@ -223,6 +223,12 @@ export default function Analytics() {
           value={totalInvites > 0 ? `${checkInRate}%` : "—"}
           sub="visitors ÷ invites"
           color={checkInRate >= 75 ? "text-green-600 dark:text-green-400" : ""}
+        />
+        <StatCard
+          icon={Clock}
+          label="Avg visit duration"
+          value="N/A"
+          sub="no sign-out tracking"
         />
       </div>
 
