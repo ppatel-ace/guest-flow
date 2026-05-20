@@ -1164,8 +1164,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         documentsAgreed: null,
       })).filter((r) => r.fullName);
       const result = await storage.bulkImportVisitors(parsed);
+      const parts: string[] = [];
+      if (result.inserted > 0) parts.push(`${result.inserted} new visitor${result.inserted !== 1 ? "s" : ""} imported`);
+      if (result.backfilled > 0) parts.push(`${result.backfilled} record${result.backfilled !== 1 ? "s" : ""} backfilled with US Citizen answer`);
+      if (result.skipped > 0) parts.push(`${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped`);
+      if (parts.length === 0) parts.push("No new records to import");
       res.json({
-        message: `Imported ${result.inserted} visitor${result.inserted !== 1 ? "s" : ""}${result.skipped > 0 ? `, ${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped` : ""}`,
+        message: parts.join(", "),
         ...result,
       });
     } catch (error) {
@@ -1174,6 +1179,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // Count Envoy visitors missing the usCitizen answer (protected)
+  app.get("/api/visitors/missing-us-citizen-count", requireAuth, async (req, res) => {
+    try {
+      const count = await storage.countVisitorsMissingUsCitizen();
+      res.json({ count });
+    } catch (error) {
+      console.error("[visitors/missing-us-citizen-count]", error);
+      res.status(500).json({ error: "Failed to count records" });
+    }
+  });
 
   // Get merge history for a visitor contact (protected)
   app.get("/api/visitors/merge-events", requireAuth, async (req, res) => {

@@ -212,7 +212,8 @@ export interface IStorage {
   lookupVisitorByEmail(email: string): Promise<{ fullName: string; email: string | null; phoneNumber: string | null; company: string | null; acePoc: string | null } | null>;
   createVisitor(data: InsertVisitor): Promise<Visitor>;
   getAllVisitors(): Promise<Visitor[]>;
-  bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }>;
+  bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number; backfilled: number }>;
+  countVisitorsMissingUsCitizen(): Promise<number>;
   getVisitorProfile(email?: string, name?: string): Promise<{
     stats: { totalVisits: number; firstVisited: Date | null; lastVisited: Date | null; avgDurationMinutes: number | null };
     visits: Visitor[];
@@ -1032,27 +1033,45 @@ export class DatabaseStorage implements IStorage {
     return { deleted: rows.length };
   }
 
-  async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {
+  async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number; backfilled: number }> {
     let inserted = 0;
     let skipped = 0;
+    let backfilled = 0;
     for (const row of rows) {
       // Deduplicate by (fullName, date of signedInAt)
       const signedInDate = row.signedInAt ? new Date(row.signedInAt) : new Date();
       const dateStr = signedInDate.toISOString().slice(0, 10);
       const [existing] = await db
-        .select({ id: visitors.id })
+        .select({ id: visitors.id, usCitizen: visitors.usCitizen })
         .from(visitors)
         .where(
           sql`LOWER(${visitors.fullName}) = LOWER(${row.fullName}) AND DATE(${visitors.signedInAt}) = ${dateStr}::date`
         );
       if (existing) {
-        skipped++;
+        // If the existing record is missing usCitizen and the incoming row has it, backfill
+        if (!existing.usCitizen && row.usCitizen) {
+          await db
+            .update(visitors)
+            .set({ usCitizen: row.usCitizen })
+            .where(eq(visitors.id, existing.id));
+          backfilled++;
+        } else {
+          skipped++;
+        }
       } else {
         await db.insert(visitors).values(row);
         inserted++;
       }
     }
-    return { inserted, skipped };
+    return { inserted, skipped, backfilled };
+  }
+
+  async countVisitorsMissingUsCitizen(): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(visitors)
+      .where(sql`${visitors.source} = 'envoy' AND (${visitors.usCitizen} IS NULL OR ${visitors.usCitizen} = '')`);
+    return Number(row?.count ?? 0);
   }
 
 }

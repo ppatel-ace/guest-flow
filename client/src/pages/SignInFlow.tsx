@@ -51,6 +51,7 @@ import {
   GitMerge,
   BookUser,
   ArrowUpDown,
+  AlertTriangle,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1052,6 +1053,11 @@ function VisitorLogTab() {
     queryKey: ["/api/visitors"],
   });
 
+  const { data: missingUsCitizenData } = useQuery<{ count: number }>({
+    queryKey: ["/api/visitors/missing-us-citizen-count"],
+  });
+  const missingUsCitizenCount = missingUsCitizenData?.count ?? 0;
+
   const profileQueryKey = selected
     ? selected.email
       ? `/api/visitors/profile?email=${encodeURIComponent(selected.email)}`
@@ -1184,6 +1190,7 @@ function VisitorLogTab() {
       const result = await res.json();
       toast({ title: "Import complete", description: result.message });
       queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors/missing-us-citizen-count"] });
       setImportOpen(false);
       resetImport();
     } catch (err: any) {
@@ -1240,6 +1247,30 @@ function VisitorLogTab() {
           Import Envoy CSV
         </Button>
       </div>
+
+      {missingUsCitizenCount > 0 && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 px-4 py-3" data-testid="banner-missing-us-citizen">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              {missingUsCitizenCount} Envoy record{missingUsCitizenCount !== 1 ? "s are" : " is"} missing the "US Citizen or Resident" answer
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              Re-import the original Envoy CSV to backfill these answers. Existing records will be updated automatically — no duplicates will be created.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/50"
+            onClick={() => { resetImport(); setImportOpen(true); }}
+            data-testid="button-backfill-us-citizen"
+          >
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Re-import CSV
+          </Button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Loading visitors…</div>
