@@ -1151,6 +1151,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Merge two visitor contacts (protected)
+  app.post("/api/visitors/merge", requireAuth, async (req, res) => {
+    try {
+      const { primaryKey, secondaryKey } = req.body;
+      if (!primaryKey || !secondaryKey) {
+        return res.status(400).json({ error: "primaryKey and secondaryKey are required" });
+      }
+      if (primaryKey === secondaryKey) {
+        return res.status(400).json({ error: "Cannot merge a contact with itself" });
+      }
+      const result = await storage.mergeVisitorContacts(primaryKey, secondaryKey);
+      res.json(result);
+    } catch (error) {
+      console.error("[visitors/merge]", error);
+      res.status(500).json({ error: "Failed to merge contacts" });
+    }
+  });
+
   // Custom domain root redirect: registration.aceelectronics.com → /guest-check-in
   app.get("/", (req, res, next) => {
     const host = req.hostname || "";

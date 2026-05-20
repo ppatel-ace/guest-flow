@@ -217,6 +217,7 @@ export interface IStorage {
   }>;
   getVisitorNotes(lookupKey: string): Promise<VisitorNote | undefined>;
   upsertVisitorNotes(lookupKey: string, notes: string): Promise<VisitorNote>;
+  mergeVisitorContacts(primaryKey: string, secondaryKey: string): Promise<{ merged: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -903,6 +904,45 @@ export class DatabaseStorage implements IStorage {
       .values({ lookupKey, notes, updatedAt: new Date() })
       .returning();
     return inserted;
+  }
+
+  async mergeVisitorContacts(primaryKey: string, secondaryKey: string): Promise<{ merged: number }> {
+    // Find primary's most recent visitor row to get the canonical identity
+    const primaryRows = primaryKey.includes('@')
+      ? await db.select().from(visitors).where(sql`LOWER(${visitors.email}) = ${primaryKey}`).orderBy(desc(visitors.signedInAt))
+      : await db.select().from(visitors).where(sql`LOWER(${visitors.fullName}) = ${primaryKey}`).orderBy(desc(visitors.signedInAt));
+
+    if (primaryRows.length === 0) throw new Error('Primary contact not found');
+    const primaryRep = primaryRows[0];
+
+    // Update all secondary visitor rows to use the primary's identity
+    let updatedRows: { id: string }[] = [];
+    if (secondaryKey.includes('@')) {
+      updatedRows = await db.update(visitors)
+        .set({ fullName: primaryRep.fullName, email: primaryRep.email, company: primaryRep.company })
+        .where(sql`LOWER(${visitors.email}) = ${secondaryKey}`)
+        .returning({ id: visitors.id });
+    } else {
+      updatedRows = await db.update(visitors)
+        .set({ fullName: primaryRep.fullName, email: primaryRep.email, company: primaryRep.company })
+        .where(sql`LOWER(${visitors.fullName}) = ${secondaryKey}`)
+        .returning({ id: visitors.id });
+    }
+
+    // Merge internal notes: append secondary's notes onto primary's, then clear secondary
+    const [primaryNotes, secondaryNotes] = await Promise.all([
+      this.getVisitorNotes(primaryKey),
+      this.getVisitorNotes(secondaryKey),
+    ]);
+    if (secondaryNotes && secondaryNotes.notes.trim()) {
+      const combined = primaryNotes?.notes.trim()
+        ? `${primaryNotes.notes}\n\n---\n\n${secondaryNotes.notes}`
+        : secondaryNotes.notes;
+      await this.upsertVisitorNotes(primaryKey, combined);
+      await this.upsertVisitorNotes(secondaryKey, '');
+    }
+
+    return { merged: updatedRows.length };
   }
 
   async bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number }> {

@@ -47,6 +47,8 @@ import {
   History,
   StickyNote,
   ListFilter,
+  GitMerge,
+  BookUser,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1616,6 +1618,406 @@ function VisitorLogTab() {
   );
 }
 
+// ─── Contacts Tab ─────────────────────────────────────────────────────────────
+
+function ContactsTab() {
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergePickedPrimary, setMergePickedPrimary] = useState<string | null>(null);
+  const [profileSelected, setProfileSelected] = useState<Visitor | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
+
+  const { data: allVisitors = [], isLoading } = useQuery<Visitor[]>({
+    queryKey: ["/api/visitors"],
+  });
+
+  const profileQueryKey = profileSelected
+    ? profileSelected.email
+      ? `/api/visitors/profile?email=${encodeURIComponent(profileSelected.email)}`
+      : `/api/visitors/profile?name=${encodeURIComponent(profileSelected.fullName)}`
+    : null;
+
+  const { data: profile, isLoading: profileLoading } = useQuery<VisitorProfileResult>({
+    queryKey: [profileQueryKey],
+    enabled: profileQueryKey !== null,
+  });
+
+  const notesLookupKey = profileSelected ? visitorLookupKey(profileSelected) : null;
+
+  const { data: notesData, isLoading: notesLoading } = useQuery<{ lookupKey: string; notes: string }>({
+    queryKey: ["/api/visitors/notes", notesLookupKey],
+    enabled: notesLookupKey !== null,
+  });
+
+  const saveNotesMutation = useMutation({
+    mutationFn: ({ key, notes }: { key: string; notes: string }) =>
+      apiRequest("PUT", "/api/visitors/notes", { key, notes }),
+    onSuccess: () => {
+      toast({ title: "Notes saved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors/notes", notesLookupKey] });
+    },
+    onError: () => toast({ title: "Failed to save notes", variant: "destructive" }),
+  });
+
+  useEffect(() => {
+    setNotesDraft(notesData?.notes ?? "");
+  }, [notesData, profileSelected]);
+
+  const groupedVisitors = useMemo<GroupedVisitor[]>(() => {
+    const map = new Map<string, GroupedVisitor>();
+    for (const v of allVisitors) {
+      const key = visitorLookupKey(v);
+      const vDate = new Date(v.signedInAt);
+      if (map.has(key)) {
+        const g = map.get(key)!;
+        g.totalVisits++;
+        if (vDate < g.firstVisited) g.firstVisited = vDate;
+        if (vDate > g.lastVisited) { g.lastVisited = vDate; g.representative = v; }
+      } else {
+        map.set(key, {
+          lookupKey: key, fullName: v.fullName, email: v.email, company: v.company,
+          photoData: v.photoData, totalVisits: 1, firstVisited: vDate, lastVisited: vDate, representative: v,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.lastVisited.getTime() - a.lastVisited.getTime());
+  }, [allVisitors]);
+
+  const filteredGrouped = groupedVisitors.filter(g => {
+    const q = search.toLowerCase();
+    return g.fullName.toLowerCase().includes(q) || g.email?.toLowerCase().includes(q) || g.company?.toLowerCase().includes(q) || false;
+  });
+
+  const checkedContacts = groupedVisitors.filter(g => checkedKeys.has(g.lookupKey));
+
+  const toggleCheck = (key: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCheckedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) { next.delete(key); } else if (next.size < 2) { next.add(key); }
+      return next;
+    });
+  };
+
+  const mergeMutation = useMutation({
+    mutationFn: ({ primaryKey, secondaryKey }: { primaryKey: string; secondaryKey: string }) =>
+      apiRequest("POST", "/api/visitors/merge", { primaryKey, secondaryKey }),
+    onSuccess: () => {
+      toast({ title: "Contacts merged successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors/notes"] });
+      setCheckedKeys(new Set());
+      setMergeDialogOpen(false);
+      setMergePickedPrimary(null);
+    },
+    onError: () => toast({ title: "Merge failed", description: "Could not merge contacts.", variant: "destructive" }),
+  });
+
+  const handleConfirmMerge = () => {
+    if (!mergePickedPrimary || checkedContacts.length !== 2) return;
+    const secondary = checkedContacts.find(c => c.lookupKey !== mergePickedPrimary);
+    if (!secondary) return;
+    mergeMutation.mutate({ primaryKey: mergePickedPrimary, secondaryKey: secondary.lookupKey });
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="Search by name, email, or company…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            data-testid="input-contacts-search"
+          />
+        </div>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {isLoading ? "Loading…" : `${filteredGrouped.length} contact${filteredGrouped.length !== 1 ? "s" : ""}`}
+        </span>
+        {checkedKeys.size === 2 && (
+          <Button
+            size="sm"
+            onClick={() => { setMergePickedPrimary(checkedContacts[0]?.lookupKey ?? null); setMergeDialogOpen(true); }}
+            data-testid="button-merge-contacts"
+          >
+            <GitMerge className="h-3.5 w-3.5 mr-1.5" />
+            Merge contacts
+          </Button>
+        )}
+        {checkedKeys.size === 1 && (
+          <span className="text-xs text-muted-foreground">Select 1 more to merge</span>
+        )}
+        {checkedKeys.size > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setCheckedKeys(new Set())} data-testid="button-clear-selection">
+            <X className="h-3.5 w-3.5 mr-1" />
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Contact list */}
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground py-8 text-center">Loading contacts…</div>
+      ) : filteredGrouped.length === 0 ? (
+        <div className="py-12 text-center border border-dashed rounded-md space-y-2">
+          <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
+          <p className="text-sm text-muted-foreground">
+            {search ? "No contacts match your search." : "No contacts yet."}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-md border overflow-hidden">
+          <div className="hidden lg:grid grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+            <span />
+            <span />
+            <span>Name / Email</span>
+            <span>Company</span>
+            <span>Visits</span>
+            <span>First visited</span>
+            <span>Last visited</span>
+          </div>
+          <div className="divide-y">
+            {filteredGrouped.map(g => (
+              <div
+                key={g.lookupKey}
+                className={`w-full px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2.5rem_2rem_1fr_1fr_72px_88px_88px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer ${checkedKeys.has(g.lookupKey) ? "bg-primary/5 hover:bg-primary/10" : ""}`}
+                onClick={() => setProfileSelected(g.representative)}
+                data-testid={`row-contact-${g.lookupKey}`}
+              >
+                <div className="flex items-center justify-center shrink-0" onClick={e => toggleCheck(g.lookupKey, e)}>
+                  <input
+                    type="checkbox"
+                    readOnly
+                    checked={checkedKeys.has(g.lookupKey)}
+                    disabled={checkedKeys.size >= 2 && !checkedKeys.has(g.lookupKey)}
+                    className="h-4 w-4 accent-primary cursor-pointer"
+                    data-testid={`checkbox-contact-${g.lookupKey}`}
+                  />
+                </div>
+                <Avatar className="h-8 w-8 shrink-0">
+                  {g.photoData ? (
+                    <img src={g.photoData} alt={g.fullName} className="h-full w-full rounded-full object-cover" />
+                  ) : (
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                      {getInitials(g.fullName).toUpperCase()}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="flex-1 lg:flex-none min-w-0">
+                  <div className="text-sm font-medium truncate">{g.fullName}</div>
+                  <div className="text-xs text-muted-foreground truncate">{g.email || "—"}</div>
+                </div>
+                <div className="hidden lg:block text-sm text-muted-foreground truncate">{g.company || "—"}</div>
+                <div className="hidden lg:flex items-center gap-1 text-xs font-semibold">
+                  <History className="h-3.5 w-3.5 text-muted-foreground" />
+                  {g.totalVisits}
+                </div>
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
+                  {g.firstVisited.toLocaleDateString()}
+                </div>
+                <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
+                  {g.lastVisited.toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Visitor profile sheet */}
+      <Sheet open={profileSelected !== null} onOpenChange={open => !open && setProfileSelected(null)}>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+          {profileSelected && (
+            <>
+              <SheetHeader className="pb-4">
+                <SheetTitle>Visitor Profile</SheetTitle>
+              </SheetHeader>
+              <div className="flex items-center gap-4 pb-5 border-b">
+                {profileSelected.photoData ? (
+                  <img src={profileSelected.photoData} alt="Visitor photo" className="h-16 w-16 rounded-full object-cover border shrink-0" />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border">
+                    <span className="text-xl font-semibold text-primary">{getInitials(profileSelected.fullName).toUpperCase()}</span>
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-lg font-semibold">{profileSelected.fullName}</div>
+                  {profileSelected.email && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                      <span className="text-muted-foreground/60">✉</span>
+                      <span className="truncate">{profileSelected.email}</span>
+                    </div>
+                  )}
+                  {profileSelected.company && <div className="text-sm text-muted-foreground mt-0.5">{profileSelected.company}</div>}
+                </div>
+              </div>
+              {profileLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4">
+                  {[0,1,2,3].map(i => <div key={i} className="rounded-lg border bg-muted/30 p-3 animate-pulse h-16" />)}
+                </div>
+              ) : profile && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4">
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1"><History className="h-3.5 w-3.5" />Total visits</div>
+                    <div className="text-2xl font-bold">{profile.stats.totalVisits}</div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1"><Calendar className="h-3.5 w-3.5" />First visited</div>
+                    <div className="text-sm font-semibold">{profile.stats.firstVisited ? new Date(profile.stats.firstVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1"><Calendar className="h-3.5 w-3.5" />Last visited</div>
+                    <div className="text-sm font-semibold">{profile.stats.lastVisited ? new Date(profile.stats.lastVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mb-1"><Clock className="h-3.5 w-3.5" />Avg duration</div>
+                    <div className="text-sm font-semibold">
+                      {profile.stats.avgDurationMinutes != null
+                        ? (() => { const h = Math.floor(profile.stats.avgDurationMinutes / 60); const m = profile.stats.avgDurationMinutes % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; })()
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Previous visits</h3>
+                {profileLoading ? (
+                  <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-12 rounded-md bg-muted/30 animate-pulse" />)}</div>
+                ) : !profile || profile.visits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No visits found.</p>
+                ) : (
+                  <div className="rounded-md border overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[700px]">
+                        <div className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                          <span>Date</span><span>Signed In</span><span>Signed Out</span><span>Purpose</span><span>ACE POC</span><span>Status</span><span>Duration</span><span>Source</span>
+                        </div>
+                        <div className="divide-y max-h-96 overflow-y-auto">
+                          {profile.visits.map(v => (
+                            <div key={v.id} className="grid grid-cols-[110px_80px_80px_90px_90px_80px_70px_65px] gap-x-2 px-3 py-2.5 items-center text-xs" data-testid={`contact-visit-${v.id}`}>
+                              <div className="font-medium text-foreground whitespace-nowrap">{new Date(v.signedInAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                              <div className="text-muted-foreground whitespace-nowrap">{new Date(v.signedInAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</div>
+                              <div className="text-muted-foreground whitespace-nowrap">{v.signedOutAt ? new Date(v.signedOutAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"}</div>
+                              <div className="truncate text-muted-foreground">{v.purpose || "—"}</div>
+                              <div className="truncate text-muted-foreground">{v.acePoc || "—"}</div>
+                              <div>{v.signedOutAt
+                                ? <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed out</Badge>
+                                : <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-[10px] px-1.5 py-0 whitespace-nowrap">Signed in</Badge>
+                              }</div>
+                              <div className="text-muted-foreground whitespace-nowrap">{formatDuration(v.signedInAt, v.signedOutAt)}</div>
+                              <div>{sourceBadge(v.source)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {profileSelected.notes && (
+                  <div className="pt-2 space-y-1">
+                    <div className="text-sm font-medium text-muted-foreground">Notes (this visit)</div>
+                    <p className="text-sm">{profileSelected.notes}</p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2 pt-4 border-t mt-4">
+                <div className="flex items-center gap-2">
+                  <StickyNote className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">Internal notes</span>
+                  <span className="text-xs text-muted-foreground ml-auto">Only visible to your team</span>
+                </div>
+                {notesLoading ? (
+                  <div className="h-20 rounded-md bg-muted/30 animate-pulse" />
+                ) : (
+                  <Textarea
+                    placeholder="Add notes for your team about this visitor…"
+                    value={notesDraft}
+                    onChange={e => setNotesDraft(e.target.value)}
+                    className="resize-none text-sm"
+                    rows={3}
+                    data-testid="textarea-contacts-visitor-notes"
+                  />
+                )}
+                <Button
+                  size="sm"
+                  disabled={saveNotesMutation.isPending || notesLoading}
+                  onClick={() => { if (notesLookupKey) saveNotesMutation.mutate({ key: notesLookupKey, notes: notesDraft }); }}
+                  data-testid="button-save-contacts-visitor-notes"
+                >
+                  {saveNotesMutation.isPending ? "Saving…" : "Save notes"}
+                </Button>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Merge dialog */}
+      <Dialog open={mergeDialogOpen} onOpenChange={open => { setMergeDialogOpen(open); if (!open) setMergePickedPrimary(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Merge contacts</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <p className="text-sm text-muted-foreground">
+              Choose which contact to keep. All visits from the other contact will be moved here, then it will be removed.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              {checkedContacts.map(c => (
+                <button
+                  key={c.lookupKey}
+                  type="button"
+                  className={`rounded-lg border-2 p-4 text-left transition-colors ${mergePickedPrimary === c.lookupKey ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"}`}
+                  onClick={() => setMergePickedPrimary(c.lookupKey)}
+                  data-testid={`button-pick-primary-${c.lookupKey}`}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      {c.photoData ? (
+                        <img src={c.photoData} alt={c.fullName} className="h-full w-full rounded-full object-cover" />
+                      ) : (
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary">{getInitials(c.fullName).toUpperCase()}</AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{c.fullName}</div>
+                      <div className="text-xs text-muted-foreground truncate">{c.email || "—"}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    {c.company && <div className="truncate">{c.company}</div>}
+                    <div>{c.totalVisits} visit{c.totalVisits !== 1 ? "s" : ""}</div>
+                  </div>
+                  {mergePickedPrimary === c.lookupKey && (
+                    <Badge className="mt-2 text-xs">Keep this one</Badge>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMergeDialogOpen(false)} disabled={mergeMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmMerge}
+              disabled={!mergePickedPrimary || mergeMutation.isPending}
+              data-testid="button-confirm-merge"
+            >
+              {mergeMutation.isPending ? "Merging…" : "Merge contacts"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ─── Export Data Tab ───────────────────────────────────────────────────────────
 
 function ExportDataTab() {
@@ -1743,6 +2145,10 @@ export default function SignInFlow() {
             <UserCheck className="h-4 w-4 mr-1.5" />
             Visitor Log
           </TabsTrigger>
+          <TabsTrigger value="contacts" data-testid="tab-contacts">
+            <BookUser className="h-4 w-4 mr-1.5" />
+            Contacts
+          </TabsTrigger>
           <TabsTrigger value="export-data" data-testid="tab-export-data">
             <Download className="h-4 w-4 mr-1.5" />
             Export Data
@@ -1817,6 +2223,18 @@ export default function SignInFlow() {
             </CardHeader>
             <CardContent>
               <VisitorLogTab />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="contacts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contacts</CardTitle>
+              <CardDescription>One record per unique visitor. Select two to merge duplicate profiles.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ContactsTab />
             </CardContent>
           </Card>
         </TabsContent>
