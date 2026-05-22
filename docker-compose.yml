@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  guestflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: guestflow-app
+    restart: unless-stopped
+    ports:
+      - "6055:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - FINGERPRINT_HMAC_SECRET=${FINGERPRINT_HMAC_SECRET}
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY}
+      - VITE_TURNSTILE_SITE_KEY=${VITE_TURNSTILE_SITE_KEY}
+    networks:
+      - guestflow-net
+
+networks:
+  guestflow-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.30.0/24
