@@ -20,13 +20,19 @@ const databaseUrl = process.env.DATABASE_URL ?? localUrl!;
 const hostname = new URL(databaseUrl).hostname;
 const isNeon = hostname.endsWith("neon.tech");
 
+// In Replit the serverless WebSocket driver is needed (port 6543/WSS).
+// Outside Replit (e.g. Docker on Portainer) use the standard postgres driver
+// so the connection goes over plain TCP on port 5432, which is typically open.
+const isReplit = !!process.env.REPL_ID;
+
 function createDb() {
-  if (isNeon) {
+  if (isNeon && isReplit) {
     neonConfig.webSocketConstructor = ws;
     const pool = new Pool({ connectionString: databaseUrl });
     return { db: neonDrizzle({ client: pool, schema }), pool };
   }
-  // Local or standard Postgres — disable SSL for local hosts, require for remote
+  // Standard postgres driver: works for local DBs, non-Replit Neon, and any
+  // other PostgreSQL-compatible host.
   const isLocal = hostname === "localhost" || hostname === "helium" || hostname === "127.0.0.1";
   const sslOption = isLocal ? false : ("require" as const);
   const client = postgres(databaseUrl, { ssl: sslOption, prepare: false });
