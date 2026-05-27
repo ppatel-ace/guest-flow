@@ -3,6 +3,7 @@ import { drizzle as neonDrizzle } from 'drizzle-orm/neon-serverless';
 import postgres from 'postgres';
 import { drizzle as pgDrizzle } from 'drizzle-orm/postgres-js';
 import ws from "ws";
+import net from "net";
 import * as schema from "@shared/schema";
 
 if (!process.env.DATABASE_URL && !process.env.PGHOST) {
@@ -35,7 +36,20 @@ function createDb() {
   // other PostgreSQL-compatible host.
   const isLocal = hostname === "localhost" || hostname === "helium" || hostname === "127.0.0.1";
   const sslOption = isLocal ? false : ("require" as const);
-  const client = postgres(databaseUrl, { ssl: sslOption, prepare: false });
+  // Force IPv4 for remote hosts so Docker/Portainer environments without IPv6
+  // don't get ENETUNREACH when the DNS resolves to an IPv6 address.
+  const socketOption = isLocal
+    ? undefined
+    : (opts: { host: string | string[]; port: number | number[] }) => {
+        const host = Array.isArray(opts.host) ? opts.host[0] : opts.host;
+        const port = Array.isArray(opts.port) ? opts.port[0] : opts.port;
+        return net.createConnection({ host, port, family: 4 });
+      };
+  const client = postgres(databaseUrl, {
+    ssl: sslOption,
+    prepare: false,
+    ...(socketOption ? { socket: socketOption } : {}),
+  });
   return { db: pgDrizzle(client, { schema }), pool: undefined };
 }
 

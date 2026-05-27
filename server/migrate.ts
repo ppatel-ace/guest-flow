@@ -6,6 +6,7 @@ import postgres from "postgres";
 import { drizzle as pgDrizzle } from "drizzle-orm/postgres-js";
 import { migrate as pgMigrate } from "drizzle-orm/postgres-js/migrator";
 import ws from "ws";
+import net from "net";
 
 const migrationsFolder = path.join(process.cwd(), "migrations");
 
@@ -54,10 +55,20 @@ export async function runMigrations(): Promise<void> {
       await pool.end();
     } else {
       const sslOption = isLocal ? false : ("require" as const);
+      // Force IPv4 for remote hosts so Docker/Portainer environments without
+      // IPv6 don't get ENETUNREACH when DNS resolves to an IPv6 address.
+      const socketOption = isLocal
+        ? undefined
+        : (opts: { host: string | string[]; port: number | number[] }) => {
+            const host = Array.isArray(opts.host) ? opts.host[0] : opts.host;
+            const port = Array.isArray(opts.port) ? opts.port[0] : opts.port;
+            return net.createConnection({ host, port, family: 4 });
+          };
       const client = postgres(databaseUrl, {
         ssl: sslOption,
         prepare: false,
         max: 1,
+        ...(socketOption ? { socket: socketOption } : {}),
       });
       const migDb = pgDrizzle(client);
       await pgMigrate(migDb, { migrationsFolder });
