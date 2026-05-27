@@ -1,4 +1,4 @@
-CREATE TABLE "visitor_merge_events" (
+CREATE TABLE IF NOT EXISTS "visitor_merge_events" (
         "id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
         "primary_key" text NOT NULL,
         "secondary_name" text NOT NULL,
