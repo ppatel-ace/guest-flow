@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -24,12 +23,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { CheckCircle, ChevronsUpDown, Check } from "lucide-react";
+import { CheckCircle2, ChevronsUpDown, Check, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { Turnstile } from "@marsidev/react-turnstile";
-import type { PageSettings, FormField } from "@shared/schema";
+import type { PageSettings } from "@shared/schema";
 
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
@@ -45,6 +44,9 @@ const ACE_POC_OPTIONS = [
 const EMAIL_DOMAINS = ["@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com", "@icloud.com"];
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
+
+const LABEL_CLASS = "text-slate-600 text-xs font-semibold uppercase tracking-wider";
+const INPUT_CLASS = "bg-slate-50 border-slate-200 focus:border-blue-500 focus:ring-blue-500 transition-colors h-10";
 
 function EmailInput({
   value,
@@ -121,14 +123,15 @@ function EmailInput({
         placeholder="john@example.com"
         required
         autoComplete="off"
+        className={INPUT_CLASS}
         data-testid="input-guest-email"
       />
       {showSuggestions && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-md overflow-hidden">
+        <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-md overflow-hidden">
           {suggestions.map((s) => (
             <li
               key={s}
-              className="px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors"
+              className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 transition-colors text-slate-700"
               onMouseDown={(e) => {
                 e.preventDefault();
                 pickSuggestion(s);
@@ -159,7 +162,7 @@ function PocCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className="w-full justify-between font-normal h-10 bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
           data-testid="combobox-ace-poc"
         >
           {value || "Search by name..."}
@@ -211,8 +214,7 @@ export default function GuestCheckIn() {
   const [company, setCompany] = useState("");
   const [acePoc, setAcePoc] = useState("");
 
-  // Bot protection state
-  const [honeypot, setHoneypot] = useState<string>(""); // must stay "" for real users; bots auto-fill it
+  const [honeypot, setHoneypot] = useState<string>("");
   const [timingToken, setTimingToken] = useState<string>("");
   const [captchaMode, setCaptchaMode] = useState<"invisible" | "visible" | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string>("");
@@ -222,7 +224,6 @@ export default function GuestCheckIn() {
     queryKey: ["/api/page-settings/guest_checkin_page"],
   });
 
-  // Fetch CAPTCHA mode and timing token on mount
   useEffect(() => {
     fetch("/api/captcha-mode")
       .then((r) => r.json())
@@ -235,13 +236,11 @@ export default function GuestCheckIn() {
       });
   }, []);
 
-  const pageTitle = settings?.title ?? "Check-In";
-  const description = settings?.description ?? "Please fill in your details below";
-  const successTitle = settings?.successTitle ?? "Welcome!";
-  const successMessage = settings?.successMessage ?? "You have been successfully checked in";
+  const pageTitle = settings?.title ?? "Guest Check-In";
+  const successTitle = settings?.successTitle ?? "You're checked in.";
+  const successMessage = settings?.successMessage ?? "Your host has been notified of your arrival.";
   const eventName = settings?.eventName;
 
-  // Whether Turnstile has produced a token yet (only matters when site key is configured)
   const turnstileReady = !TURNSTILE_SITE_KEY || !!turnstileToken;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -258,8 +257,6 @@ export default function GuestCheckIn() {
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
     try {
-      // Single atomic endpoint: bot checks + lead write + customer check-in in one request.
-      // This ensures Turnstile is verified exactly once alongside the DB writes.
       const res = await fetch("/api/guest-checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -297,7 +294,6 @@ export default function GuestCheckIn() {
       }
 
       const data: { name?: string } = await res.json();
-      // Honeypot fake-success returns {"id":"ok"} with no name — fall back to entered name
       setCustomerName(data.name ?? fullName);
       setStep("success");
     } catch (error) {
@@ -308,50 +304,93 @@ export default function GuestCheckIn() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 flex items-start justify-center py-6 px-4">
-      <div className="w-full max-w-sm space-y-5">
-        <div className="flex flex-col items-center gap-2 pt-2">
-          <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-            <p className="text-lg font-bold tracking-tight" data-testid="text-brand">Ace Electronics Defense Systems</p>
-          </a>
-          {settingsLoading ? (
-            <Skeleton className="h-5 w-48" />
-          ) : eventName ? (
-            <p className="text-sm font-semibold text-center text-foreground" data-testid="text-event-name">{eventName}</p>
-          ) : null}
-        </div>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8"
+      style={{
+        background: "radial-gradient(circle at 50% 0%, #1E3A5F 0%, #0F172A 70%, #020617 100%)",
+        backgroundImage: `
+          radial-gradient(circle at 50% 0%, #1E3A5F 0%, #0F172A 70%, #020617 100%),
+          linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
+        `,
+        backgroundSize: "100% 100%, 60px 60px, 60px 60px",
+      }}
+    >
+      {/* Header */}
+      <div className="w-full max-w-xl flex flex-col items-center mb-8 text-center">
+        <a
+          href="https://www.aceelectronics.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="link-logo"
+          className="flex flex-col items-center gap-4 no-underline"
+        >
+          <div className="bg-slate-800/50 p-3 rounded-2xl backdrop-blur-sm border border-slate-700/50">
+            <Shield className="w-8 h-8 text-blue-400" />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight" data-testid="text-brand">
+            Ace Electronics Defense Systems
+          </h1>
+        </a>
+        {settingsLoading ? (
+          <Skeleton className="h-5 w-48 mt-2 bg-slate-700" />
+        ) : eventName ? (
+          <p className="text-slate-300 text-base font-semibold mt-2" data-testid="text-event-name">{eventName}</p>
+        ) : (
+          <p className="text-slate-400 text-lg mt-1">Secure Facility Check-In</p>
+        )}
+      </div>
+
+      {/* Card */}
+      <div className="w-full max-w-xl bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 20px 60px -15px rgba(0,0,0,0.5)" }}>
+
+        {step === "success" && (
+          <div className="p-12 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900" data-testid="text-welcome-name">
+              {successTitle}
+            </h2>
+            <p className="text-slate-500 text-lg max-w-sm">{successMessage}</p>
+            {customerName && (
+              <p className="text-xl font-semibold text-slate-800">{customerName}</p>
+            )}
+            <p className="text-sm text-slate-400 mt-4">Please wait in the reception area.</p>
+          </div>
+        )}
 
         {step === "form" && (
-          <Card className="shadow-sm">
-            <CardHeader className="pb-4">
-              {settingsLoading ? (
-                <>
-                  <Skeleton className="h-6 w-28 mb-1" />
-                  <Skeleton className="h-4 w-56" />
-                </>
-              ) : (
-                <>
-                  <CardTitle className="text-xl">{pageTitle}</CardTitle>
-                  <CardDescription className="text-sm">{description}</CardDescription>
-                </>
-              )}
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="p-6 md:p-10 space-y-6">
 
-                {/* Honeypot field — invisible to real users, bots fill it automatically */}
-                <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden", opacity: 0 }}>
-                  <label htmlFor="_hp">Leave this blank</label>
-                  <input id="_hp" name="_hp" type="text" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
-                </div>
+            {/* Page title from settings */}
+            {settingsLoading ? (
+              <div className="space-y-1">
+                <Skeleton className="h-6 w-36" />
+                <Skeleton className="h-4 w-56" />
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">{pageTitle}</h2>
+              </div>
+            )}
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="title-select" className="text-sm font-medium">
-                    Title <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
+            {/* Honeypot — invisible to real users */}
+            <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden", opacity: 0 }}>
+              <label htmlFor="_hp">Leave this blank</label>
+              <input id="_hp" name="_hp" type="text" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+            </div>
+
+            <div className="space-y-5">
+              {/* Title + First + Last */}
+              <div className="grid grid-cols-1 md:grid-cols-[110px_1fr_1fr] gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title-select" className={LABEL_CLASS}>
+                    Title
                   </Label>
                   <Select value={title} onValueChange={setTitle}>
-                    <SelectTrigger id="title-select" className="h-10" data-testid="select-title">
-                      <SelectValue placeholder="Select title" />
+                    <SelectTrigger id="title-select" className={INPUT_CLASS} data-testid="select-title">
+                      <SelectValue placeholder="-" />
                     </SelectTrigger>
                     <SelectContent>
                       {TITLE_OPTIONS.map((t) => (
@@ -361,47 +400,49 @@ export default function GuestCheckIn() {
                   </Select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="first-name" className="text-sm font-medium">
-                      First Name <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="first-name"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="John"
-                      required
-                      className="h-10"
-                      data-testid="input-first-name"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="last-name" className="text-sm font-medium">
-                      Last Name <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="last-name"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Doe"
-                      required
-                      className="h-10"
-                      data-testid="input-last-name"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="first-name" className={LABEL_CLASS}>
+                    First Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="first-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="John"
+                    required
+                    className={INPUT_CLASS}
+                    data-testid="input-first-name"
+                  />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="guest-email" className="text-sm font-medium">
-                    Email <span className="text-destructive">*</span>
+                <div className="space-y-2">
+                  <Label htmlFor="last-name" className={LABEL_CLASS}>
+                    Last Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="last-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Doe"
+                    required
+                    className={INPUT_CLASS}
+                    data-testid="input-last-name"
+                  />
+                </div>
+              </div>
+
+              {/* Email + Phone */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="guest-email" className={LABEL_CLASS}>
+                    Email <span className="text-red-500">*</span>
                   </Label>
                   <EmailInput value={email} onChange={setEmail} />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="phone-number" className="text-sm font-medium">
-                    Phone Number <span className="text-destructive">*</span>
+                <div className="space-y-2">
+                  <Label htmlFor="phone-number" className={LABEL_CLASS}>
+                    Phone Number <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     id="phone-number"
@@ -410,86 +451,79 @@ export default function GuestCheckIn() {
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+1 (555) 000-0000"
                     required
-                    className="h-10"
+                    className={INPUT_CLASS}
                     data-testid="input-phone-number"
                   />
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="company" className="text-sm font-medium">
-                    Company <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
+              {/* Company + Ace POC */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="company" className={LABEL_CLASS}>
+                    Company <span className="text-slate-400 font-normal normal-case">(Optional)</span>
                   </Label>
                   <Input
                     id="company"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     placeholder="Acme Corp"
-                    className="h-10"
+                    className={INPUT_CLASS}
                     data-testid="input-company"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">
-                    Ace POC <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
+                <div className="space-y-2">
+                  <Label className={LABEL_CLASS}>
+                    Ace POC <span className="text-slate-400 font-normal normal-case">(Optional)</span>
                   </Label>
                   <PocCombobox value={acePoc} onChange={setAcePoc} />
                 </div>
-
-                {/* Cloudflare Turnstile — renders based on mode once site key is available */}
-                {TURNSTILE_SITE_KEY && captchaMode === "visible" && (
-                  <div className="flex justify-center" data-testid="turnstile-widget">
-                    <Turnstile
-                      siteKey={TURNSTILE_SITE_KEY}
-                      onSuccess={setTurnstileToken}
-                      onError={() => setTurnstileToken("")}
-                      onExpire={() => setTurnstileToken("")}
-                      options={{ appearance: "always", theme: "light" }}
-                    />
-                  </div>
-                )}
-
-                {/* Invisible Turnstile (event days) — no widget, runs silently */}
-                {TURNSTILE_SITE_KEY && captchaMode === "invisible" && (
-                  <Turnstile
-                    siteKey={TURNSTILE_SITE_KEY}
-                    onSuccess={setTurnstileToken}
-                    onError={() => setTurnstileToken("")}
-                    onExpire={() => setTurnstileToken("")}
-                    options={{ appearance: "execute" }}
-                  />
-                )}
-
-                <Button
-                  type="submit"
-                  className="w-full h-11 text-base font-semibold mt-2"
-                  disabled={submitting || !turnstileReady}
-                  data-testid="button-submit-lead"
-                >
-                  {submitting ? "Submitting..." : "Check In"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-
-        {step === "success" && (
-          <Card className="text-center shadow-sm">
-            <CardHeader className="pb-4">
-              <div className="mx-auto mb-3">
-                <CheckCircle className="h-14 w-14 text-green-500" />
               </div>
-              <CardTitle className="text-2xl">{successTitle}</CardTitle>
-              <CardDescription className="text-base">{successMessage}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold mb-2" data-testid="text-welcome-name">
-                {customerName}
-              </p>
-              <p className="text-sm text-muted-foreground">You're all set. Enjoy your visit!</p>
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* Turnstile — visible mode */}
+            {TURNSTILE_SITE_KEY && captchaMode === "visible" && (
+              <div className="flex justify-center" data-testid="turnstile-widget">
+                <Turnstile
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onSuccess={setTurnstileToken}
+                  onError={() => setTurnstileToken("")}
+                  onExpire={() => setTurnstileToken("")}
+                  options={{ appearance: "always", theme: "light" }}
+                />
+              </div>
+            )}
+
+            {/* Turnstile — invisible mode */}
+            {TURNSTILE_SITE_KEY && captchaMode === "invisible" && (
+              <Turnstile
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={setTurnstileToken}
+                onError={() => setTurnstileToken("")}
+                onExpire={() => setTurnstileToken("")}
+                options={{ appearance: "execute" }}
+              />
+            )}
+
+            <div className="pt-2 border-t border-slate-100">
+              <Button
+                type="submit"
+                disabled={submitting || !turnstileReady}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-14 text-lg font-medium shadow-lg transition-all"
+                data-testid="button-submit-lead"
+              >
+                {submitting ? "Verifying..." : "Complete Check-In"}
+              </Button>
+            </div>
+          </form>
         )}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-8 text-slate-500 text-sm flex items-center gap-2">
+        <Shield className="w-4 h-4" />
+        <span>Confidential &amp; Secured Facility</span>
       </div>
     </div>
   );
