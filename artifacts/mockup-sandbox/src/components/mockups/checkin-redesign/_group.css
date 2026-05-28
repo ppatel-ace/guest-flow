@@ -1,0 +1,11 @@
+.hero-bg-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  background-position: center;
+}
+
+.hero-gradient {
+  background: radial-gradient(circle at 50% 0%, #1E3A5F 0%, #0F172A 70%, #020617 100%);
+}
