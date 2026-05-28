@@ -19,7 +19,8 @@ const localUrl = process.env.PGHOST
   : null;
 
 const databaseUrl = process.env.DATABASE_URL ?? localUrl!;
-const hostname = new URL(databaseUrl).hostname;
+const parsedUrl = new URL(databaseUrl);
+const hostname = parsedUrl.hostname;
 const isNeon = hostname.endsWith("neon.tech");
 
 // Supabase hosts can be:
@@ -29,7 +30,7 @@ const isNeon = hostname.endsWith("neon.tech");
 //
 // DATABASE_URL format: copy the connection string from the Supabase dashboard
 // (Project Settings → Database → Connection String). It already includes the
-// correct host and port. The code below enforces certificate verification
+// correct host and port. Supabase always gets full certificate verification
 // regardless of any sslmode query parameter in the URL.
 const isSupabase =
   hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.com");
@@ -39,6 +40,33 @@ const isSupabase =
 // so the connection goes over plain TCP on port 5432, which is typically open.
 const isReplit = !!process.env.REPL_ID;
 
+// ---------------------------------------------------------------------------
+// sslmode resolution
+//
+// Priority order:
+//   1. Supabase → always verify-full (cloud DB, security non-negotiable)
+//   2. sslmode query param in DATABASE_URL → honours the operator's explicit choice
+//      - "disable"                   → no SSL  (safe for Docker-internal networks)
+//      - "verify-full" / "verify-ca" → SSL + certificate verification
+//      - anything else               → SSL without CA pinning (require / prefer / allow)
+//   3. Hostname heuristics → localhost/helium/127.0.0.1 → no SSL; everything else → require
+//
+// Docker/Portainer tip: add ?sslmode=disable to DATABASE_URL when your Postgres
+// container is on the same Docker network and doesn't have SSL configured.
+// ---------------------------------------------------------------------------
+function resolveSslOption(
+  sslmodeParam: string | null,
+  isLocalHost: boolean
+): false | "require" | { rejectUnauthorized: boolean } {
+  if (isSupabase) return { rejectUnauthorized: true };
+  if (sslmodeParam === "disable") return false;
+  if (sslmodeParam === "verify-full" || sslmodeParam === "verify-ca") return { rejectUnauthorized: true };
+  if (sslmodeParam !== null) return "require";
+  // No explicit sslmode — fall back to hostname heuristics.
+  if (isLocalHost) return false;
+  return "require";
+}
+
 function createDb() {
   if (isNeon && isReplit) {
     neonConfig.webSocketConstructor = ws;
@@ -46,27 +74,22 @@ function createDb() {
     return { db: neonDrizzle({ client: pool, schema }), pool };
   }
   // Standard postgres driver: works for local DBs, non-Replit Neon, and any
-  // other PostgreSQL-compatible host.
+  // other PostgreSQL-compatible host (including Docker service names like "db").
   const isLocal = hostname === "localhost" || hostname === "helium" || hostname === "127.0.0.1";
-
-  // Supabase: full certificate verification to catch forged/MitM certificates.
-  // Other remote hosts: encrypted but without CA pinning (legacy behaviour).
-  // Local hosts: no SSL.
-  const sslOption = isLocal
-    ? false
-    : isSupabase
-      ? { rejectUnauthorized: true }
-      : ("require" as const);
+  const sslmodeParam = parsedUrl.searchParams.get("sslmode");
+  const sslOption = resolveSslOption(sslmodeParam, isLocal);
 
   // Force IPv4 for remote hosts so Docker/Portainer environments without IPv6
   // don't get ENETUNREACH when the DNS resolves to an IPv6 address.
-  const socketOption = isLocal
-    ? undefined
-    : (opts: { host: string | string[]; port: number | number[] }) => {
+  // Skip the override when SSL is disabled — it's unnecessary on local networks.
+  const needsSocket = sslOption !== false && !isLocal;
+  const socketOption = needsSocket
+    ? (opts: { host: string | string[]; port: number | number[] }) => {
         const host = Array.isArray(opts.host) ? opts.host[0] : opts.host;
         const port = Array.isArray(opts.port) ? opts.port[0] : opts.port;
         return net.createConnection({ host, port, family: 4 });
-      };
+      }
+    : undefined;
   const client = postgres(databaseUrl, {
     ssl: sslOption,
     prepare: false,
@@ -77,6 +100,7 @@ function createDb() {
 
 const { db, pool } = createDb();
 
+// ---------------------------------------------------------------------------
 // Startup connectivity check — call this once from the server's async startup
 // block so it runs before the server starts listening.  Keeping it out of
 // module-level top-level await preserves CJS build compatibility.
