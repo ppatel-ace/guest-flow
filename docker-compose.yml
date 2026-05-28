@@ -16,3 +16,14 @@ services:
       FINGERPRINT_HMAC_SECRET: ${FINGERPRINT_HMAC_SECRET:-change_this_to_a_long_random_secret}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+    networks:
+      guestflow_net:
+        ipv4_address: 10.20.11.2
+
+networks:
+  guestflow_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.11.0/24
+          gateway: 10.20.11.1
