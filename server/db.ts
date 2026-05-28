@@ -77,11 +77,11 @@ function createDb() {
 
 const { db, pool } = createDb();
 
-// Startup connectivity check: runs synchronously (top-level await) so the
-// module does not finish loading — and the server does not start listening —
-// until the SSL handshake is confirmed good. Any certificate error is caught
-// here and re-thrown with a descriptive message instead of surfacing later.
-if (isSupabase) {
+// Startup connectivity check — call this once from the server's async startup
+// block so it runs before the server starts listening.  Keeping it out of
+// module-level top-level await preserves CJS build compatibility.
+async function checkConnection(): Promise<void> {
+  if (!isSupabase) return;
   try {
     await db.execute(sql`SELECT 1`);
   } catch (err: unknown) {
@@ -93,4 +93,4 @@ if (isSupabase) {
   }
 }
 
-export { db, pool };
+export { db, pool, checkConnection };

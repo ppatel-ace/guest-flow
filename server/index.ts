@@ -3,6 +3,7 @@ import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
+import { checkConnection } from "./db";
 
 // Extend Express session
 declare module "express-session" {
@@ -127,6 +128,7 @@ app.use((req, res, next) => {
     }
   }
 
+  await checkConnection();
   await runMigrations();
 
   const server = await registerRoutes(app);
