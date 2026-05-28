@@ -68,6 +68,20 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Hostname normalisation: any *.aceelectronics.com host that isn't the canonical
+  // guestflow.aceelectronics.com gets a permanent 301 to the same path/query on
+  // guestflow.aceelectronics.com.  localhost and Replit dev domains are unaffected
+  // because they don't match the aceelectronics.com suffix check.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const host = req.hostname; // strips port, lower-cased by Express
+    const isAceHost = host === "aceelectronics.com" || host.endsWith(".aceelectronics.com");
+    const isCanonical = host === "guestflow.aceelectronics.com";
+    if (isAceHost && !isCanonical) {
+      return res.redirect(301, `https://guestflow.aceelectronics.com${req.originalUrl}`);
+    }
+    return next();
+  });
+
   // Unconditional guard: /login is permanently retired — redirect to guest check-in
   // in all environments so the URL is never exposed even in development.
   app.use((req: Request, res: Response, next: NextFunction) => {
