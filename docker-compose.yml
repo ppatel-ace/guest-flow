@@ -30,7 +30,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://guestflow:guestflow_pass@10.50.30.3:5432/guestflow
+      DATABASE_URL: postgresql://guestflow:guestflow_pass@10.50.30.3:5432/guestflow?sslmode=disable
       PGHOST: 10.50.30.3
       PGPORT: 5432
       PGUSER: guestflow
