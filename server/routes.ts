@@ -1,9 +1,138 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertFormFieldSchema } from "@shared/schema";
+import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
+import rateLimit from "express-rate-limit";
+import { createHmac } from "crypto";
+
+// ─── Bot-protection helpers ────────────────────────────────────────────────────
+
+const HMAC_SECRET = process.env.FINGERPRINT_HMAC_SECRET ?? "dev-fallback-change-in-prod";
+
+function makeTimingToken(): string {
+  const ts = Date.now();
+  const sig = createHmac("sha256", HMAC_SECRET).update(String(ts)).digest("hex");
+  return `${ts}.${sig}`;
+}
+
+function validateTimingToken(token: string): { ok: boolean; reason?: string } {
+  const parts = token?.split(".");
+  if (!parts || parts.length !== 2) return { ok: false, reason: "malformed" };
+  const [tsStr, sig] = parts;
+  const expected = createHmac("sha256", HMAC_SECRET).update(tsStr).digest("hex");
+  if (sig !== expected) return { ok: false, reason: "invalid signature" };
+  const age = Date.now() - Number(tsStr);
+  if (age < 2000) return { ok: false, reason: "too fast" };
+  if (age > 30 * 60 * 1000) return { ok: false, reason: "expired" };
+  return { ok: true };
+}
+
+const HEADLESS_UA_PATTERNS = [
+  "headlesschrome", "puppeteer", "playwright", "selenium", "phantomjs",
+  "python-requests", "python-urllib", "curl/", "wget/", "httpie",
+  "go-http-client", "java/", "apache-httpclient",
+];
+
+function isHeadlessUA(ua: string | undefined): boolean {
+  if (!ua) return true;
+  const lower = ua.toLowerCase();
+  return HEADLESS_UA_PATTERNS.some((p) => lower.includes(p));
+}
+
+async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // skip verification in dev when key not set
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret, response: token, remoteip: ip }),
+    });
+    const data = await res.json() as { success: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Bot-block in-memory counters (resets daily, no DB required) ──────────────
+
+type BlockReason = "honeypot" | "ua" | "timing" | "turnstile" | "rateLimit";
+
+interface BlockEvent {
+  timestamp: number;
+  reason: BlockReason;
+  maskedIp: string;
+}
+
+function maskIp(ip: string | undefined): string {
+  if (!ip) return "unknown";
+  const v4 = ip.split(".");
+  if (v4.length === 4) return `${v4[0]}.${v4[1]}.x.x`;
+  const colon = ip.indexOf(":");
+  return colon !== -1 ? ip.slice(0, colon) + ":xxxx:…" : ip.slice(0, 8) + "…";
+}
+
+let _blockDay = new Date().toISOString().slice(0, 10);
+// Uncapped per-reason totals — never lose a count due to log rotation
+let _blockCounts: Record<BlockReason, number> = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
+// Capped recent-event log for the dashboard table (last 100 entries)
+let _blockLog: BlockEvent[] = [];
+
+function recordBlock(reason: BlockReason, ip: string | undefined) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _blockDay) {
+    _blockLog = [];
+    _blockCounts = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
+    _blockDay = today;
+  }
+  _blockCounts[reason]++;
+  _blockLog.push({ timestamp: Date.now(), reason, maskedIp: maskIp(ip) });
+  if (_blockLog.length > 100) _blockLog = _blockLog.slice(-100);
+}
+
+function getBotStats() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _blockDay) {
+    _blockLog = [];
+    _blockCounts = { honeypot: 0, ua: 0, timing: 0, turnstile: 0, rateLimit: 0 };
+    _blockDay = today;
+  }
+  const total = Object.values(_blockCounts).reduce((s, n) => s + n, 0);
+  return {
+    date: today,
+    total,
+    counts: { ..._blockCounts },
+    recentLog: [..._blockLog].reverse().slice(0, 20),
+  };
+}
+
+// Rate limiters for the legacy guest-register endpoint and the atomic guest-checkin endpoint.
+
+const guestRegisterLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    recordBlock("rateLimit", req.ip);
+    res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+  },
+});
+
+// Single limiter for the atomic guest check-in endpoint
+const guestCheckinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    recordBlock("rateLimit", req.ip);
+    res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+  },
+});
 
 // Authentication middleware
 const requireAuth = (req: any, res: any, next: any) => {
@@ -233,32 +362,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Guest registration and check-in (public)
-  app.post("/api/guest-register", async (req, res) => {
-    try {
-      const { metadata, ...rest } = req.body;
-      const data = insertCustomerSchema.parse(rest);
-      
-      // Attach extra field data as JSON string
-      const customerData = {
-        ...data,
-        metadata: metadata && typeof metadata === 'object' ? JSON.stringify(metadata) : undefined,
-      };
-      
-      // Create the customer
-      const customer = await storage.createCustomer(customerData);
-      
-      // Automatically check them in
-      const checkedIn = await storage.checkInCustomer(customer.id);
-      
-      res.status(201).json(checkedIn);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid customer data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to register and check in" });
-    }
-  });
 
   // Get all form fields (public - needed by guest check-in form)
   app.get("/api/form-fields", async (req, res) => {
@@ -353,6 +456,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Visitor analytics (protected)
+  app.get("/api/analytics/visitors", requireAuth, async (req, res) => {
+    try {
+      const { start, end, bucket = "day" } = req.query as Record<string, string>;
+      if (!start || !end) return res.status(400).json({ error: "start and end are required" });
+      const validBuckets = ["day", "week", "month"];
+      if (!validBuckets.includes(bucket)) return res.status(400).json({ error: "Invalid bucket" });
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+      const result = await storage.getVisitorAnalytics(startDate, endDate, bucket as "day" | "week" | "month");
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   // Get monthly check-in statistics (public - allows viewing stats without login)
   app.get("/api/stats/monthly-checkins", async (req, res) => {
     try {
@@ -393,6 +516,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CAPTCHA mode endpoint (public, no-cache) — tells the frontend whether to show visible widget
+  app.get("/api/captcha-mode", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      let mode: "invisible" | "visible" = "visible";
+      try {
+        const settings = await storage.getPageSettings("guest_checkin_page");
+        const start = settings.captchaBypassStart;
+        const end = settings.captchaBypassEnd;
+        if (start && end) {
+          const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+          if (today >= start && today <= end) mode = "invisible";
+        }
+      } catch {
+        // if settings not found, default to visible
+      }
+      res.json({ mode, token: makeTimingToken() });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to determine CAPTCHA mode" });
+    }
+  });
+
+  // Security status (protected) — returns which bot-protection secrets are active, no values exposed
+  app.get("/api/admin/security-status", requireAuth, (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({
+      turnstile: !!process.env.TURNSTILE_SECRET_KEY && !!process.env.VITE_TURNSTILE_SITE_KEY,
+      hmacTiming: !!process.env.FINGERPRINT_HMAC_SECRET,
+      rateLimit: true, // always active, no key required
+    });
+  });
+
+  // Bot-protection stats (protected) — in-memory counters, reset daily
+  app.get("/api/admin/bot-stats", requireAuth, (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(getBotStats());
+  });
+
   // Get page settings (public)
   app.get("/api/page-settings/:key", async (req, res) => {
     try {
@@ -406,7 +567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update page settings (protected)
   app.put("/api/page-settings/:key", requireAuth, async (req, res) => {
     try {
-      const { title, description, successMessage, successTitle, eventName, eventDate, eventLocation } = req.body;
+      const { title, description, successMessage, successTitle, eventName, eventDate, eventLocation, captchaBypassStart, captchaBypassEnd } = req.body;
       if (!title || !description) {
         return res.status(400).json({ error: "title and description are required" });
       }
@@ -418,11 +579,731 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventName: eventName || null,
         eventDate: eventDate || null,
         eventLocation: eventLocation || null,
+        captchaBypassStart: captchaBypassStart || null,
+        captchaBypassEnd: captchaBypassEnd || null,
       });
       res.json(settings);
     } catch (error) {
       res.status(500).json({ error: "Failed to update page settings" });
     }
+  });
+
+  // Get all leads (protected)
+  app.get("/api/leads", requireAuth, async (req, res) => {
+    try {
+      const allLeads = await storage.getAllLeads();
+      res.json(allLeads);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch leads" });
+    }
+  });
+
+  // Update a lead (protected)
+  app.patch("/api/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateSchema = insertLeadSchema.partial();
+      const data = updateSchema.parse(req.body);
+      const updated = await storage.updateLead(id, data);
+      if (!updated) return res.status(404).json({ error: "Lead not found" });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: error.errors });
+      res.status(500).json({ error: "Failed to update lead" });
+    }
+  });
+
+  // Delete a lead (protected)
+  app.delete("/api/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deletedLead = await storage.deleteLead(id);
+      if (!deletedLead) return res.status(404).json({ error: "Lead not found" });
+      if (deletedLead.customerId) {
+        await storage.deleteCustomer(deletedLead.customerId);
+      }
+      res.json({ deleted: true, id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete lead" });
+    }
+  });
+
+  // Guest registration (rate limited)
+  // Atomic public guest check-in: runs all bot checks once, then creates lead + customer.
+  // Single endpoint eliminates Turnstile token reuse (tokens are single-use).
+  app.post("/api/guest-checkin", guestCheckinLimiter, async (req, res) => {
+    try {
+      const { _hp, _ft, "cf-turnstile-response": cfToken, ...body } = req.body;
+
+      // 1. Honeypot — fake success, zero DB work
+      if (_hp) {
+        recordBlock("honeypot", req.ip);
+        return res.status(201).json({ id: "ok" });
+      }
+      // 2. Headless UA
+      if (isHeadlessUA(req.headers["user-agent"])) {
+        recordBlock("ua", req.ip);
+        return res.status(403).json({ error: "Request blocked." });
+      }
+      // 3. Timing token (required when secret is configured)
+      if (process.env.FINGERPRINT_HMAC_SECRET) {
+        if (!_ft) {
+          recordBlock("timing", req.ip);
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+        const check = validateTimingToken(_ft as string);
+        if (!check.ok) {
+          recordBlock("timing", req.ip);
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+      }
+      // 4. Cloudflare Turnstile — verified exactly once per submission
+      //    Both keys must be present for enforcement (site key drives the widget;
+      //    secret key drives server verification — partial config is treated as inactive)
+      if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY) {
+        if (!cfToken) {
+          recordBlock("turnstile", req.ip);
+          return res.status(403).json({ error: "CAPTCHA verification required." });
+        }
+        const ip = req.ip ?? "unknown";
+        const valid = await verifyTurnstile(cfToken as string, ip);
+        if (!valid) {
+          recordBlock("turnstile", req.ip);
+          return res.status(403).json({ error: "CAPTCHA verification failed. Please try again." });
+        }
+      }
+
+      // ── DB writes (only reached by legitimate users) ─────────────────────────
+      // 1. Lead record
+      const leadData = insertLeadSchema.parse({
+        title: body.title ?? null,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phoneNumber: body.phoneNumber,
+        company: body.company ?? null,
+        acePoc: body.acePoc ?? null,
+        eventName: body.eventName ?? null,
+        photoData: body.photoData ?? null,
+        plusOneCount: body.plusOneCount ?? 0,
+        documentsAgreed: body.documentsAgreed ?? null,
+      });
+      await storage.createLead(leadData);
+
+      // 2. Customer create + check-in (fall back to email look-up if already registered)
+      const fullName = `${leadData.firstName} ${leadData.lastName}`.trim();
+      let customer = null;
+      try {
+        const customerData = insertCustomerSchema.parse({
+          name: fullName,
+          email: body.email,
+          phone: body.phoneNumber || undefined,
+          status: "checked-in",
+        });
+        const created = await storage.createCustomer(customerData);
+        customer = await storage.checkInCustomer(created.id);
+      } catch {
+        // Customer may already exist — look up and check in by email
+        const existing = await storage.getCustomerByEmail(body.email);
+        if (existing) {
+          customer = await storage.checkInCustomer(existing.id);
+        }
+      }
+
+      res.status(201).json(customer ?? { name: fullName });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to check in" });
+    }
+  });
+
+  // Legacy guest-register endpoint — kept for backward compatibility (e.g. existing QR flows).
+  // The primary check-in form now uses /api/guest-checkin which verifies Turnstile.
+  // Turnstile is intentionally absent here: the token was already consumed by /api/guest-checkin
+  // when called via the normal form flow, and re-verifying a single-use token always fails.
+  // Honeypot + UA + timing together defend this path against automated abuse.
+  app.post("/api/guest-register", guestRegisterLimiter, async (req, res) => {
+    try {
+      // ── Bot protection checks ───────────────────────────────────────────────
+      // 1. Honeypot
+      if (req.body._hp) {
+        recordBlock("honeypot", req.ip);
+        return res.status(201).json({ id: "ok" });
+      }
+      // 2. Headless UA
+      if (isHeadlessUA(req.headers["user-agent"])) {
+        recordBlock("ua", req.ip);
+        return res.status(403).json({ error: "Request blocked." });
+      }
+      // 3. Timing token (required when secret is configured)
+      const timingToken = req.body._ft as string | undefined;
+      if (process.env.FINGERPRINT_HMAC_SECRET) {
+        if (!timingToken) {
+          recordBlock("timing", req.ip);
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+        const check = validateTimingToken(timingToken);
+        if (!check.ok) {
+          recordBlock("timing", req.ip);
+          return res.status(403).json({ error: "Submission rejected. Please reload the page and try again." });
+        }
+      }
+      // Note: Turnstile is NOT verified on this legacy path. The primary check-in
+      // flow uses /api/guest-checkin which verifies Turnstile exactly once atomically.
+      // Honeypot, UA, and timing together prevent direct-call bypass here.
+      // ─────────────────────────────────────────────────────────────────────────
+
+      const { metadata, _hp, _ft, "cf-turnstile-response": _cftr, ...rest } = req.body;
+      const data = insertCustomerSchema.parse(rest);
+      const customerData = {
+        ...data,
+        metadata: metadata && typeof metadata === 'object' ? JSON.stringify(metadata) : undefined,
+      };
+      const customer = await storage.createCustomer(customerData);
+      const checkedIn = await storage.checkInCustomer(customer.id);
+      res.status(201).json(checkedIn);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid customer data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to register and check in" });
+    }
+  });
+
+
+  // ── CRM routes (protected) ────────────────────────────────────────────────
+
+  app.get("/api/crm/companies", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getAllCompanies();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch companies" });
+    }
+  });
+
+  app.get("/api/crm/companies/:id", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getCompanyById(req.params.id);
+      if (!data) return res.status(404).json({ error: "Company not found" });
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch company" });
+    }
+  });
+
+  app.get("/api/crm/contacts", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getAllContacts();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch contacts" });
+    }
+  });
+
+  app.get("/api/crm/contacts/:id", requireAuth, async (req, res) => {
+    try {
+      const data = await storage.getContactById(req.params.id);
+      if (!data) return res.status(404).json({ error: "Contact not found" });
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch contact" });
+    }
+  });
+
+  // ── Documents endpoints ──────────────────────────────────────────────────────
+
+  // Get documents — public only for ?enabled=true (kiosk); full list requires auth
+  app.get("/api/documents", async (req, res) => {
+    try {
+      const enabledOnly = req.query.enabled === "true";
+      if (!enabledOnly && !(req as any).session?.authenticated) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const docs = enabledOnly ? await storage.getEnabledDocuments() : await storage.getAllDocuments();
+      res.json(docs);
+    } catch (error) {
+      console.error("[documents GET]", error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Create document (protected)
+  app.post("/api/documents", requireAuth, async (req, res) => {
+    try {
+      const data = insertDocumentSchema.parse(req.body);
+      const doc = await storage.createDocument(data);
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("[documents POST]", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid document data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create document" });
+    }
+  });
+
+  // Reorder documents (protected) — must come before /:id route
+  app.put("/api/documents/reorder", requireAuth, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: "ids must be an array" });
+      }
+      await storage.reorderDocuments(ids);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[documents reorder]", error);
+      res.status(500).json({ error: "Failed to reorder documents" });
+    }
+  });
+
+  // Update document (protected)
+  app.put("/api/documents/:id", requireAuth, async (req, res) => {
+    try {
+      const data = insertDocumentSchema.partial().parse(req.body);
+      const doc = await storage.updateDocument(req.params.id, data);
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(doc);
+    } catch (error) {
+      console.error("[documents PUT]", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid document data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update document" });
+    }
+  });
+
+  // Delete document (protected)
+  app.delete("/api/documents/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteDocument(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("[documents DELETE]", error);
+      res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
+
+  // ── Kiosk check-in settings ───────────────────────────────────────────────────
+
+  // Get kiosk settings (public - for kiosk page)
+  app.get("/api/kiosk/settings", async (req, res) => {
+    try {
+      const settings = await storage.getKioskSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("[kiosk/settings GET]", error);
+      res.status(500).json({ error: "Failed to fetch kiosk settings" });
+    }
+  });
+
+  // Update kiosk settings (protected)
+  app.put("/api/kiosk/settings", requireAuth, async (req, res) => {
+    try {
+      const schema = z.object({
+        photoEnabled: z.boolean().optional(),
+        plusOneEnabled: z.boolean().optional(),
+        kioskTimeoutSeconds: z.number().int().min(5).max(300).optional(),
+      });
+      const data = schema.parse(req.body);
+      const settings = await storage.updateKioskSettings(data);
+      res.json(settings);
+    } catch (error) {
+      console.error("[kiosk/settings PUT]", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid settings data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update kiosk settings" });
+    }
+  });
+
+  // ── Kiosk device registry ─────────────────────────────────────────────────────
+
+  // Register a device (public - called on first kiosk load)
+  app.post("/api/kiosk/register", async (req, res) => {
+    try {
+      const { deviceId } = req.body;
+      if (!deviceId || typeof deviceId !== "string") {
+        return res.status(400).json({ error: "deviceId is required" });
+      }
+      const ua = req.headers["user-agent"];
+      const ip = req.ip;
+      const device = await storage.registerKioskDevice(deviceId, ua, ip);
+      res.json(device);
+    } catch (error) {
+      console.error("[kiosk/register]", error);
+      res.status(500).json({ error: "Failed to register device" });
+    }
+  });
+
+  // Heartbeat (public - called every 30s by kiosk)
+  app.post("/api/kiosk/heartbeat", async (req, res) => {
+    try {
+      const { deviceId, status } = req.body;
+      if (!deviceId || typeof deviceId !== "string") {
+        return res.status(400).json({ error: "deviceId is required" });
+      }
+      const validStatus = ["idle", "active"].includes(status) ? status : "idle";
+      const device = await storage.heartbeatKioskDevice(deviceId, validStatus);
+      if (!device) {
+        // Device not found — re-register it
+        const ua = req.headers["user-agent"];
+        const ip = req.ip;
+        const registered = await storage.registerKioskDevice(deviceId, ua, ip);
+        return res.json(registered);
+      }
+      res.json(device);
+    } catch (error) {
+      console.error("[kiosk/heartbeat]", error);
+      res.status(500).json({ error: "Failed to send heartbeat" });
+    }
+  });
+
+  // List devices (protected)
+  app.get("/api/kiosk/devices", requireAuth, async (req, res) => {
+    try {
+      const devices = await storage.getAllKioskDevices();
+      // Compute status: offline if lastSeen > 2 minutes ago
+      const now = Date.now();
+      const enriched = devices.map((d) => {
+        const lastSeenMs = new Date(d.lastSeen).getTime();
+        const diffMs = now - lastSeenMs;
+        let computedStatus = d.status;
+        if (diffMs > 2 * 60 * 1000) computedStatus = "offline";
+        return { ...d, computedStatus };
+      });
+      res.json(enriched);
+    } catch (error) {
+      console.error("[kiosk/devices GET]", error);
+      res.status(500).json({ error: "Failed to fetch devices" });
+    }
+  });
+
+  // Rename device (protected)
+  app.put("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
+    try {
+      const { name } = req.body;
+      const device = await storage.updateKioskDevice(req.params.id, { name: name ?? null });
+      if (!device) {
+        return res.status(404).json({ error: "Device not found" });
+      }
+      res.json(device);
+    } catch (error) {
+      console.error("[kiosk/devices PUT]", error);
+      res.status(500).json({ error: "Failed to update device" });
+    }
+  });
+
+  // Delete device (protected)
+  app.delete("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteKioskDevice(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Device not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("[kiosk/devices DELETE]", error);
+      res.status(500).json({ error: "Failed to delete device" });
+    }
+  });
+
+  // ── Kiosk check-in submission (public, bypasses bot-protection) ──────────────
+  // This endpoint is for kiosk devices only. Anti-bot tokens (_hp, _ft, Turnstile)
+  // are not applicable on a supervised iPad at reception. Rate-limited per IP.
+  const kioskCheckinLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: "Too many requests. Please wait a moment." });
+    },
+  });
+
+  // Visitor lookup by email (public - used by kiosk for returning-visitor autofill)
+  // Rate-limited to reduce PII enumeration risk
+  const visitorLookupLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: "Too many requests. Please wait a moment." });
+    },
+  });
+  app.get("/api/kiosk/visitor-lookup", visitorLookupLimiter, async (req, res) => {
+    try {
+      const email = (req.query.email as string | undefined)?.trim();
+      if (!email) return res.status(400).json({ error: "email query param required" });
+      const result = await storage.lookupVisitorByEmail(email);
+      res.json(result ?? null);
+    } catch (error) {
+      console.error("[kiosk/visitor-lookup]", error);
+      res.status(500).json({ error: "Lookup failed" });
+    }
+  });
+
+  app.post("/api/kiosk/checkin", kioskCheckinLimiter, async (req, res) => {
+    try {
+      const body = req.body;
+      if (!body.firstName || !body.lastName) {
+        return res.status(400).json({ error: "firstName and lastName are required" });
+      }
+      const fullName = `${String(body.firstName).trim()} ${String(body.lastName).trim()}`.trim();
+      const visitor = await storage.createVisitor({
+        fullName,
+        email: body.email?.trim().toLowerCase() || null,
+        phoneNumber: body.phoneNumber?.trim() || null,
+        company: body.company?.trim() || null,
+        acePoc: body.acePoc || null,
+        signedInAt: new Date(),
+        signedOutAt: null,
+        usCitizen: null,
+        purpose: null,
+        location: null,
+        source: "kiosk",
+        notes: null,
+        photoData: body.photoData ?? null,
+        documentsAgreed: body.documentsAgreed ?? null,
+      });
+      res.status(201).json(visitor);
+    } catch (error) {
+      console.error("[kiosk/checkin]", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to check in" });
+    }
+  });
+
+  // ── Visitors (walk-ins from kiosk / Envoy) ────────────────────────────────
+
+  // Internal notes for a visitor profile (protected)
+  app.get("/api/visitors/notes", requireAuth, async (req, res) => {
+    try {
+      const key = (req.query.key as string | undefined)?.trim();
+      if (!key) return res.status(400).json({ error: "key query param required" });
+      const note = await storage.getVisitorNotes(key);
+      res.json(note ?? { lookupKey: key, notes: "" });
+    } catch (error) {
+      console.error("[visitors/notes GET]", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  app.put("/api/visitors/notes", requireAuth, async (req, res) => {
+    try {
+      const { key, notes } = req.body;
+      if (!key || typeof notes !== "string") {
+        return res.status(400).json({ error: "key and notes are required" });
+      }
+      const note = await storage.upsertVisitorNotes(key.trim(), notes);
+      res.json(note);
+    } catch (error) {
+      console.error("[visitors/notes PUT]", error);
+      res.status(500).json({ error: "Failed to save notes" });
+    }
+  });
+
+  // Visitor profile — all visits for a person (protected)
+  app.get("/api/visitors/profile", requireAuth, async (req, res) => {
+    try {
+      const email = req.query.email as string | undefined;
+      const name = req.query.name as string | undefined;
+      if (!email && !name) {
+        return res.status(400).json({ error: "email or name query param required" });
+      }
+      const profile = await storage.getVisitorProfile(email, name);
+      res.json(profile);
+    } catch (error) {
+      console.error("[visitors/profile]", error);
+      res.status(500).json({ error: "Failed to fetch visitor profile" });
+    }
+  });
+
+  // List all visitors (protected)
+  app.get("/api/visitors", requireAuth, async (req, res) => {
+    try {
+      const all = await storage.getAllVisitors();
+      res.json(all);
+    } catch (error) {
+      console.error("[visitors GET]", error);
+      res.status(500).json({ error: "Failed to fetch visitors" });
+    }
+  });
+
+  // Bulk import from Envoy CSV (protected)
+  app.post("/api/visitors/bulk-import", requireAuth, async (req, res) => {
+    try {
+      const { rows } = req.body;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ error: "rows array is required" });
+      }
+      const parsed: any[] = rows.map((r: any) => ({
+        fullName: r.fullName ?? r.full_name ?? "",
+        email: r.email?.trim().toLowerCase() || null,
+        company: r.company?.trim() || null,
+        acePoc: r.acePoc ?? r.ace_poc ?? null,
+        signedInAt: r.signedInAt ? new Date(r.signedInAt) : new Date(),
+        signedOutAt: r.signedOutAt ? new Date(r.signedOutAt) : null,
+        usCitizen: r.usCitizen ?? r.us_citizen ?? null,
+        purpose: r.purpose?.trim() || null,
+        location: r.location?.trim() || null,
+        source: "envoy",
+        notes: r.notes?.trim() || null,
+        photoData: null,
+        documentsAgreed: null,
+      })).filter((r) => r.fullName);
+      const result = await storage.bulkImportVisitors(parsed);
+      const parts: string[] = [];
+      if (result.inserted > 0) parts.push(`${result.inserted} new visitor${result.inserted !== 1 ? "s" : ""} imported`);
+      if (result.backfilled > 0) parts.push(`${result.backfilled} record${result.backfilled !== 1 ? "s" : ""} backfilled with missing fields`);
+      if (result.skipped > 0) parts.push(`${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped`);
+      if (parts.length === 0) parts.push("No new records to import");
+      res.json({
+        message: parts.join(", "),
+        ...result,
+      });
+    } catch (error) {
+      console.error("[visitors/import]", error);
+      res.status(500).json({ error: "Failed to import visitors" });
+    }
+  });
+
+
+  // Count Envoy visitors missing the usCitizen answer (protected)
+  app.get("/api/visitors/missing-us-citizen-count", requireAuth, async (req, res) => {
+    try {
+      const count = await storage.countVisitorsMissingUsCitizen();
+      res.json({ count });
+    } catch (error) {
+      console.error("[visitors/missing-us-citizen-count]", error);
+      res.status(500).json({ error: "Failed to count records" });
+    }
+  });
+
+  // Get merge history for a visitor contact (protected)
+  app.get("/api/visitors/merge-events", requireAuth, async (req, res) => {
+    try {
+      const key = req.query.key as string;
+      if (!key) return res.status(400).json({ error: "key is required" });
+      const events = await storage.getVisitorMergeEvents(key);
+      res.json(events);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch merge events" });
+    }
+  });
+
+  // Merge two visitor contacts (protected)
+  app.post("/api/visitors/merge", requireAuth, async (req, res) => {
+    try {
+      const { primaryKey, secondaryKey } = req.body;
+      if (!primaryKey || !secondaryKey) {
+        return res.status(400).json({ error: "primaryKey and secondaryKey are required" });
+      }
+      if (primaryKey === secondaryKey) {
+        return res.status(400).json({ error: "Cannot merge a contact with itself" });
+      }
+      const result = await storage.mergeVisitorContacts(primaryKey, secondaryKey);
+      res.json(result);
+    } catch (error) {
+      console.error("[visitors/merge]", error);
+      res.status(500).json({ error: "Failed to merge contacts" });
+    }
+  });
+
+  // Update all visitor rows for a contact by lookup key (protected)
+  app.put("/api/visitors/by-key", requireAuth, async (req, res) => {
+    try {
+      const { lookupKey, fullName, email, company, phoneNumber } = req.body;
+      if (!lookupKey || typeof lookupKey !== "string") {
+        return res.status(400).json({ error: "lookupKey is required" });
+      }
+      const data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null } = {};
+      if (typeof fullName === "string") data.fullName = fullName.trim();
+      if (email !== undefined) data.email = email?.trim().toLowerCase() || null;
+      if (company !== undefined) data.company = company?.trim() || null;
+      if (phoneNumber !== undefined) data.phoneNumber = phoneNumber?.trim() || null;
+      const result = await storage.updateVisitorsByKey(lookupKey.trim(), data);
+      res.json(result);
+    } catch (error) {
+      console.error("[visitors/by-key PUT]", error);
+      res.status(500).json({ error: "Failed to update contact" });
+    }
+  });
+
+  // Delete all visitor rows for a contact by lookup key (protected)
+  app.delete("/api/visitors/by-key", requireAuth, async (req, res) => {
+    try {
+      const { lookupKey } = req.body;
+      if (!lookupKey || typeof lookupKey !== "string") {
+        return res.status(400).json({ error: "lookupKey is required" });
+      }
+      const result = await storage.deleteVisitorsByKey(lookupKey.trim());
+      res.json(result);
+    } catch (error) {
+      console.error("[visitors/by-key DELETE]", error);
+      res.status(500).json({ error: "Failed to delete contact" });
+    }
+  });
+
+  // ─── ACE POC roster ──────────────────────────────────────────────────────────
+
+  // GET is public so the kiosk can fetch the list without an admin session
+  app.get("/api/ace-pocs", async (req, res) => {
+    try {
+      const pocs = await storage.listAcePocs();
+      res.json(pocs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch ACE POCs" });
+    }
+  });
+
+  app.post("/api/ace-pocs", requireAuth, async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "name is required" });
+      }
+      const poc = await storage.createAcePoc(name.trim());
+      res.status(201).json(poc);
+    } catch (error: any) {
+      const msg = error?.message ?? "";
+      if (msg.includes("unique") || msg.includes("duplicate") || error?.code === "23505") {
+        return res.status(409).json({ error: "A POC with that name already exists" });
+      }
+      res.status(500).json({ error: "Failed to create ACE POC" });
+    }
+  });
+
+  app.delete("/api/ace-pocs/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteAcePoc(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "ACE POC not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete ACE POC" });
+    }
+  });
+
+  // Custom domain root redirect: registration.aceelectronics.com → /guest-check-in
+  app.get("/", (req, res, next) => {
+    const host = req.hostname || "";
+    if (host.includes("registration.aceelectronics.com")) {
+      return res.redirect(302, "/guest-check-in");
+    }
+    next();
   });
 
   const httpServer = createServer(app);

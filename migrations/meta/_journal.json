@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779289788711,
+      "tag": "0000_material_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779290491922,
+      "tag": "0001_backfill_legacy_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748000000000,
+      "tag": "0002_visitors_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779302001016,
+      "tag": "0003_visitor_merge_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1748100000000,
+      "tag": "0004_visitors_phone_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1748200000000,
+      "tag": "0005_ace_pocs",
+      "breakpoints": true
+    }
+  ]
+}

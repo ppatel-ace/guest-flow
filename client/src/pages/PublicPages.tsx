@@ -43,6 +43,10 @@ import {
   ChevronUp,
   ChevronDown,
   Lock,
+  ShieldCheck,
+  ShieldAlert,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -612,6 +616,8 @@ function GuestCheckInEditor() {
   const [description, setDescription] = useState("");
   const [successTitle, setSuccessTitle] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [captchaBypassStart, setCaptchaBypassStart] = useState("");
+  const [captchaBypassEnd, setCaptchaBypassEnd] = useState("");
 
   useEffect(() => {
     if (settings) {
@@ -620,6 +626,8 @@ function GuestCheckInEditor() {
       setDescription(settings.description ?? "Enter your phone number or email address to check in");
       setSuccessTitle(settings.successTitle ?? "Welcome!");
       setSuccessMessage(settings.successMessage ?? "You have been successfully checked in");
+      setCaptchaBypassStart(settings.captchaBypassStart ?? "");
+      setCaptchaBypassEnd(settings.captchaBypassEnd ?? "");
     }
   }, [settings]);
 
@@ -631,6 +639,8 @@ function GuestCheckInEditor() {
         eventName,
         successTitle,
         successMessage,
+        captchaBypassStart: captchaBypassStart || null,
+        captchaBypassEnd: captchaBypassEnd || null,
       });
       return res.json();
     },
@@ -740,10 +750,60 @@ function GuestCheckInEditor() {
         </div>
       </div>
 
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Bot Protection — CAPTCHA Bypass</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            On these dates the visible CAPTCHA widget is hidden for real attendees. Silent bot detection still runs every day.
+            Leave blank to always show the CAPTCHA widget.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="captcha-bypass-start">Event Start Date</Label>
+            <Input
+              id="captcha-bypass-start"
+              type="date"
+              value={captchaBypassStart}
+              onChange={(e) => setCaptchaBypassStart(e.target.value)}
+              disabled={isLoading}
+              data-testid="input-captcha-bypass-start"
+            />
+            <p className="text-xs text-muted-foreground">First day CAPTCHA is hidden (YYYY-MM-DD)</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="captcha-bypass-end">Event End Date</Label>
+            <Input
+              id="captcha-bypass-end"
+              type="date"
+              value={captchaBypassEnd}
+              onChange={(e) => setCaptchaBypassEnd(e.target.value)}
+              disabled={isLoading}
+              data-testid="input-captcha-bypass-end"
+            />
+            <p className="text-xs text-muted-foreground">Last day CAPTCHA is hidden (inclusive)</p>
+          </div>
+        </div>
+
+        {captchaBypassStart && captchaBypassEnd && captchaBypassStart > captchaBypassEnd && (
+          <p className="text-xs text-destructive">Start date must be on or before end date.</p>
+        )}
+      </div>
+
       <div className="flex justify-end">
         <Button
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending || isLoading || !title.trim() || !description.trim()}
+          disabled={
+            mutation.isPending ||
+            isLoading ||
+            !title.trim() ||
+            !description.trim() ||
+            (!!captchaBypassStart && !!captchaBypassEnd && captchaBypassStart > captchaBypassEnd)
+          }
           data-testid="button-save-guest-page"
         >
           <Save className="mr-2 h-4 w-4" />
@@ -754,6 +814,164 @@ function GuestCheckInEditor() {
       <Separator />
 
       <FormFieldsManager />
+    </div>
+  );
+}
+
+function SecurityStatusPanel() {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const { data: status, isLoading } = useQuery<{
+    turnstile: boolean;
+    hmacTiming: boolean;
+    rateLimit: boolean;
+  }>({
+    queryKey: ["/api/admin/security-status"],
+    refetchOnWindowFocus: false,
+  });
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const layers = [
+    {
+      key: "rateLimit",
+      label: "Rate Limiting",
+      description: "Caps check-in attempts per IP — always active, no key needed.",
+      active: status?.rateLimit ?? true,
+      optional: false,
+    },
+    {
+      key: "hmacTiming",
+      label: "Timing Token (HMAC)",
+      description: "Ensures the form was loaded before submission, blocking instant-replay bots.",
+      active: status?.hmacTiming ?? false,
+      optional: false,
+      secretKey: "FINGERPRINT_HMAC_SECRET",
+    },
+    {
+      key: "turnstile",
+      label: "Cloudflare Turnstile CAPTCHA",
+      description: "Optional ML-based CAPTCHA. Requires a free Cloudflare account. Form works without it.",
+      active: status?.turnstile ?? false,
+      optional: true,
+      secretKey: "VITE_TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY",
+    },
+  ];
+
+  const requiredActive = !isLoading && layers.filter((l) => !l.optional).every((l) => l.active);
+  const allActive = !isLoading && layers.every((l) => l.active);
+
+  return (
+    <div className="space-y-6" data-testid="section-security-status">
+      <div className="space-y-1">
+        <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Protection Layers</h3>
+        <p className="text-xs text-muted-foreground">
+          {requiredActive
+            ? "All required bot-protection layers are active."
+            : "One or more required layers need a secret configured in Replit."}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {layers.map((layer) => (
+          <div
+            key={layer.key}
+            className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+            data-testid={`security-layer-${layer.key}`}
+          >
+            {isLoading ? (
+              <div className="h-5 w-5 rounded-full bg-muted animate-pulse mt-0.5" />
+            ) : layer.active ? (
+              <ShieldCheck className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+            ) : layer.optional ? (
+              <ShieldAlert className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+            ) : (
+              <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">{layer.label}</span>
+                {!isLoading && (
+                  <Badge
+                    variant={layer.active ? "default" : "secondary"}
+                    className={
+                      layer.active
+                        ? "bg-green-500 hover:bg-green-500 text-white text-xs"
+                        : layer.optional
+                        ? "text-xs text-muted-foreground"
+                        : "text-xs"
+                    }
+                    data-testid={`badge-security-${layer.key}`}
+                  >
+                    {layer.active ? "Active" : layer.optional ? "Optional — not configured" : "Not configured"}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">{layer.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Setup Instructions</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Add keys to Replit Secrets (not environment variables) then restart the app. Rate limiting is always on — no setup needed.
+          </p>
+        </div>
+
+        <div className="space-y-4 text-sm">
+          <div className="space-y-2">
+            <p className="font-medium">Step 1 — Add the timing-token secret <span className="text-muted-foreground font-normal">(required)</span></p>
+            <p className="text-xs text-muted-foreground">
+              Generate a random secret string and add it to Replit Secrets as{" "}
+              <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">FINGERPRINT_HMAC_SECRET</code>.
+              Run the command below in a terminal to generate a strong value:
+            </p>
+            <div className="flex items-center gap-2 p-2 rounded bg-muted font-mono text-xs">
+              <span className="flex-1">openssl rand -hex 32</span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 shrink-0"
+                onClick={() => copyToClipboard("openssl rand -hex 32", "hmac")}
+                data-testid="button-copy-hmac-command"
+              >
+                {copied === "hmac" ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="font-medium">Step 2 — Add a Cloudflare Turnstile CAPTCHA <span className="text-muted-foreground font-normal">(optional)</span></p>
+            <p className="text-xs text-muted-foreground">
+              Skip this step if you don't use Cloudflare — the form works without it and all other protections still run.
+              If you do want the CAPTCHA layer, sign up free at Cloudflare, create a Turnstile widget for your domain, then add the keys below.
+            </p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Go to <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" className="underline underline-offset-2">dash.cloudflare.com → Turnstile</a> → Add site → choose <strong>Managed</strong></li>
+              <li>Copy the <strong>Site Key</strong> → Replit Secrets → <code className="bg-muted px-1 py-0.5 rounded font-mono">VITE_TURNSTILE_SITE_KEY</code></li>
+              <li>Copy the <strong>Secret Key</strong> → Replit Secrets → <code className="bg-muted px-1 py-0.5 rounded font-mono">TURNSTILE_SECRET_KEY</code></li>
+            </ol>
+          </div>
+
+          <div className="space-y-2">
+            <p className="font-medium">Step 3 — Restart the app</p>
+            <p className="text-xs text-muted-foreground">
+              After adding secrets in Replit, restart the workflow so the server picks up the new values.
+              Return to this tab — the badges will update to confirm what's active.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -775,6 +993,10 @@ export default function PublicPages() {
           <TabsTrigger value="guest" data-testid="tab-guest-page">
             <ClipboardList className="mr-2 h-4 w-4" />
             Guest Check-In Form
+          </TabsTrigger>
+          <TabsTrigger value="security" data-testid="tab-security">
+            <Lock className="mr-2 h-4 w-4" />
+            Security
           </TabsTrigger>
         </TabsList>
 
@@ -802,6 +1024,20 @@ export default function PublicPages() {
             </CardHeader>
             <CardContent>
               <GuestCheckInEditor />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Bot Protection</CardTitle>
+              <CardDescription>
+                Status of all protection layers on the guest check-in form, and step-by-step setup instructions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SecurityStatusPanel />
             </CardContent>
           </Card>
         </TabsContent>

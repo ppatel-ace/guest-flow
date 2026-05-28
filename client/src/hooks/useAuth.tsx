@@ -24,7 +24,7 @@ export function useAuth() {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/session"], { authenticated: false });
-      setLocation("/login");
+      setLocation("/ace-admin");
     },
   });
 

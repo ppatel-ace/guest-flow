@@ -5,16 +5,7 @@ import { ImportCustomersDialog } from "@/components/ImportCustomersDialog";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 
-const initialCustomers: Customer[] = [
-  { id: "1", name: "Sarah Johnson", email: "sarah.j@example.com", phone: "+1 (555) 123-4567", status: "checked-in", invitedAt: "2 hours ago" },
-  { id: "2", name: "Michael Chen", email: "m.chen@example.com", phone: "+1 (555) 234-5678", status: "confirmed", invitedAt: "1 day ago" },
-  { id: "3", name: "Emily Rodriguez", email: "emily.r@example.com", phone: "+1 (555) 345-6789", status: "pending", invitedAt: "3 days ago" },
-  { id: "4", name: "David Kim", email: "david.kim@example.com", phone: "+1 (555) 456-7890", status: "checked-in", invitedAt: "5 hours ago" },
-  { id: "5", name: "Jessica Martinez", email: "j.martinez@example.com", phone: "+1 (555) 567-8901", status: "confirmed", invitedAt: "12 hours ago" },
-  { id: "6", name: "Robert Taylor", email: "r.taylor@example.com", phone: "+1 (555) 678-9012", status: "pending", invitedAt: "2 days ago" },
-  { id: "7", name: "Amanda White", email: "amanda.w@example.com", phone: "+1 (555) 789-0123", status: "checked-in", invitedAt: "30 min ago" },
-  { id: "8", name: "James Brown", email: "james.b@example.com", phone: "+1 (555) 890-1234", status: "confirmed", invitedAt: "6 hours ago" },
-];
+const initialCustomers: Customer[] = [];
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
@@ -52,8 +43,8 @@ export default function Customers() {
     <div className="space-y-6" data-testid="page-customers">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold">Customers</h1>
-          <p className="text-muted-foreground">Manage your customer list and invitations</p>
+          <h1 className="text-3xl font-bold">Invites</h1>
+          <p className="text-muted-foreground">Manage your invite list and check-ins</p>
         </div>
         <div className="flex gap-2">
           <AddCustomerDialog onAdd={handleAddCustomer} />
@@ -65,7 +56,7 @@ export default function Customers() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search customers..."
+          placeholder="Search invites..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-9"

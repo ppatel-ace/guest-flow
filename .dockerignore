@@ -4,3 +4,10 @@ dist
 .env
 *.log
 attached_assets
+*.tar.gz
+.DS_Store
+crm-export
+customers_backup.csv
+production_import.sql
+design_guidelines.md
+README.md

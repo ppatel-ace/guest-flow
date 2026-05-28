@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, Database, LogOut, Globe } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown, Workflow, BarChart2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -13,47 +13,26 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 
-const menuItems = [
-  {
-    title: "Dashboard",
-    url: "/",
-    icon: Home,
-  },
-  {
-    title: "Customers",
-    url: "/customers",
-    icon: Users,
-  },
-  {
-    title: "Check-In",
-    url: "/check-in",
-    icon: QrCode,
-  },
-  {
-    title: "Invitations",
-    url: "/invitations",
-    icon: Mail,
-  },
-  {
-    title: "Import",
-    url: "/import",
-    icon: FileSpreadsheet,
-  },
-  {
-    title: "Public Pages",
-    url: "/public-pages",
-    icon: Globe,
-  },
-  {
-    title: "Setup",
-    url: "/setup",
-    icon: Database,
-  },
+const mainMenuItems = [
+  { title: "Dashboard", url: "/", icon: Home },
+  { title: "Invites", url: "/customers", icon: Users },
+  { title: "Check-In", url: "/check-in", icon: QrCode },
+  { title: "Invitations", url: "/invitations", icon: Mail },
+  { title: "Import", url: "/import", icon: FileSpreadsheet },
+  { title: "Public Pages", url: "/public-pages", icon: Globe },
+  { title: "Export", url: "/export", icon: FileDown },
+  { title: "Sign-in Flow", url: "/sign-in-flow", icon: Workflow },
+  { title: "Analytics", url: "/analytics", icon: BarChart2 },
 ];
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { logout } = useAuth();
+
+  const isActive = (url: string) => {
+    if (url === "/") return location === "/";
+    return location.startsWith(url);
+  };
 
   return (
     <Sidebar>
@@ -62,10 +41,10 @@ export function AppSidebar() {
           <SidebarGroupLabel>Customer Check-In</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {mainMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
