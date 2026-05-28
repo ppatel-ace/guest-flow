@@ -116,15 +116,18 @@ async function checkConnection(): Promise<void> {
   if (!isSupabase) return;
   try {
     await db.execute(sql`SELECT 1`);
+    console.log("[db] Supabase connection verified ✓");
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    const hint = message.includes("self-signed") || message.includes("certificate")
-      ? " If you are using the Supabase connection pooler, append ?sslmode=require to your DATABASE_URL."
-      : "";
-    throw new Error(
-      `Supabase SSL connection check failed. Verify your DATABASE_URL and that the ` +
-      `server certificate is trusted. Original error: ${message}${hint}`
-    );
+    let hint = "";
+    if (message.includes("self-signed") || message.includes("certificate")) {
+      hint = "\n  → Append ?sslmode=require to your DATABASE_URL (pooler uses a self-signed cert).";
+    } else if (message.includes("password authentication") || message.includes("password")) {
+      hint = "\n  → The Supabase pooler requires the username format: postgres.<project-ref>\n  → Copy the exact Session-mode connection string from Supabase → Settings → Database.";
+    }
+    // Warn but do not crash — bad credentials should not prevent the dev server
+    // from starting. API calls will surface the real error when they hit the DB.
+    console.error(`[db] WARNING: Supabase connection check failed — ${message}${hint}`);
   }
 }
 
