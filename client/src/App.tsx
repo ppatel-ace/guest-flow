@@ -76,6 +76,28 @@ function AdminLayout() {
 }
 
 function App() {
+  const isGuestOnlyDomain =
+    window.location.hostname === "aceregistration.replit.app";
+
+  if (isGuestOnlyDomain) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Switch>
+            <Route path="/guest-check-in" component={GuestCheckIn} />
+            <Route>
+              {() => {
+                window.location.replace("/guest-check-in");
+                return null;
+              }}
+            </Route>
+          </Switch>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
