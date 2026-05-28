@@ -99,6 +99,11 @@ app.use((req, res, next) => {
   if (process.env.NODE_ENV === "production") {
     const PUBLIC_PAGES = ["/guest-check-in", "/scan", "/kiosk"];
     app.use((req: Request, res: Response, next: NextFunction) => {
+      // guestflow.aceelectronics.com is an internal-only admin domain — skip the guard entirely
+      const host = req.hostname || "";
+      if (host === "guestflow.aceelectronics.com") {
+        return next();
+      }
       // Always pass through API calls and static assets (files with extensions)
       if (req.path.startsWith("/api/") || /\.\w+$/.test(req.path)) {
         return next();

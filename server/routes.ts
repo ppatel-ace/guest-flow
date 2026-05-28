@@ -1297,9 +1297,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Custom domain root redirect: registration.aceelectronics.com → /guest-check-in
+  // Custom domain root redirects
   app.get("/", (req, res, next) => {
     const host = req.hostname || "";
+    if (host === "guestflow.aceelectronics.com") {
+      return res.redirect(302, "/dashboard");
+    }
     if (host.includes("registration.aceelectronics.com")) {
       return res.redirect(302, "/guest-check-in");
     }

@@ -103,6 +103,7 @@ function App() {
       <TooltipProvider>
         <Switch>
           <Route path="/ace-admin" component={Login} />
+          <Route path="/dashboard" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
           <Route path="/kiosk" component={Kiosk} />
