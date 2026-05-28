@@ -7,14 +7,7 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run build && \
-    npx drizzle-kit generate && \
-    npx esbuild server/migrate.ts \
-      --platform=node \
-      --packages=external \
-      --bundle \
-      --format=esm \
-      --outfile=dist/migrate.js
+RUN npm run build
 
 FROM node:20-alpine AS runner
 
@@ -25,9 +18,10 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
-COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+
+ENV NODE_ENV=production
+ENV PORT=5000
 
 EXPOSE 5000
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["node", "dist/index.cjs"]
