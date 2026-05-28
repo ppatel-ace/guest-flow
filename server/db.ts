@@ -2,6 +2,7 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle as neonDrizzle } from 'drizzle-orm/neon-serverless';
 import postgres from 'postgres';
 import { drizzle as pgDrizzle } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
 import ws from "ws";
 import net from "net";
 import * as schema from "@shared/schema";
@@ -12,7 +13,7 @@ if (!process.env.DATABASE_URL && !process.env.PGHOST) {
   );
 }
 
-// Prefer DATABASE_URL (Neon) if available; fall back to local Helium PostgreSQL.
+// Prefer DATABASE_URL (Neon/Supabase) if available; fall back to local Helium PostgreSQL.
 const localUrl = process.env.PGHOST
   ? `postgresql://${process.env.PGUSER ?? "postgres"}:${process.env.PGPASSWORD ?? ""}@${process.env.PGHOST}:${process.env.PGPORT ?? 5432}/${process.env.PGDATABASE ?? "postgres"}`
   : null;
@@ -20,6 +21,18 @@ const localUrl = process.env.PGHOST
 const databaseUrl = process.env.DATABASE_URL ?? localUrl!;
 const hostname = new URL(databaseUrl).hostname;
 const isNeon = hostname.endsWith("neon.tech");
+
+// Supabase hosts can be:
+//   - Direct connections:  <ref>.supabase.co
+//   - Pooler connections:  aws-0-<region>.pooler.supabase.com  (session/transaction mode)
+// Both are covered by checking for either TLD.
+//
+// DATABASE_URL format: copy the connection string from the Supabase dashboard
+// (Project Settings → Database → Connection String). It already includes the
+// correct host and port. The code below enforces certificate verification
+// regardless of any sslmode query parameter in the URL.
+const isSupabase =
+  hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.com");
 
 // In Replit the serverless WebSocket driver is needed (port 6543/WSS).
 // Outside Replit (e.g. Docker on Portainer) use the standard postgres driver
@@ -35,7 +48,16 @@ function createDb() {
   // Standard postgres driver: works for local DBs, non-Replit Neon, and any
   // other PostgreSQL-compatible host.
   const isLocal = hostname === "localhost" || hostname === "helium" || hostname === "127.0.0.1";
-  const sslOption = isLocal ? false : ("require" as const);
+
+  // Supabase: full certificate verification to catch forged/MitM certificates.
+  // Other remote hosts: encrypted but without CA pinning (legacy behaviour).
+  // Local hosts: no SSL.
+  const sslOption = isLocal
+    ? false
+    : isSupabase
+      ? { rejectUnauthorized: true }
+      : ("require" as const);
+
   // Force IPv4 for remote hosts so Docker/Portainer environments without IPv6
   // don't get ENETUNREACH when the DNS resolves to an IPv6 address.
   const socketOption = isLocal
@@ -54,5 +76,21 @@ function createDb() {
 }
 
 const { db, pool } = createDb();
+
+// Startup connectivity check: runs synchronously (top-level await) so the
+// module does not finish loading — and the server does not start listening —
+// until the SSL handshake is confirmed good. Any certificate error is caught
+// here and re-thrown with a descriptive message instead of surfacing later.
+if (isSupabase) {
+  try {
+    await db.execute(sql`SELECT 1`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Supabase SSL connection check failed. Verify your DATABASE_URL and that the ` +
+      `server certificate is trusted. Original error: ${message}`
+    );
+  }
+}
 
 export { db, pool };
