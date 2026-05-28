@@ -363,15 +363,18 @@ export default function GuestCheckIn() {
         {step === "form" && (
           <form onSubmit={handleSubmit} className="p-6 md:p-10 space-y-6">
 
-            {/* Page title from settings */}
+            {/* Page title + description from settings */}
             {settingsLoading ? (
               <div className="space-y-1">
                 <Skeleton className="h-6 w-36" />
                 <Skeleton className="h-4 w-56" />
               </div>
             ) : (
-              <div>
+              <div className="space-y-0.5">
                 <h2 className="text-xl font-bold text-slate-900">{pageTitle}</h2>
+                {settings?.description && (
+                  <p className="text-sm text-slate-500">{settings.description}</p>
+                )}
               </div>
             )}
 
