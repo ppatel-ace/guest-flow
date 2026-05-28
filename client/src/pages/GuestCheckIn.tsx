@@ -29,8 +29,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { Turnstile } from "@marsidev/react-turnstile";
-import logoPath from "@assets/Blue AEDS_1760039355599.png";
-import type { PageSettings } from "@shared/schema";
+import type { PageSettings, FormField } from "@shared/schema";
 
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
@@ -313,7 +312,7 @@ export default function GuestCheckIn() {
       <div className="w-full max-w-sm space-y-5">
         <div className="flex flex-col items-center gap-2 pt-2">
           <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-20 w-auto" data-testid="img-logo" />
+            <p className="text-lg font-bold tracking-tight" data-testid="text-brand">Ace Electronics Defense Systems</p>
           </a>
           {settingsLoading ? (
             <Skeleton className="h-5 w-48" />

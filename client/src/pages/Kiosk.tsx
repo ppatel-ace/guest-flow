@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/select";
 import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import logoPath from "@assets/Blue AEDS_1760039355599.png";
 import type { FormField, AcePoc } from "@shared/schema";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -491,7 +490,7 @@ export default function Kiosk() {
           onClick={startFlow}
           data-testid="screen-kiosk-idle"
         >
-          <img src={logoPath} alt="Logo" className="h-32 w-auto" data-testid="img-kiosk-logo" />
+          <p className="text-2xl font-bold tracking-tight" data-testid="img-kiosk-logo">Ace Electronics Defense Systems</p>
           <div className="text-center space-y-2">
             <p className="text-3xl font-bold text-foreground">Welcome</p>
             <p className="text-xl text-muted-foreground">Tap anywhere to check in</p>
@@ -505,7 +504,7 @@ export default function Kiosk() {
         <div className="flex-1 overflow-auto p-6 md:p-10">
           <div className="max-w-lg mx-auto space-y-6">
             <div className="flex items-center justify-between">
-              <img src={logoPath} alt="Logo" className="h-12 w-auto" />
+              <p className="text-base font-bold tracking-tight">Ace Electronics Defense Systems</p>
               <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel">
                 <X className="h-4 w-4 mr-1" /> Cancel
               </Button>
@@ -779,7 +778,7 @@ export default function Kiosk() {
       {step === "documents" && enabledDocs.length > 0 && (
         <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl mx-auto w-full">
           <div className="flex items-center justify-between mb-6">
-            <img src={logoPath} alt="Logo" className="h-10 w-auto" />
+            <p className="text-sm font-bold tracking-tight">Ace Electronics Defense Systems</p>
             <span className="text-sm text-muted-foreground">{currentDocIndex + 1} of {enabledDocs.length}</span>
           </div>
 
@@ -801,7 +800,7 @@ export default function Kiosk() {
       {/* ── Photo Step ── */}
       {step === "photo" && photoEnabled && (
         <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6" data-testid="screen-kiosk-photo">
-          <img src={logoPath} alt="Logo" className="h-10 w-auto" />
+          <p className="text-sm font-bold tracking-tight">Ace Electronics Defense Systems</p>
           <div>
             <h2 className="text-2xl font-bold text-center">Take a Photo</h2>
             <p className="text-muted-foreground text-center text-sm mt-1">We'll use this for your visitor badge.</p>
@@ -845,7 +844,7 @@ export default function Kiosk() {
       {/* ── Thank You Step ── */}
       {step === "thanks" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8" data-testid="screen-kiosk-thanks">
-          <img src={logoPath} alt="Logo" className="h-16 w-auto" />
+          <p className="text-lg font-bold tracking-tight">Ace Electronics Defense Systems</p>
           <CheckCircle className="h-24 w-24 text-green-500" />
           <div className="text-center space-y-2">
             <h2 className="text-3xl font-bold">Welcome, {visitorName.split(" ")[0]}!</h2>

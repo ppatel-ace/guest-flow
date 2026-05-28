@@ -4,7 +4,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MapPin, Calendar, Building2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import logoPath from "@assets/Blue AEDS_1760039981304.png";
 import type { PageSettings } from "@shared/schema";
 
 export default function StandaloneCheckIn() {
@@ -32,8 +31,8 @@ export default function StandaloneCheckIn() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="flex items-center justify-between p-4 sm:p-6 border-b">
         <div className="flex-1" />
-        <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-          <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 lg:h-36 w-auto mx-auto" data-testid="img-logo" />
+        <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" className="text-center" data-testid="link-logo">
+          <p className="text-lg font-bold tracking-tight" data-testid="text-brand">Ace Electronics Defense Systems</p>
         </a>
         <div className="flex-1 flex justify-end">
           <ThemeToggle />
