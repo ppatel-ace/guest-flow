@@ -18,7 +18,7 @@ services:
       VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
     networks:
       guestflow_net:
-        ipv4_address: 10.20.11.2
+        ipv4_address: 172.28.11.2
 
   nginx:
     image: nginx:alpine
@@ -32,7 +32,7 @@ services:
       - app
     networks:
       guestflow_net:
-        ipv4_address: 10.20.11.3
+        ipv4_address: 172.28.11.3
 
 networks:
   guestflow_net:
@@ -41,5 +41,5 @@ networks:
       com.docker.network.bridge.name: br-guestflow
     ipam:
       config:
-        - subnet: 10.20.11.0/24
-          gateway: 10.20.11.1
+        - subnet: 172.28.11.0/24
+          gateway: 172.28.11.1
