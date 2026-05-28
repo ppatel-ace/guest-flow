@@ -15,7 +15,6 @@ import {
 import { CheckCircle, Phone, User, Mail, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import logoPath from "@assets/Blue AEDS_1760039355599.png";
 import type { PageSettings, FormField } from "@shared/schema";
 
 export default function GuestCheckIn() {
@@ -202,7 +201,7 @@ export default function GuestCheckIn() {
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
         <div className="flex flex-col items-center gap-2">
           <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" data-testid="link-logo">
-            <img src={logoPath} alt="Ace Electronics Defense Systems" className="h-24 sm:h-28 md:h-32 w-auto" data-testid="img-logo" />
+            <p className="text-lg font-bold tracking-tight" data-testid="text-brand">Ace Electronics Defense Systems</p>
           </a>
           {settingsLoading ? (
             <Skeleton className="h-5 w-48" />
