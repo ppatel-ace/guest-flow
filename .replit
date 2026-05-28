@@ -50,6 +50,7 @@ expertMode = true
 [userenv]
 
 [userenv.shared]
+DATABASE_URL = "postgresql://postgres.pagdiccadattytahnxfj:p7UiTKf0p6MhBDsS@aws-1-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require"
 
 [postMerge]
 path = "scripts/post-merge.sh"
