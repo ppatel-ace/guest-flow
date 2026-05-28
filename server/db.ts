@@ -58,7 +58,15 @@ function resolveSslOption(
   sslmodeParam: string | null,
   isLocalHost: boolean
 ): false | "require" | { rejectUnauthorized: boolean } {
-  if (isSupabase) return { rejectUnauthorized: true };
+  if (isSupabase) {
+    // Supabase direct connections use a trusted cert → strict by default.
+    // Supabase connection poolers (PgBouncer) use a self-signed cert.
+    // Add ?sslmode=require to DATABASE_URL to use SSL without CA verification
+    // (needed when the pooler presents a self-signed certificate).
+    if (sslmodeParam === "require") return "require";
+    if (sslmodeParam === "disable") return false;
+    return { rejectUnauthorized: true };
+  }
   if (sslmodeParam === "disable") return false;
   if (sslmodeParam === "verify-full" || sslmodeParam === "verify-ca") return { rejectUnauthorized: true };
   if (sslmodeParam !== null) return "require";
@@ -110,9 +118,12 @@ async function checkConnection(): Promise<void> {
     await db.execute(sql`SELECT 1`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    const hint = message.includes("self-signed") || message.includes("certificate")
+      ? " If you are using the Supabase connection pooler, append ?sslmode=require to your DATABASE_URL."
+      : "";
     throw new Error(
       `Supabase SSL connection check failed. Verify your DATABASE_URL and that the ` +
-      `server certificate is trusted. Original error: ${message}`
+      `server certificate is trusted. Original error: ${message}${hint}`
     );
   }
 }
