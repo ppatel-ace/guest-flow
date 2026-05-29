@@ -545,8 +545,7 @@ export default function Kiosk() {
           <div className="max-w-lg mx-auto space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <img src={logoFormSrc} alt="AE" className="h-10 w-auto object-contain" style={{ transform: "rotate(-90deg)" }} />
-                <p className="text-base font-bold tracking-tight">Ace Electronics Inc.</p>
+                <img src={logoFormSrc} alt="AE" className="h-24 w-auto object-contain" style={{ transform: "rotate(-90deg)" }} />
               </div>
               <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel">
                 <X className="h-4 w-4 mr-1" /> Cancel
