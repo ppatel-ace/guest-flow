@@ -1365,10 +1365,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(poc);
     } catch (error: any) {
       const msg = error?.message ?? "";
+      console.error("[ace-pocs] createAcePoc failed:", msg, error?.code ?? "");
       if (msg.includes("unique") || msg.includes("duplicate") || error?.code === "23505") {
         return res.status(409).json({ error: "A POC with that name already exists" });
       }
-      res.status(500).json({ error: "Failed to create ACE POC" });
+      res.status(500).json({ error: "Failed to create ACE POC", detail: msg });
     }
   });
 
