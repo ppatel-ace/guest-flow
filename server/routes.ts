@@ -895,17 +895,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/documents/:id", requireAuth, async (req, res) => {
     try {
       const data = insertDocumentSchema.partial().parse(req.body);
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
       const doc = await storage.updateDocument(req.params.id, data);
       if (!doc) {
         return res.status(404).json({ error: "Document not found" });
       }
       res.json(doc);
-    } catch (error) {
-      console.error("[documents PUT]", error);
+    } catch (error: any) {
+      const msg = error?.message ?? String(error);
+      const detail = error?.detail ?? error?.code ?? undefined;
+      console.error("[documents PUT] id=%s body=%j error=%s detail=%s", req.params.id, req.body, msg, detail);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid document data", details: error.errors });
       }
-      res.status(500).json({ error: "Failed to update document" });
+      res.status(500).json({ error: "Failed to update document", detail: msg });
     }
   });
 

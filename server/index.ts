@@ -1,5 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import pgSimple from "connect-pg-simple";
+import pkg from "pg";
+const { Pool: PgPool } = pkg;
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
@@ -25,8 +28,41 @@ if (!process.env.SESSION_SECRET) {
   process.exit(1);
 }
 
-// Session middleware
+// Build a pg.Pool for the session store, honouring the same SSL rules as db.ts.
+function buildSessionPool(): InstanceType<typeof PgPool> | undefined {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) return undefined;
+  try {
+    const parsed = new URL(dbUrl);
+    const host = parsed.hostname;
+    const isSupabase = host.endsWith(".supabase.co") || host.endsWith(".supabase.com");
+    const sslmode = parsed.searchParams.get("sslmode");
+    let ssl: boolean | object = false;
+    if (isSupabase) {
+      ssl = sslmode === "require" ? { rejectUnauthorized: false } : { rejectUnauthorized: true };
+    } else if (sslmode === "disable") {
+      ssl = false;
+    } else if (sslmode) {
+      ssl = { rejectUnauthorized: sslmode === "verify-full" || sslmode === "verify-ca" };
+    } else {
+      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "helium";
+      ssl = isLocal ? false : { rejectUnauthorized: false };
+    }
+    return new PgPool({ connectionString: dbUrl, ssl: ssl as any, max: 2 });
+  } catch {
+    return undefined;
+  }
+}
+
+const PgSession = pgSimple(session);
+const sessionPool = buildSessionPool();
+
+// Session middleware — use PostgreSQL store when DATABASE_URL is available so
+// sessions survive server restarts; fall back to MemoryStore in dev without a DB.
 app.use(session({
+  store: sessionPool
+    ? new PgSession({ pool: sessionPool, tableName: "session", createTableIfMissing: true })
+    : undefined,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,

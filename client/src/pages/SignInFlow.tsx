@@ -494,7 +494,7 @@ function DocumentsTab() {
       toast({ title: "Document updated" });
       setFormState({ open: false, mode: "add" });
     },
-    onError: () => toast({ title: "Error", description: "Failed to update document.", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Failed to update document", description: err?.message ?? "Unknown error", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({

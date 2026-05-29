@@ -575,6 +575,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateDocument(id: string, data: Partial<InsertDocument>): Promise<Document | undefined> {
+    if (Object.keys(data).length === 0) return undefined;
     const [doc] = await db.update(documents).set(data).where(eq(documents.id, id)).returning();
     return doc || undefined;
   }
