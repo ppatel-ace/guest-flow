@@ -2814,33 +2814,37 @@ function AcePocTab() {
             return (
               <li key={poc.id} data-testid={`row-ace-poc-${poc.id}`}>
                 <div className="flex items-center justify-between px-3 py-2.5">
-                  <button
-                    className="flex items-center gap-2 flex-1 text-left"
-                    onClick={() => setExpandedPocId(isExpanded ? null : poc.id)}
-                    data-testid={`button-expand-ace-poc-${poc.id}`}
-                  >
-                    <span className="text-sm font-medium">{poc.name}</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm font-medium truncate">{poc.name}</span>
                     {pocEmails.length > 0 && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs shrink-0">
                         {pocEmails.length} email{pocEmails.length !== 1 ? "s" : ""}
                       </Badge>
                     )}
-                    {isExpanded ? (
-                      <ChevronUp className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
-                    ) : (
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
-                    )}
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive ml-2 shrink-0"
-                    onClick={() => deleteMutation.mutate(poc.id)}
-                    disabled={deleteMutation.isPending}
-                    data-testid={`button-delete-ace-poc-${poc.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  </div>
+                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => setExpandedPocId(isExpanded ? null : poc.id)}
+                      data-testid={`button-edit-ace-poc-${poc.id}`}
+                      title="Edit notification emails"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteMutation.mutate(poc.id)}
+                      disabled={deleteMutation.isPending}
+                      data-testid={`button-delete-ace-poc-${poc.id}`}
+                      title="Remove POC"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 {isExpanded && (
                   <div className="px-3 pb-3 border-t bg-muted/30">
