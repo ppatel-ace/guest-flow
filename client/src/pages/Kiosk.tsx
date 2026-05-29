@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import logoIdleSrc from "@assets/Full_logo_AE_only_clean_blue_1780058989550.bmp";
-import logoFormSrc from "@assets/FULLOGO_clean_blue_half_size_1780059248259.bmp";
+const logoIdleSrc = "/logos/ace-logo-idle.bmp";
+const logoFormSrc = "/logos/ace-logo-form.bmp";
 import {
   Select,
   SelectContent,
