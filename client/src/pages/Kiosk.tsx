@@ -16,6 +16,21 @@ import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-
 import { useQuery } from "@tanstack/react-query";
 import type { FormField, AcePoc } from "@shared/schema";
 
+// ─── Template variable substitution ──────────────────────────────────────────
+
+function substituteDocumentVars(
+  content: string,
+  visitor: { firstName: string; lastName: string; company: string; email: string }
+): string {
+  const fullName = `${visitor.firstName} ${visitor.lastName}`.trim();
+  return content
+    .replace(/\{\{firstName\}\}/g, visitor.firstName)
+    .replace(/\{\{lastName\}\}/g, visitor.lastName)
+    .replace(/\{\{fullName\}\}/g, fullName)
+    .replace(/\{\{company\}\}/g, visitor.company)
+    .replace(/\{\{email\}\}/g, visitor.email);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface KioskSettings {
@@ -851,7 +866,12 @@ export default function Kiosk() {
 
           <h2 className="text-2xl font-bold mb-2">{enabledDocs[currentDocIndex].title}</h2>
           <div className="flex-1 overflow-auto border rounded-xl p-5 bg-muted/30 mb-6 text-sm leading-relaxed whitespace-pre-wrap" data-testid="text-document-content">
-            {enabledDocs[currentDocIndex].content}
+            {substituteDocumentVars(enabledDocs[currentDocIndex].content, {
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              company: company.trim(),
+              email: email.trim(),
+            })}
           </div>
 
           <Button

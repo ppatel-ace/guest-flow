@@ -611,6 +611,14 @@ function DocumentsTab() {
             <div className="space-y-2">
               <Label htmlFor="doc-content">Content <span className="text-destructive">*</span></Label>
               <Textarea id="doc-content" value={docContent} onChange={(e) => setDocContent(e.target.value)} placeholder="Enter the full text of the document..." rows={8} data-testid="textarea-doc-content" />
+              <div className="rounded-md border bg-muted/40 px-3 py-2.5 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Available placeholders — replaced with visitor data at check-in:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {["{{firstName}}", "{{lastName}}", "{{fullName}}", "{{company}}", "{{email}}"].map((ph) => (
+                    <code key={ph} className="text-xs bg-background border rounded px-1.5 py-0.5 font-mono">{ph}</code>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
