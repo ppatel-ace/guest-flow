@@ -1052,6 +1052,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const visitorSearchLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: "Too many requests. Please wait a moment." });
+    },
+  });
+  app.get("/api/kiosk/visitor-search", visitorSearchLimiter, async (req, res) => {
+    try {
+      const q = (req.query.q as string | undefined)?.trim();
+      if (!q || q.length < 3) return res.json([]);
+      const results = await storage.searchCustomers(q);
+      const suggestions = results
+        .filter((c) => c.email)
+        .slice(0, 5)
+        .map((c) => ({ email: c.email, name: c.name }));
+      res.json(suggestions);
+    } catch (error) {
+      console.error("[kiosk/visitor-search]", error);
+      res.status(500).json({ error: "Search failed" });
+    }
+  });
+
   app.post("/api/kiosk/checkin", kioskCheckinLimiter, async (req, res) => {
     try {
       const body = req.body;

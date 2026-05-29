@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import logoIdleSrc from "@assets/Full_logo_AE_only_clean_blue_1780058989550.bmp";
+import logoFormSrc from "@assets/FULLOGO_clean_blue_half_size_1780059248259.bmp";
 import {
   Select,
   SelectContent,
@@ -142,6 +144,11 @@ export default function Kiosk() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Email autocomplete
+  const [emailSuggestions, setEmailSuggestions] = useState<Array<{ email: string; name: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Inactivity timer
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -173,6 +180,38 @@ export default function Kiosk() {
   const timeoutSecs = settings?.kioskTimeoutSeconds ?? 30;
   const photoEnabled = settings?.photoEnabled ?? false;
   const plusOneEnabled = settings?.plusOneEnabled ?? false;
+
+  // ── Email autocomplete search ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (formStage !== "email" || email.trim().length < 3) {
+      setEmailSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/kiosk/visitor-search?q=${encodeURIComponent(email.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEmailSuggestions(data);
+          setShowSuggestions(data.length > 0);
+        }
+      } catch {
+        // silently ignore
+      }
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [email, formStage]);
+
+  const handleSuggestionSelect = (suggestion: { email: string; name: string }) => {
+    setEmail(suggestion.email);
+    setShowSuggestions(false);
+    setEmailSuggestions([]);
+  };
 
   // ── Device registration & heartbeat ──────────────────────────────────────────
 
@@ -490,7 +529,8 @@ export default function Kiosk() {
           onClick={startFlow}
           data-testid="screen-kiosk-idle"
         >
-          <p className="text-2xl font-bold tracking-tight" data-testid="img-kiosk-logo">Ace Electronics Defense Systems</p>
+          <img src={logoIdleSrc} alt="Ace Electronics Inc." className="h-40 w-auto object-contain max-w-xs" data-testid="img-kiosk-logo" />
+          <p className="text-2xl font-bold tracking-tight">Ace Electronics Inc.</p>
           <div className="text-center space-y-2">
             <p className="text-3xl font-bold text-foreground">Welcome</p>
             <p className="text-xl text-muted-foreground">Tap anywhere to check in</p>
@@ -504,7 +544,10 @@ export default function Kiosk() {
         <div className="flex-1 overflow-auto p-6 md:p-10">
           <div className="max-w-lg mx-auto space-y-6">
             <div className="flex items-center justify-between">
-              <p className="text-base font-bold tracking-tight">Ace Electronics Defense Systems</p>
+              <div className="flex items-center gap-2">
+                <img src={logoFormSrc} alt="AE" className="h-10 w-auto object-contain" style={{ transform: "rotate(-90deg)" }} />
+                <p className="text-base font-bold tracking-tight">Ace Electronics Inc.</p>
+              </div>
               <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel">
                 <X className="h-4 w-4 mr-1" /> Cancel
               </Button>
@@ -526,16 +569,34 @@ export default function Kiosk() {
                   className="space-y-1.5"
                 >
                   <Label className="text-base">Email <span className="text-destructive">*</span></Label>
-                  <Input
-                    className="h-16 text-lg"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={handleEmailKeyDown}
-                    placeholder="your@email.com"
-                    autoFocus
-                    data-testid="input-kiosk-email"
-                  />
+                  <div className="relative">
+                    <Input
+                      className="h-16 text-lg"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={handleEmailKeyDown}
+                      placeholder="your@email.com"
+                      autoFocus
+                      data-testid="input-kiosk-email"
+                    />
+                    {showSuggestions && emailSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-background border border-border rounded-xl shadow-lg overflow-hidden">
+                        {emailSuggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="w-full text-left px-4 py-3 hover:bg-muted flex flex-col border-b border-border last:border-0"
+                            onMouseDown={(e) => { e.preventDefault(); handleSuggestionSelect(s); }}
+                            data-testid={`suggestion-email-${i}`}
+                          >
+                            <span className="text-base font-medium">{s.email}</span>
+                            {s.name && <span className="text-sm text-muted-foreground">{s.name}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
