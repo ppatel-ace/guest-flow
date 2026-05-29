@@ -28,27 +28,26 @@ if (!process.env.SESSION_SECRET) {
   process.exit(1);
 }
 
-// Build a pg.Pool for the session store, honouring the same SSL rules as db.ts.
+// Build a pg.Pool for the session store.
+// Strip sslmode from the connection string so the pg driver's URL parser cannot
+// override the explicit ssl object we pass — that's the only reliable way to
+// control rejectUnauthorized when using a connectionString.
 function buildSessionPool(): InstanceType<typeof PgPool> | undefined {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) return undefined;
   try {
     const parsed = new URL(dbUrl);
     const host = parsed.hostname;
-    const isSupabase = host.endsWith(".supabase.co") || host.endsWith(".supabase.com");
-    const sslmode = parsed.searchParams.get("sslmode");
-    let ssl: boolean | object = false;
-    if (isSupabase) {
-      ssl = sslmode === "require" ? { rejectUnauthorized: false } : { rejectUnauthorized: true };
-    } else if (sslmode === "disable") {
-      ssl = false;
-    } else if (sslmode) {
-      ssl = { rejectUnauthorized: sslmode === "verify-full" || sslmode === "verify-ca" };
-    } else {
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "helium";
-      ssl = isLocal ? false : { rejectUnauthorized: false };
-    }
-    return new PgPool({ connectionString: dbUrl, ssl: ssl as any, max: 2 });
+    const isLocal = host === "localhost" || host === "127.0.0.1" || host === "helium";
+    const sslmodeParam = parsed.searchParams.get("sslmode");
+    const noSsl = sslmodeParam === "disable" || isLocal;
+
+    // Remove sslmode so pg's URL parser doesn't set its own TLS options.
+    parsed.searchParams.delete("sslmode");
+    const cleanUrl = parsed.toString();
+
+    const ssl: boolean | object = noSsl ? false : { rejectUnauthorized: false };
+    return new PgPool({ connectionString: cleanUrl, ssl: ssl as any, max: 2 });
   } catch {
     return undefined;
   }

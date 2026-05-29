@@ -1,0 +1,1 @@
+- [pg Pool SSL + connectionString conflict](pg-pool-ssl-conflict.md) — pg ignores explicit ssl:{} when connectionString also has ?sslmode=...; strip sslmode from URL first.
