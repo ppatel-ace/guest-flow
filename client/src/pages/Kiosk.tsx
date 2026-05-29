@@ -544,16 +544,16 @@ export default function Kiosk() {
         <div className="flex-1 overflow-auto p-6 md:p-10">
           <div className="max-w-lg mx-auto space-y-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img src={logoFormSrc} alt="AE" className="h-24 w-auto object-contain" style={{ transform: "rotate(-90deg)" }} />
+              <div className="flex items-center gap-3">
+                <img src={logoFormSrc} alt="AE" className="h-28 w-auto object-contain" style={{ transform: "rotate(-90deg)" }} />
+                <h1 className="text-2xl font-bold">Sign In</h1>
               </div>
               <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel">
                 <X className="h-4 w-4 mr-1" /> Cancel
               </Button>
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Sign In</h1>
-              <p className="text-muted-foreground text-sm mt-1">
+              <p className="text-muted-foreground text-sm">
                 {formStage === "email"
                   ? "Enter your email address to get started."
                   : "Please confirm your details below."}
