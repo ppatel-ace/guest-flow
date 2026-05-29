@@ -568,12 +568,11 @@ export default function Kiosk() {
                   style={{ transform: "translate(-50%, -50%) rotate(-90deg)" }}
                 />
               </div>
-              {/* Title centered in the remaining space */}
-              <h1 className="flex-1 text-center text-2xl font-bold">Sign In</h1>
               <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel" className="shrink-0">
                 <X className="h-4 w-4 mr-1" /> Cancel
               </Button>
             </div>
+            <h1 className="text-2xl font-bold">Sign In</h1>
             <div>
               <p className="text-muted-foreground text-sm">
                 {formStage === "email"
