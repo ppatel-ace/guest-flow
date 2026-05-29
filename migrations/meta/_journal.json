@@ -43,6 +43,13 @@
       "when": 1748200000000,
       "tag": "0005_ace_pocs",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1748300000000,
+      "tag": "0006_ace_pocs_emails",
+      "breakpoints": true
     }
   ]
 }

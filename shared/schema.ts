@@ -249,6 +249,7 @@ export type VisitorMergeEvent = typeof visitorMergeEvents.$inferSelect;
 export const acePocs = pgTable("ace_pocs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
+  emails: text("emails").array().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

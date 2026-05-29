@@ -6,6 +6,7 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
 import { createHmac } from "crypto";
+import { sendCheckInNotification, logEmailConfigStatus } from "./email";
 
 // ─── Bot-protection helpers ────────────────────────────────────────────────────
 
@@ -143,7 +144,8 @@ const requireAuth = (req: any, res: any, next: any) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+  logEmailConfigStatus();
+
   // Authentication routes
   app.post("/api/login", async (req, res) => {
     try {
@@ -710,6 +712,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Fire-and-forget email notification if a POC was selected
+      const pocName = body.acePoc as string | null | undefined;
+      if (pocName) {
+        (async () => {
+          try {
+            const [poc, globalEmails] = await Promise.all([
+              storage.getAcePocByName(pocName),
+              storage.getNotificationEmails(),
+            ]);
+            const pocEmails: string[] = poc?.emails ?? [];
+            const merged = [...new Set([...pocEmails, ...globalEmails])];
+            if (merged.length > 0) {
+              await sendCheckInNotification(
+                {
+                  fullName,
+                  email: body.email ?? null,
+                  company: body.company ?? null,
+                  documentsAgreed: body.documentsAgreed ?? null,
+                },
+                pocName,
+                merged
+              );
+            }
+          } catch (err) {
+            console.error("[guest-checkin] email notification error:", err);
+          }
+        })();
+      }
+
       res.status(201).json(customer ?? { name: fullName });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1100,6 +1131,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         photoData: body.photoData ?? null,
         documentsAgreed: body.documentsAgreed ?? null,
       });
+
+      // Fire-and-forget email notification if a POC was selected
+      const pocName = body.acePoc as string | null | undefined;
+      if (pocName) {
+        (async () => {
+          try {
+            const [poc, globalEmails] = await Promise.all([
+              storage.getAcePocByName(pocName),
+              storage.getNotificationEmails(),
+            ]);
+            const pocEmails: string[] = poc?.emails ?? [];
+            const merged = [...new Set([...pocEmails, ...globalEmails])];
+            if (merged.length > 0) {
+              await sendCheckInNotification(
+                {
+                  fullName,
+                  email: visitor.email,
+                  company: visitor.company,
+                  usCitizen: body.usCitizen ?? null,
+                  documentsAgreed: visitor.documentsAgreed ?? null,
+                },
+                pocName,
+                merged
+              );
+            }
+          } catch (err) {
+            console.error("[kiosk/checkin] email notification error:", err);
+          }
+        })();
+      }
+
       res.status(201).json(visitor);
     } catch (error) {
       console.error("[kiosk/checkin]", error);
@@ -1319,6 +1381,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete ACE POC" });
+    }
+  });
+
+  // Update emails for a specific ACE POC (admin protected)
+  app.patch("/api/ace-pocs/:id/emails", requireAuth, async (req, res) => {
+    try {
+      const { emails } = req.body;
+      if (!Array.isArray(emails)) {
+        return res.status(400).json({ error: "emails must be an array" });
+      }
+      const invalid = emails.filter(
+        (e: unknown) => typeof e !== "string" || !e.trim().toLowerCase().endsWith("@aceelectronics.com")
+      );
+      if (invalid.length > 0) {
+        return res.status(400).json({ error: "All emails must end in @aceelectronics.com", invalid });
+      }
+      const poc = await storage.updateAcePocEmails(req.params.id, emails.map((e: string) => e.trim().toLowerCase()));
+      if (!poc) return res.status(404).json({ error: "ACE POC not found" });
+      res.json(poc);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update POC emails" });
+    }
+  });
+
+  // Get global notification emails (admin protected)
+  app.get("/api/notification-emails", requireAuth, async (req, res) => {
+    try {
+      const emails = await storage.getNotificationEmails();
+      res.json({ emails });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notification emails" });
+    }
+  });
+
+  // Set global notification emails (admin protected)
+  app.patch("/api/notification-emails", requireAuth, async (req, res) => {
+    try {
+      const { emails } = req.body;
+      if (!Array.isArray(emails)) {
+        return res.status(400).json({ error: "emails must be an array" });
+      }
+      const invalid = emails.filter(
+        (e: unknown) => typeof e !== "string" || !e.trim().toLowerCase().endsWith("@aceelectronics.com")
+      );
+      if (invalid.length > 0) {
+        return res.status(400).json({ error: "All emails must end in @aceelectronics.com", invalid });
+      }
+      await storage.setNotificationEmails(emails.map((e: string) => e.trim().toLowerCase()));
+      res.json({ emails: emails.map((e: string) => e.trim().toLowerCase()) });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update notification emails" });
     }
   });
 

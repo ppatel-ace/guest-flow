@@ -2607,16 +2607,122 @@ function ExportDataTab() {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Email list editor (shared by per-POC and global notification sections) ──
+
+const ACE_DOMAIN = "@aceelectronics.com";
+
+function isValidAceEmail(email: string): boolean {
+  return /^[^\s@]+@aceelectronics\.com$/i.test(email.trim());
+}
+
+function EmailListEditor({
+  emails,
+  onSave,
+  isSaving,
+  testIdPrefix,
+}: {
+  emails: string[];
+  onSave: (emails: string[]) => void;
+  isSaving: boolean;
+  testIdPrefix: string;
+}) {
+  const [newEmail, setNewEmail] = useState("");
+  const [localEmails, setLocalEmails] = useState<string[]>(emails);
+
+  useEffect(() => {
+    setLocalEmails(emails);
+  }, [emails]);
+
+  const handleAdd = () => {
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed || !isValidAceEmail(trimmed) || localEmails.includes(trimmed)) return;
+    const updated = [...localEmails, trimmed];
+    setLocalEmails(updated);
+    setNewEmail("");
+    onSave(updated);
+  };
+
+  const handleRemove = (email: string) => {
+    const updated = localEmails.filter((e) => e !== email);
+    setLocalEmails(updated);
+    onSave(updated);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAdd(); }
+  };
+
+  const isInvalid = newEmail.trim() !== "" && !isValidAceEmail(newEmail.trim());
+
+  return (
+    <div className="space-y-2 pt-2">
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <Input
+            placeholder={`name${ACE_DOMAIN}`}
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className={isInvalid ? "border-destructive" : ""}
+            data-testid={`${testIdPrefix}-email-input`}
+          />
+          {isInvalid && (
+            <p className="text-xs text-destructive mt-1">Must be an @aceelectronics.com address</p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          onClick={handleAdd}
+          disabled={!newEmail.trim() || isInvalid || isSaving}
+          data-testid={`${testIdPrefix}-email-add`}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Add
+        </Button>
+      </div>
+      {localEmails.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">No notification emails configured.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {localEmails.map((email) => (
+            <Badge
+              key={email}
+              variant="secondary"
+              className="flex items-center gap-1 pr-1 text-xs"
+              data-testid={`${testIdPrefix}-email-badge-${email}`}
+            >
+              {email}
+              <button
+                className="ml-0.5 rounded-full hover:text-destructive focus:outline-none"
+                onClick={() => handleRemove(email)}
+                disabled={isSaving}
+                data-testid={`${testIdPrefix}-email-remove-${email}`}
+                aria-label={`Remove ${email}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── ACE POC Tab ─────────────────────────────────────────────────────────────
 
 function AcePocTab() {
   const { toast } = useToast();
   const [newName, setNewName] = useState("");
+  const [expandedPocId, setExpandedPocId] = useState<string | null>(null);
+  const [savingEmailsFor, setSavingEmailsFor] = useState<string | null>(null);
 
   const { data: pocs = [], isLoading } = useQuery<AcePoc[]>({
     queryKey: ["/api/ace-pocs"],
+  });
+
+  const { data: notifData, isLoading: notifLoading } = useQuery<{ emails: string[] }>({
+    queryKey: ["/api/notification-emails"],
   });
 
   const addMutation = useMutation({
@@ -2642,8 +2748,39 @@ function AcePocTab() {
     },
   });
 
+  const updatePocEmailsMutation = useMutation({
+    mutationFn: ({ id, emails }: { id: string; emails: string[] }) =>
+      apiRequest("PATCH", `/api/ace-pocs/${id}/emails`, { emails }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ace-pocs"] });
+      toast({ title: "Notification emails updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update emails", variant: "destructive" });
+    },
+    onSettled: () => setSavingEmailsFor(null),
+  });
+
+  const updateNotifEmailsMutation = useMutation({
+    mutationFn: (emails: string[]) =>
+      apiRequest("PATCH", "/api/notification-emails", { emails }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notification-emails"] });
+      toast({ title: "Global notification emails updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update global emails", variant: "destructive" });
+    },
+  });
+
+  const handlePocEmailSave = (pocId: string, emails: string[]) => {
+    setSavingEmailsFor(pocId);
+    updatePocEmailsMutation.mutate({ id: pocId, emails });
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Add new POC */}
       <div className="flex gap-2">
         <Input
           placeholder="Enter full name (e.g. Jane Smith)"
@@ -2663,29 +2800,88 @@ function AcePocTab() {
           Add
         </Button>
       </div>
+
+      {/* POC roster */}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : pocs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No ACE POCs configured yet. Add one above.</p>
       ) : (
         <ul className="divide-y rounded-md border">
-          {pocs.map((poc) => (
-            <li key={poc.id} className="flex items-center justify-between px-3 py-2.5">
-              <span className="text-sm font-medium">{poc.name}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                onClick={() => deleteMutation.mutate(poc.id)}
-                disabled={deleteMutation.isPending}
-                data-testid={`button-delete-ace-poc-${poc.id}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </li>
-          ))}
+          {pocs.map((poc) => {
+            const isExpanded = expandedPocId === poc.id;
+            const pocEmails: string[] = poc.emails ?? [];
+            return (
+              <li key={poc.id} data-testid={`row-ace-poc-${poc.id}`}>
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <button
+                    className="flex items-center gap-2 flex-1 text-left"
+                    onClick={() => setExpandedPocId(isExpanded ? null : poc.id)}
+                    data-testid={`button-expand-ace-poc-${poc.id}`}
+                  >
+                    <span className="text-sm font-medium">{poc.name}</span>
+                    {pocEmails.length > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {pocEmails.length} email{pocEmails.length !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                    {isExpanded ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                    )}
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive ml-2 shrink-0"
+                    onClick={() => deleteMutation.mutate(poc.id)}
+                    disabled={deleteMutation.isPending}
+                    data-testid={`button-delete-ace-poc-${poc.id}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                {isExpanded && (
+                  <div className="px-3 pb-3 border-t bg-muted/30">
+                    <p className="text-xs text-muted-foreground pt-2 mb-1">
+                      Notification emails for <strong>{poc.name}</strong> — notified when they are selected at check-in.
+                    </p>
+                    <EmailListEditor
+                      emails={pocEmails}
+                      onSave={(emails) => handlePocEmailSave(poc.id, emails)}
+                      isSaving={savingEmailsFor === poc.id && updatePocEmailsMutation.isPending}
+                      testIdPrefix={`poc-${poc.id}`}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+
+      {/* Global notification emails */}
+      <div className="rounded-md border">
+        <div className="px-4 py-3 border-b bg-muted/40">
+          <h3 className="text-sm font-semibold">Global Notification Emails</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            These addresses receive a notification for every check-in, regardless of which POC was selected.
+          </p>
+        </div>
+        <div className="px-4 py-3">
+          {notifLoading ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : (
+            <EmailListEditor
+              emails={notifData?.emails ?? []}
+              onSave={(emails) => updateNotifEmailsMutation.mutate(emails)}
+              isSaving={updateNotifEmailsMutation.isPending}
+              testIdPrefix="global-notif"
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

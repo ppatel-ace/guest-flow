@@ -229,6 +229,11 @@ export interface IStorage {
   listAcePocs(): Promise<AcePoc[]>;
   createAcePoc(name: string): Promise<AcePoc>;
   deleteAcePoc(id: string): Promise<boolean>;
+  updateAcePocEmails(id: string, emails: string[]): Promise<AcePoc | undefined>;
+  getAcePocByName(name: string): Promise<AcePoc | undefined>;
+  // Global notification emails
+  getNotificationEmails(): Promise<string[]>;
+  setNotificationEmails(emails: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1106,6 +1111,50 @@ export class DatabaseStorage implements IStorage {
   async deleteAcePoc(id: string): Promise<boolean> {
     const result = await db.delete(acePocs).where(eq(acePocs.id, id)).returning();
     return result.length > 0;
+  }
+
+  async updateAcePocEmails(id: string, emails: string[]): Promise<AcePoc | undefined> {
+    const [row] = await db
+      .update(acePocs)
+      .set({ emails })
+      .where(eq(acePocs.id, id))
+      .returning();
+    return row || undefined;
+  }
+
+  async getAcePocByName(name: string): Promise<AcePoc | undefined> {
+    const [row] = await db.select().from(acePocs).where(eq(acePocs.name, name));
+    return row || undefined;
+  }
+
+  // ─── Global notification emails ───────────────────────────────────────────────
+
+  async getNotificationEmails(): Promise<string[]> {
+    const [row] = await db
+      .select()
+      .from(pageSettings)
+      .where(eq(pageSettings.key, "notification_emails"));
+    if (!row) return [];
+    try {
+      return JSON.parse(row.description) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  async setNotificationEmails(emails: string[]): Promise<void> {
+    await db
+      .insert(pageSettings)
+      .values({
+        key: "notification_emails",
+        title: "Notification Emails",
+        description: JSON.stringify(emails),
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: pageSettings.key,
+        set: { description: JSON.stringify(emails), updatedAt: new Date() },
+      });
   }
 
 }
