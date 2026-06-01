@@ -1130,7 +1130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signedOutAt: null,
         usCitizen: null,
         purpose: null,
-        location: null,
+        location: body.location?.trim() || null,
         source: "kiosk",
         notes: null,
         photoData: body.photoData ?? null,

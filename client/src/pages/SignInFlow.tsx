@@ -1350,11 +1350,12 @@ function VisitorLogTab() {
       ) : (
         /* ── By-visit: individual rows ── */
         <div className="rounded-md border overflow-hidden">
-          <div className="hidden lg:grid grid-cols-[2rem_1fr_1fr_1fr_88px_88px_56px_64px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+          <div className="hidden lg:grid grid-cols-[2rem_1fr_1fr_1fr_80px_88px_88px_56px_64px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
             <span />
             <span>Name / Email</span>
             <span>Company</span>
             <span>ACE POC</span>
+            <span>Location</span>
             <span>Signed In</span>
             <span>Signed Out</span>
             <span>Duration</span>
@@ -1364,7 +1365,7 @@ function VisitorLogTab() {
             {filtered.map((visitor) => (
               <button
                 key={visitor.id}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_1fr_1fr_1fr_88px_88px_56px_64px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors"
+                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_1fr_1fr_1fr_80px_88px_88px_56px_64px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors"
                 onClick={() => setSelected(visitor)}
                 data-testid={`row-visitor-${visitor.id}`}
               >
@@ -1383,6 +1384,7 @@ function VisitorLogTab() {
                 </div>
                 <div className="hidden lg:block text-sm text-muted-foreground truncate">{visitor.company || "—"}</div>
                 <div className="hidden lg:block text-sm text-muted-foreground truncate">{visitor.acePoc || "—"}</div>
+                <div className="hidden lg:block text-xs text-muted-foreground truncate">{visitor.location || "—"}</div>
                 <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                   {new Date(visitor.signedInAt).toLocaleDateString()}
                 </div>

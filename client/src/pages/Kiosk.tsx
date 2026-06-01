@@ -141,6 +141,7 @@ export default function Kiosk() {
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [acePoc, setAcePoc] = useState("");
+  const [location, setLocation] = useState("");
   const [plusOneCount, setPlusOneCount] = useState(1);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
 
@@ -256,7 +257,7 @@ export default function Kiosk() {
     setWelcomeFirstName(null);
     setIsLookingUp(false);
     setFormTitle(""); setFirstName(""); setLastName(""); setEmail("");
-    setPhone(""); setCompany(""); setAcePoc(""); setPlusOneCount(1);
+    setPhone(""); setCompany(""); setAcePoc(""); setLocation(""); setPlusOneCount(1);
     setCustomFieldValues({}); setPhotoData(null); setCameraError(false);
     setCurrentDocIndex(0); setAcknowledgedDocs([]);
     setSubmitError(null); setIsSubmitting(false);
@@ -356,6 +357,10 @@ export default function Kiosk() {
   };
 
   const determineNextStepAfterForm = () => {
+    if (!location) {
+      setSubmitError("Please select a location before continuing.");
+      return;
+    }
     if (enabledDocs.length > 0) {
       setCurrentDocIndex(0);
       setStep("documents");
@@ -394,6 +399,7 @@ export default function Kiosk() {
           setLastName("");
           setCompany("");
           setAcePoc("");
+          setLocation("");
           setPhone("");
           setWelcomeFirstName(null);
         }
@@ -424,6 +430,7 @@ export default function Kiosk() {
       setLastName("");
       setCompany("");
       setAcePoc("");
+      setLocation("");
       setPhone("");
     }
   };
@@ -469,6 +476,7 @@ export default function Kiosk() {
           phoneNumber: phone.trim(),
           company: company.trim() || null,
           acePoc: acePoc || null,
+          location: location || null,
           title: formTitle || null,
           photoData: photo || null,
           plusOneCount: plusOneEnabled ? plusOneCount : 0,
@@ -766,11 +774,31 @@ export default function Kiosk() {
                   </Select>
                 </motion.div>
 
+                <motion.div
+                  key="field-location"
+                  custom={5}
+                  variants={fieldVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-1.5"
+                >
+                  <Label className="text-base">Location <span className="text-destructive">*</span></Label>
+                  <Select value={location} onValueChange={(v) => { setLocation(v); setSubmitError(null); }}>
+                    <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-location">
+                      <SelectValue placeholder="Select your location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="New Jersey">New Jersey</SelectItem>
+                      <SelectItem value="Michigan">Michigan</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+
                 {/* Custom fields */}
                 {customFields.map((field, idx) => (
                   <motion.div
                     key={`field-custom-${field.id}`}
-                    custom={5 + idx}
+                    custom={6 + idx}
                     variants={fieldVariants}
                     initial="hidden"
                     animate="visible"
@@ -815,7 +843,7 @@ export default function Kiosk() {
                 {plusOneEnabled && (
                   <motion.div
                     key="field-plusone"
-                    custom={5 + customFields.length}
+                    custom={6 + customFields.length}
                     variants={fieldVariants}
                     initial="hidden"
                     animate="visible"
@@ -839,7 +867,7 @@ export default function Kiosk() {
 
                 <motion.div
                   key="field-submit"
-                  custom={6 + customFields.length + (plusOneEnabled ? 1 : 0)}
+                  custom={7 + customFields.length + (plusOneEnabled ? 1 : 0)}
                   variants={fieldVariants}
                   initial="hidden"
                   animate="visible"
