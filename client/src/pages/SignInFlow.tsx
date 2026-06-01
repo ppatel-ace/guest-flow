@@ -100,6 +100,7 @@ interface KioskDevice {
   lastSeen: string;
   userAgent: string | null;
   ipAddress: string | null;
+  defaultLocation: string | null;
 }
 
 interface VisitorMergeEvent {
@@ -818,6 +819,7 @@ function DevicesTab() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingLocation, setEditingLocation] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: devices = [], isLoading, refetch } = useQuery<KioskDevice[]>({
@@ -826,16 +828,19 @@ function DevicesTab() {
   });
 
   const renameMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const res = await apiRequest("PUT", `/api/kiosk/devices/${id}`, { name: name || null });
+    mutationFn: async ({ id, name, defaultLocation }: { id: string; name: string; defaultLocation: string }) => {
+      const res = await apiRequest("PUT", `/api/kiosk/devices/${id}`, {
+        name: name || null,
+        defaultLocation: defaultLocation || null,
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kiosk/devices"] });
-      toast({ title: "Device renamed" });
+      toast({ title: "Device saved" });
       setEditingId(null);
     },
-    onError: () => toast({ title: "Error", description: "Failed to rename device.", variant: "destructive" }),
+    onError: () => toast({ title: "Error", description: "Failed to save device.", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -905,25 +910,37 @@ function DevicesTab() {
               <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusColor(device.computedStatus)}`} />
               <div className="flex-1 min-w-0">
                 {editingId === device.id ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Input
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       placeholder="Device name"
                       className="h-7 text-sm w-48"
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") renameMutation.mutate({ id: device.id, name: editingName });
                         if (e.key === "Escape") setEditingId(null);
                       }}
                       autoFocus
                       data-testid={`input-device-name-${device.id}`}
                     />
-                    <Button size="sm" className="h-7" onClick={() => renameMutation.mutate({ id: device.id, name: editingName })} data-testid={`button-save-device-name-${device.id}`}>Save</Button>
+                    <Select value={editingLocation} onValueChange={setEditingLocation}>
+                      <SelectTrigger className="h-7 text-sm w-36" data-testid={`select-device-location-${device.id}`}>
+                        <SelectValue placeholder="No location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">No default</SelectItem>
+                        <SelectItem value="New Jersey">New Jersey</SelectItem>
+                        <SelectItem value="Michigan">Michigan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="h-7" onClick={() => renameMutation.mutate({ id: device.id, name: editingName, defaultLocation: editingLocation })} data-testid={`button-save-device-name-${device.id}`}>Save</Button>
                     <Button size="sm" variant="outline" className="h-7" onClick={() => setEditingId(null)}>Cancel</Button>
                   </div>
                 ) : (
-                  <div className="font-medium text-sm">
+                  <div className="font-medium text-sm flex items-center gap-2">
                     {device.name || <span className="text-muted-foreground italic">Unnamed device</span>}
+                    {device.defaultLocation && (
+                      <span className="text-xs text-muted-foreground border rounded px-1.5 py-0.5">{device.defaultLocation}</span>
+                    )}
                   </div>
                 )}
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap">
@@ -934,7 +951,7 @@ function DevicesTab() {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
-                <Button size="icon" variant="ghost" onClick={() => { setEditingId(device.id); setEditingName(device.name ?? ""); }} data-testid={`button-rename-device-${device.id}`}>
+                <Button size="icon" variant="ghost" onClick={() => { setEditingId(device.id); setEditingName(device.name ?? ""); setEditingLocation(device.defaultLocation ?? ""); }} data-testid={`button-rename-device-${device.id}`}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(device.id)} data-testid={`button-delete-device-${device.id}`}>

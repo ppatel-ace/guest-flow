@@ -1024,11 +1024,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rename device (protected)
+  // Public: get a single device's settings by deviceId (used by kiosk to read defaultLocation)
+  app.get("/api/kiosk/device-info", async (req, res) => {
+    try {
+      const { deviceId } = req.query;
+      if (!deviceId || typeof deviceId !== "string") {
+        return res.status(400).json({ error: "deviceId is required" });
+      }
+      const devices = await storage.getAllKioskDevices();
+      const device = devices.find((d) => d.deviceId === deviceId);
+      if (!device) return res.json({ defaultLocation: null });
+      res.json({ defaultLocation: device.defaultLocation ?? null });
+    } catch (error) {
+      console.error("[kiosk/device-info]", error);
+      res.status(500).json({ error: "Failed to fetch device info" });
+    }
+  });
+
+  // Rename / configure device (protected)
   app.put("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
     try {
-      const { name } = req.body;
-      const device = await storage.updateKioskDevice(req.params.id, { name: name ?? null });
+      const { name, defaultLocation } = req.body;
+      const device = await storage.updateKioskDevice(req.params.id, {
+        name: name ?? null,
+        defaultLocation: defaultLocation ?? null,
+      });
       if (!device) {
         return res.status(404).json({ error: "Device not found" });
       }

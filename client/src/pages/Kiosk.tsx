@@ -79,16 +79,22 @@ function getOrCreateDeviceId(): string {
   return id;
 }
 
-async function registerDevice(deviceId: string): Promise<void> {
+async function registerDevice(deviceId: string): Promise<string | null> {
   try {
     await fetch("/api/kiosk/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ deviceId }),
     });
+    const infoRes = await fetch(`/api/kiosk/device-info?deviceId=${encodeURIComponent(deviceId)}`);
+    if (infoRes.ok) {
+      const data = await infoRes.json();
+      return data.defaultLocation ?? null;
+    }
   } catch {
     // silently ignore
   }
+  return null;
 }
 
 async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promise<void> {
@@ -125,6 +131,7 @@ const welcomeBadgeVariants = {
 
 export default function Kiosk() {
   const deviceId = useRef<string>(getOrCreateDeviceId());
+  const deviceDefaultLocation = useRef<string | null>(null);
   const [step, setStep] = useState<KioskStep>("idle");
   const [visitorName, setVisitorName] = useState("");
 
@@ -232,7 +239,9 @@ export default function Kiosk() {
   // ── Device registration & heartbeat ──────────────────────────────────────────
 
   useEffect(() => {
-    registerDevice(deviceId.current);
+    registerDevice(deviceId.current).then((loc) => {
+      if (loc) deviceDefaultLocation.current = loc;
+    });
     const interval = setInterval(() => {
       sendHeartbeat(deviceId.current, step === "idle" ? "idle" : "active");
     }, 30000);
@@ -409,6 +418,9 @@ export default function Kiosk() {
       setWelcomeFirstName(null);
     } finally {
       setIsLookingUp(false);
+      if (deviceDefaultLocation.current) {
+        setLocation(deviceDefaultLocation.current);
+      }
       setFormStage("fields");
     }
   };
@@ -783,7 +795,11 @@ export default function Kiosk() {
                   className="space-y-1.5"
                 >
                   <Label className="text-base">Location <span className="text-destructive">*</span></Label>
-                  <Select value={location} onValueChange={(v) => { setLocation(v); setSubmitError(null); }}>
+                  <Select
+                    value={location}
+                    onValueChange={(v) => { if (!deviceDefaultLocation.current) { setLocation(v); setSubmitError(null); } }}
+                    disabled={!!deviceDefaultLocation.current}
+                  >
                     <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-location">
                       <SelectValue placeholder="Select your location" />
                     </SelectTrigger>

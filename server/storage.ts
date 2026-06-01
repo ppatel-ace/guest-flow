@@ -198,7 +198,7 @@ export interface IStorage {
   registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<KioskDevice>;
   heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined>;
   getAllKioskDevices(): Promise<KioskDevice[]>;
-  updateKioskDevice(id: string, data: { name?: string }): Promise<KioskDevice | undefined>;
+  updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null }): Promise<KioskDevice | undefined>;
   deleteKioskDevice(id: string): Promise<boolean>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
@@ -653,7 +653,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(kioskDevices).orderBy(desc(kioskDevices.lastSeen));
   }
 
-  async updateKioskDevice(id: string, data: { name?: string }): Promise<KioskDevice | undefined> {
+  async updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null }): Promise<KioskDevice | undefined> {
     const [updated] = await db.update(kioskDevices).set(data).where(eq(kioskDevices.id, id)).returning();
     return updated || undefined;
   }
