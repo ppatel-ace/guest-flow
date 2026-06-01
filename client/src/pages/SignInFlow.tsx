@@ -820,7 +820,7 @@ function DevicesTab() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
-  const [editingLocation, setEditingLocation] = useState("");
+  const [editingLocation, setEditingLocation] = useState("none");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: devices = [], isLoading, refetch } = useQuery<KioskDevice[]>({
@@ -928,12 +928,12 @@ function DevicesTab() {
                         <SelectValue placeholder="No location" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No default</SelectItem>
+                        <SelectItem value="none">No default</SelectItem>
                         <SelectItem value="New Jersey">New Jersey</SelectItem>
                         <SelectItem value="Michigan">Michigan</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button size="sm" className="h-7" onClick={() => renameMutation.mutate({ id: device.id, name: editingName, defaultLocation: editingLocation })} data-testid={`button-save-device-name-${device.id}`}>Save</Button>
+                    <Button size="sm" className="h-7" onClick={() => renameMutation.mutate({ id: device.id, name: editingName, defaultLocation: editingLocation === "none" ? "" : editingLocation })} data-testid={`button-save-device-name-${device.id}`}>Save</Button>
                     <Button size="sm" variant="outline" className="h-7" onClick={() => setEditingId(null)}>Cancel</Button>
                   </div>
                 ) : (
@@ -955,7 +955,7 @@ function DevicesTab() {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
-                <Button size="icon" variant="ghost" onClick={() => { setEditingId(device.id); setEditingName(device.name ?? ""); setEditingLocation(device.defaultLocation ?? ""); }} data-testid={`button-rename-device-${device.id}`}>
+                <Button size="icon" variant="ghost" onClick={() => { setEditingId(device.id); setEditingName(device.name ?? ""); setEditingLocation(device.defaultLocation || "none"); }} data-testid={`button-rename-device-${device.id}`}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(device.id)} data-testid={`button-delete-device-${device.id}`}>
