@@ -195,7 +195,7 @@ export interface IStorage {
   getKioskSettings(): Promise<KioskCheckinSettings>;
   updateKioskSettings(data: Partial<KioskCheckinSettings>): Promise<KioskCheckinSettings>;
   // Kiosk devices
-  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<KioskDevice>;
+  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<{ device: KioskDevice; isNew: boolean }>;
   heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined>;
   getAllKioskDevices(): Promise<KioskDevice[]>;
   updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null; locationSource?: string | null }): Promise<KioskDevice | undefined>;
@@ -617,7 +617,7 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Kiosk devices ────────────────────────────────────────────────────────────
 
-  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<KioskDevice> {
+  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<{ device: KioskDevice; isNew: boolean }> {
     const [existing] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
     if (existing) {
       const [updated] = await db
@@ -625,7 +625,7 @@ export class DatabaseStorage implements IStorage {
         .set({ lastSeen: new Date(), userAgent: userAgent ?? existing.userAgent, ipAddress: ipAddress ?? existing.ipAddress })
         .where(eq(kioskDevices.id, existing.id))
         .returning();
-      return updated;
+      return { device: updated, isNew: false };
     }
     const [created] = await db.insert(kioskDevices).values({
       deviceId,
@@ -635,7 +635,7 @@ export class DatabaseStorage implements IStorage {
       userAgent: userAgent ?? null,
       ipAddress: ipAddress ?? null,
     }).returning();
-    return created;
+    return { device: created, isNew: true };
   }
 
   async heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined> {

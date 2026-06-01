@@ -990,9 +990,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const ua = req.headers["user-agent"];
       const ip = req.ip;
-      const device = await storage.registerKioskDevice(deviceId, ua, ip);
-      // Auto-detect location from IP for new devices that have no default set yet
-      if (!device.defaultLocation) {
+      const { device, isNew } = await storage.registerKioskDevice(deviceId, ua, ip);
+      // Auto-detect location from IP only on first registration (never overwrite admin-cleared location)
+      if (isNew) {
         const detected = detectLocationFromIp(ip);
         if (detected) {
           await storage.updateKioskDevice(device.id, {
@@ -1021,7 +1021,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Device not found — re-register it
         const ua = req.headers["user-agent"];
         const ip = req.ip;
-        const registered = await storage.registerKioskDevice(deviceId, ua, ip);
+        const { device: registered } = await storage.registerKioskDevice(deviceId, ua, ip);
         return res.json(registered);
       }
       res.json(device);
