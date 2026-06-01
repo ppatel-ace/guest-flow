@@ -101,6 +101,7 @@ interface KioskDevice {
   userAgent: string | null;
   ipAddress: string | null;
   defaultLocation: string | null;
+  locationSource: string | null;
 }
 
 interface VisitorMergeEvent {
@@ -936,10 +937,13 @@ function DevicesTab() {
                     <Button size="sm" variant="outline" className="h-7" onClick={() => setEditingId(null)}>Cancel</Button>
                   </div>
                 ) : (
-                  <div className="font-medium text-sm flex items-center gap-2">
+                  <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
                     {device.name || <span className="text-muted-foreground italic">Unnamed device</span>}
                     {device.defaultLocation && (
                       <span className="text-xs text-muted-foreground border rounded px-1.5 py-0.5">{device.defaultLocation}</span>
+                    )}
+                    {device.defaultLocation && device.locationSource === "auto" && (
+                      <span className="text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">Auto-detected</span>
                     )}
                   </div>
                 )}

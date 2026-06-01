@@ -786,29 +786,30 @@ export default function Kiosk() {
                   </Select>
                 </motion.div>
 
-                <motion.div
-                  key="field-location"
-                  custom={5}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Location <span className="text-destructive">*</span></Label>
-                  <Select
-                    value={location}
-                    onValueChange={(v) => { if (!deviceDefaultLocation.current) { setLocation(v); setSubmitError(null); } }}
-                    disabled={!!deviceDefaultLocation.current}
+                {!deviceDefaultLocation.current && (
+                  <motion.div
+                    key="field-location"
+                    custom={5}
+                    variants={fieldVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="space-y-1.5"
                   >
-                    <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-location">
-                      <SelectValue placeholder="Select your location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="New Jersey">New Jersey</SelectItem>
-                      <SelectItem value="Michigan">Michigan</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </motion.div>
+                    <Label className="text-base">Location <span className="text-destructive">*</span></Label>
+                    <Select
+                      value={location}
+                      onValueChange={(v) => { setLocation(v); setSubmitError(null); }}
+                    >
+                      <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-location">
+                        <SelectValue placeholder="Select your location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="New Jersey">New Jersey</SelectItem>
+                        <SelectItem value="Michigan">Michigan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </motion.div>
+                )}
 
                 {/* Custom fields */}
                 {customFields.map((field, idx) => (

@@ -7,6 +7,23 @@ import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
 import { createHmac } from "crypto";
 import { sendCheckInNotification, logEmailConfigStatus } from "./email";
+import geoip from "geoip-lite";
+
+// ─── IP → location helper ─────────────────────────────────────────────────────
+
+const REGION_TO_LOCATION: Record<string, string> = {
+  NJ: "New Jersey",
+  MI: "Michigan",
+};
+
+function detectLocationFromIp(ip: string | undefined): string | null {
+  if (!ip) return null;
+  // Strip IPv6-mapped IPv4 prefix (::ffff:x.x.x.x)
+  const cleanIp = ip.replace(/^::ffff:/, "");
+  const geo = geoip.lookup(cleanIp);
+  if (!geo || !geo.region) return null;
+  return REGION_TO_LOCATION[geo.region] ?? null;
+}
 
 // ─── Bot-protection helpers ────────────────────────────────────────────────────
 
@@ -974,6 +991,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ua = req.headers["user-agent"];
       const ip = req.ip;
       const device = await storage.registerKioskDevice(deviceId, ua, ip);
+      // Auto-detect location from IP for new devices that have no default set yet
+      if (!device.defaultLocation) {
+        const detected = detectLocationFromIp(ip);
+        if (detected) {
+          await storage.updateKioskDevice(device.id, {
+            defaultLocation: detected,
+            locationSource: "auto",
+          });
+        }
+      }
       res.json(device);
     } catch (error) {
       console.error("[kiosk/register]", error);
@@ -1048,6 +1075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const device = await storage.updateKioskDevice(req.params.id, {
         name: name ?? null,
         defaultLocation: defaultLocation ?? null,
+        locationSource: defaultLocation ? "manual" : null,
       });
       if (!device) {
         return res.status(404).json({ error: "Device not found" });

@@ -126,6 +126,7 @@ export const kioskDevices = pgTable("kiosk_devices", {
   userAgent: text("user_agent"),
   ipAddress: text("ip_address"),
   defaultLocation: text("default_location"),
+  locationSource: text("location_source"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
