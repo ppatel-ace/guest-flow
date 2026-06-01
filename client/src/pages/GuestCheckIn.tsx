@@ -213,6 +213,7 @@ export default function GuestCheckIn() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [company, setCompany] = useState("");
   const [acePoc, setAcePoc] = useState("");
+  const [location, setLocation] = useState("");
 
   const [honeypot, setHoneypot] = useState<string>("");
   const [timingToken, setTimingToken] = useState<string>("");
@@ -247,6 +248,11 @@ export default function GuestCheckIn() {
     e.preventDefault();
     if (submitting) return;
 
+    if (!location) {
+      toast({ title: "Location required", description: "Please select a location before submitting.", variant: "destructive" });
+      return;
+    }
+
     if (TURNSTILE_SITE_KEY && !turnstileToken) {
       toast({ title: "Please wait", description: "Security check not complete yet. Try again in a moment.", variant: "destructive" });
       return;
@@ -268,6 +274,7 @@ export default function GuestCheckIn() {
           phoneNumber: phoneNumber.trim(),
           company: company.trim() || null,
           acePoc: acePoc || null,
+          location: location || null,
           eventName: eventName || null,
           _hp: honeypot,
           _ft: timingToken,
@@ -482,6 +489,22 @@ export default function GuestCheckIn() {
                   </Label>
                   <PocCombobox value={acePoc} onChange={setAcePoc} />
                 </div>
+              </div>
+
+              {/* Location */}
+              <div className="space-y-2">
+                <Label htmlFor="location-select" className={LABEL_CLASS}>
+                  Location <span className="text-red-500">*</span>
+                </Label>
+                <Select value={location} onValueChange={setLocation}>
+                  <SelectTrigger id="location-select" className={INPUT_CLASS} data-testid="select-location">
+                    <SelectValue placeholder="Select your location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="New Jersey">New Jersey</SelectItem>
+                    <SelectItem value="Michigan">Michigan</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

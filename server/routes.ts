@@ -685,6 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: body.phoneNumber,
         company: body.company ?? null,
         acePoc: body.acePoc ?? null,
+        location: body.location ?? null,
         eventName: body.eventName ?? null,
         photoData: body.photoData ?? null,
         plusOneCount: body.plusOneCount ?? 0,

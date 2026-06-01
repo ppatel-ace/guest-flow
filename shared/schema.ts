@@ -85,6 +85,7 @@ export const leads = pgTable("leads", {
   photoData: text("photo_data"),
   plusOneCount: integer("plus_one_count").default(0),
   documentsAgreed: text("documents_agreed"),
+  location: text("location"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({
