@@ -57,6 +57,13 @@
       "when": 1748400000000,
       "tag": "0003_visitor_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1748500000000,
+      "tag": "0007_kiosk_location_source",
+      "breakpoints": true
     }
   ]
 }
