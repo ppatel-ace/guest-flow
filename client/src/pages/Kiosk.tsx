@@ -583,11 +583,11 @@ export default function Kiosk() {
           data-testid="screen-kiosk-idle"
         >
           {/* Logo */}
-          <div className="mb-10">
+          <div className="mb-10 bg-white rounded-2xl p-5 shadow-2xl shadow-black/40">
             <img
               src={logoIdleSrc}
               alt="Ace Electronics Inc."
-              className="h-32 w-auto object-contain"
+              className="h-24 w-auto object-contain"
               data-testid="img-kiosk-logo"
             />
           </div>
