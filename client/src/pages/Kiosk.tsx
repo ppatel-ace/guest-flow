@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-const logoIdleSrc = "/logos/ace-logo-idle.bmp";
-const logoFormSrc = "/logos/ace-logo-form.bmp";
+const logoIdleSrc = "/logos/ace-logo-idle.png";
+const logoFormSrc = "/logos/ace-logo-form.png";
 import {
   Select,
   SelectContent,
@@ -112,19 +112,19 @@ async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promi
 // ─── Animation variants ───────────────────────────────────────────────────────
 
 const fieldVariants = {
-  hidden: { opacity: 0, y: 24 },
+  hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.3, delay: i * 0.07, ease: "easeOut" },
+    transition: { duration: 0.2, delay: i * 0.04, ease: "easeOut" },
   }),
-  exit: { opacity: 0, y: -12, transition: { duration: 0.2 } },
+  exit: { opacity: 0, y: -8, transition: { duration: 0.15 } },
 };
 
 const welcomeBadgeVariants = {
-  hidden: { opacity: 0, scale: 0.9 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
-  exit: { opacity: 0, scale: 0.9, transition: { duration: 0.2 } },
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.2, ease: "easeOut" } },
+  exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -235,6 +235,13 @@ export default function Kiosk() {
     setShowSuggestions(false);
     setEmailSuggestions([]);
   };
+
+  // ── Preload form logo so it's ready before the user taps ────────────────────
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = logoFormSrc;
+  }, []);
 
   // ── Device registration & heartbeat ──────────────────────────────────────────
 
