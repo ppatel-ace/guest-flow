@@ -583,14 +583,21 @@ export default function Kiosk() {
           data-testid="screen-kiosk-idle"
         >
           {/* Logo */}
-          <div className="mb-10">
-            <img
+          <motion.div
+            className="mb-10"
+            initial={{ opacity: 0, scale: 0.8, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <motion.img
               src={logoIdleSrc}
               alt="Ace Electronics Inc."
-              className="h-32 w-auto object-contain"
+              className="h-32 w-auto object-contain rounded-2xl shadow-2xl shadow-black/40"
+              animate={{ y: [0, -12, 0] }}
+              transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
               data-testid="img-kiosk-logo"
             />
-          </div>
+          </motion.div>
 
           {/* Welcome text */}
           <div className="text-center space-y-3 mb-14">
