@@ -526,15 +526,15 @@ export default function Kiosk() {
 
   return (
     <div
-      className="min-h-screen bg-background flex flex-col select-none"
+      className="min-h-screen flex flex-col select-none"
       style={{ touchAction: "manipulation" }}
     >
       {/* Submission error overlay */}
       {submitError && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 p-4" data-testid="banner-kiosk-error">
-          <div className="bg-destructive text-destructive-foreground rounded-xl p-4 flex items-center justify-between gap-4 shadow-lg">
+        <div className="fixed bottom-6 left-4 right-4 z-50" data-testid="banner-kiosk-error">
+          <div className="bg-red-600 text-white rounded-2xl px-5 py-4 flex items-center justify-between gap-4 shadow-2xl">
             <p className="text-base font-medium">{submitError}</p>
-            <Button size="sm" variant="secondary" onClick={() => setSubmitError(null)} data-testid="button-kiosk-dismiss-error">
+            <Button size="sm" variant="secondary" onClick={() => setSubmitError(null)} data-testid="button-kiosk-dismiss-error" className="shrink-0">
               Dismiss
             </Button>
           </div>
@@ -543,21 +543,32 @@ export default function Kiosk() {
 
       {/* Submission in-progress overlay */}
       {isSubmitting && (
-        <div className="fixed inset-0 z-40 bg-background/80 flex items-center justify-center" data-testid="overlay-kiosk-submitting">
-          <div className="text-center space-y-3">
-            <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
-            <p className="text-lg font-medium">Checking you in…</p>
+        <div className="fixed inset-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex items-center justify-center" data-testid="overlay-kiosk-submitting">
+          <div className="text-center space-y-4">
+            <div className="h-14 w-14 rounded-full border-4 border-blue-600 border-t-transparent animate-spin mx-auto" />
+            <p className="text-xl font-semibold text-slate-700 dark:text-slate-200">Checking you in…</p>
           </div>
         </div>
       )}
 
       {/* Inactivity warning overlay */}
       {showIdleWarning && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center" onClick={() => { if (countdownRef.current) clearInterval(countdownRef.current); setShowIdleWarning(false); resetInactivityTimer(); }}>
-          <div className="bg-background rounded-2xl p-10 text-center shadow-2xl max-w-sm mx-4">
-            <p className="text-2xl font-bold mb-2">Still there?</p>
-            <p className="text-muted-foreground mb-6">Returning to start in <span className="font-bold text-primary">{countdown}s</span>…</p>
-            <Button size="lg" className="w-full text-lg h-14" onClick={(e) => { e.stopPropagation(); if (countdownRef.current) clearInterval(countdownRef.current); setShowIdleWarning(false); resetInactivityTimer(); }} data-testid="button-kiosk-stay">
+        <div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center"
+          onClick={() => { if (countdownRef.current) clearInterval(countdownRef.current); setShowIdleWarning(false); resetInactivityTimer(); }}
+        >
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-10 text-center shadow-2xl max-w-sm mx-4 border border-slate-100 dark:border-slate-700">
+            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-5">
+              <span className="text-3xl font-bold text-amber-600 dark:text-amber-400">{countdown}</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Still there?</p>
+            <p className="text-slate-500 dark:text-slate-400 mb-7">Session will reset automatically.</p>
+            <Button
+              size="lg"
+              className="w-full h-14 text-lg font-semibold rounded-xl"
+              onClick={(e) => { e.stopPropagation(); if (countdownRef.current) clearInterval(countdownRef.current); setShowIdleWarning(false); resetInactivityTimer(); }}
+              data-testid="button-kiosk-stay"
+            >
               I'm still here
             </Button>
           </div>
@@ -567,428 +578,412 @@ export default function Kiosk() {
       {/* ── Idle Screen ── */}
       {step === "idle" && (
         <div
-          className="flex-1 flex flex-col items-center justify-center cursor-pointer gap-8 p-8"
+          className="flex-1 flex flex-col items-center justify-center cursor-pointer p-10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen"
           onClick={startFlow}
           data-testid="screen-kiosk-idle"
         >
-          <img src={logoIdleSrc} alt="Ace Electronics Inc." className="h-40 w-auto object-contain max-w-xs" data-testid="img-kiosk-logo" />
-          <p className="text-2xl font-bold tracking-tight">Ace Electronics Inc.</p>
-          <div className="text-center space-y-2">
-            <p className="text-3xl font-bold text-foreground">Welcome</p>
-            <p className="text-xl text-muted-foreground">Tap anywhere to check in</p>
+          {/* Logo */}
+          <div className="mb-10">
+            <img
+              src={logoIdleSrc}
+              alt="Ace Electronics Inc."
+              className="h-32 w-auto object-contain"
+              data-testid="img-kiosk-logo"
+            />
           </div>
-          <div className="w-16 h-1 rounded-full bg-primary animate-pulse" />
+
+          {/* Welcome text */}
+          <div className="text-center space-y-3 mb-14">
+            <p className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Ace Electronics</p>
+            <h1 className="text-6xl font-bold text-white tracking-tight">Welcome</h1>
+            <p className="text-slate-400 text-xl">Please sign in to continue</p>
+          </div>
+
+          {/* Tap CTA */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping" />
+              <div className="relative h-20 w-20 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/50">
+                <ChevronRight className="h-9 w-9 text-white" />
+              </div>
+            </div>
+            <p className="text-slate-300 text-lg font-medium">Tap anywhere to check in</p>
+          </div>
         </div>
       )}
 
       {/* ── Form Step ── */}
       {step === "form" && (
-        <div className="flex-1 overflow-auto p-6 md:p-10">
-          <div className="max-w-lg mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-              {/* Logo: container sized to the visual footprint after rotation (240×64px) */}
-              <div className="w-60 h-16 overflow-hidden relative shrink-0">
-                <img
-                  src={logoFormSrc}
-                  alt="AE"
-                  className="w-16 h-60 object-contain absolute top-1/2 left-1/2"
-                  style={{ transform: "translate(-50%, -50%) rotate(-90deg)" }}
-                />
+        <div className="flex-1 min-h-screen bg-slate-50 dark:bg-slate-900">
+          {/* Header bar */}
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Ace Electronics</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Visitor Check-In</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel" className="shrink-0">
-                <X className="h-4 w-4 mr-1" /> Cancel
-              </Button>
             </div>
-            <h1 className="text-2xl font-bold">Sign In</h1>
-            <div>
-              <p className="text-muted-foreground text-sm">
-                {formStage === "email"
-                  ? "Enter your email address to get started."
-                  : "Please confirm your details below."}
-              </p>
-            </div>
+            <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-cancel" className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+              <X className="h-4 w-4 mr-1.5" /> Cancel
+            </Button>
+          </div>
 
-            {/* ── Stage 1: Email only ── */}
-            {formStage === "email" && (
-              <div className="space-y-4">
-                <motion.div
-                  layoutId="kiosk-email-field"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Email <span className="text-destructive">*</span></Label>
-                  <div className="relative">
+          {/* Form content */}
+          <div className="overflow-auto p-6 md:p-10">
+            <div className="max-w-lg mx-auto">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Sign In</h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">
+                  {formStage === "email"
+                    ? "Enter your email address to get started."
+                    : "Please confirm your details below."}
+                </p>
+              </div>
+
+              {/* ── Stage 1: Email only ── */}
+              {formStage === "email" && (
+                <div className="space-y-4">
+                  <motion.div layoutId="kiosk-email-field" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Email address <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        className="h-14 text-lg rounded-xl border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onKeyDown={handleEmailKeyDown}
+                        placeholder="your@email.com"
+                        autoFocus
+                        data-testid="input-kiosk-email"
+                      />
+                      {showSuggestions && emailSuggestions.length > 0 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
+                          {emailSuggestions.map((s, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 flex flex-col border-b border-slate-100 dark:border-slate-700 last:border-0 transition-colors"
+                              onMouseDown={(e) => { e.preventDefault(); handleSuggestionSelect(s); }}
+                              data-testid={`suggestion-email-${i}`}
+                            >
+                              <span className="text-base font-medium text-slate-900 dark:text-white">{s.email}</span>
+                              {s.name && <span className="text-sm text-slate-500 dark:text-slate-400">{s.name}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: 0.05 }}>
+                    <Button
+                      className="w-full h-14 text-lg font-semibold rounded-xl bg-blue-600 hover:bg-blue-700"
+                      onClick={handleEmailContinue}
+                      disabled={!email.trim() || isLookingUp}
+                      data-testid="button-kiosk-email-continue"
+                    >
+                      {isLookingUp ? (
+                        <>
+                          <div className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin mr-2" />
+                          Looking up…
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="ml-2 h-5 w-5" />
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                </div>
+              )}
+
+              {/* ── Stage 2: Email + all fields ── */}
+              {formStage === "fields" && (
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                  <motion.div layoutId="kiosk-email-field" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Email address <span className="text-red-500">*</span>
+                    </Label>
                     <Input
-                      className="h-16 text-lg"
+                      className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onKeyDown={handleEmailKeyDown}
+                      onChange={handleEmailChange}
                       placeholder="your@email.com"
-                      autoFocus
+                      required
                       data-testid="input-kiosk-email"
                     />
-                    {showSuggestions && emailSuggestions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-background border border-border rounded-xl shadow-lg overflow-hidden">
-                        {emailSuggestions.map((s, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            className="w-full text-left px-4 py-3 hover:bg-muted flex flex-col border-b border-border last:border-0"
-                            onMouseDown={(e) => { e.preventDefault(); handleSuggestionSelect(s); }}
-                            data-testid={`suggestion-email-${i}`}
-                          >
-                            <span className="text-base font-medium">{s.email}</span>
-                            {s.name && <span className="text-sm text-muted-foreground">{s.name}</span>}
-                          </button>
-                        ))}
-                      </div>
+                  </motion.div>
+
+                  <AnimatePresence>
+                    {welcomeFirstName && (
+                      <motion.div
+                        key="welcome-badge"
+                        variants={welcomeBadgeVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3"
+                        data-testid="badge-kiosk-welcome-back"
+                      >
+                        <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                          Welcome back, {welcomeFirstName}! Your details have been pre-filled.
+                        </p>
+                      </motion.div>
                     )}
-                  </div>
-                </motion.div>
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25, delay: 0.05 }}
-                >
-                  <Button
-                    className="w-full h-16 text-xl font-bold"
-                    onClick={handleEmailContinue}
-                    disabled={!email.trim() || isLookingUp}
-                    data-testid="button-kiosk-email-continue"
-                  >
-                    {isLookingUp ? (
-                      <>
-                        <div className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin mr-2" />
-                        Looking up…
-                      </>
-                    ) : (
-                      <>
-                        Continue
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </>
-                    )}
-                  </Button>
-                </motion.div>
-              </div>
-            )}
+                  </AnimatePresence>
 
-            {/* ── Stage 2: Email + all fields ── */}
-            {formStage === "fields" && (
-              <form onSubmit={handleFormSubmit} className="space-y-4">
-                {/* Email field — shared layout animation slides it upward from Stage 1 */}
-                <motion.div
-                  layoutId="kiosk-email-field"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Email <span className="text-destructive">*</span></Label>
-                  <Input
-                    className="h-14 text-base"
-                    type="email"
-                    value={email}
-                    onChange={handleEmailChange}
-                    placeholder="your@email.com"
-                    required
-                    data-testid="input-kiosk-email"
-                  />
-                </motion.div>
-
-                {/* Welcome back badge */}
-                <AnimatePresence>
-                  {welcomeFirstName && (
-                    <motion.div
-                      key="welcome-badge"
-                      variants={welcomeBadgeVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-4 py-2.5"
-                      data-testid="badge-kiosk-welcome-back"
-                    >
-                      <CheckCircle className="h-4 w-4 text-primary shrink-0" />
-                      <p className="text-sm font-medium text-primary">
-                        Welcome back, {welcomeFirstName}! Your details have been pre-filled.
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Remaining fields — staggered reveal */}
-                <motion.div
-                  key="field-title"
-                  custom={0}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Title</Label>
-                  <Select value={formTitle} onValueChange={setFormTitle}>
-                    <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-title">
-                      <SelectValue placeholder="Select title (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TITLE_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </motion.div>
-
-                <motion.div
-                  key="field-name"
-                  custom={1}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="grid grid-cols-2 gap-3"
-                >
-                  <div className="space-y-1.5">
-                    <Label className="text-base">First Name <span className="text-destructive">*</span></Label>
-                    <Input className="h-14 text-base" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" required data-testid="input-kiosk-first-name" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-base">Last Name <span className="text-destructive">*</span></Label>
-                    <Input className="h-14 text-base" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" required data-testid="input-kiosk-last-name" />
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  key="field-phone"
-                  custom={2}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Phone Number <span className="text-destructive">*</span></Label>
-                  <Input className="h-14 text-base" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" required data-testid="input-kiosk-phone" />
-                </motion.div>
-
-                <motion.div
-                  key="field-company"
-                  custom={3}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Company <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
-                  <Input className="h-14 text-base" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" data-testid="input-kiosk-company" />
-                </motion.div>
-
-                <motion.div
-                  key="field-poc"
-                  custom={4}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-1.5"
-                >
-                  <Label className="text-base">Ace POC <span className="text-muted-foreground text-sm font-normal">(Optional)</span></Label>
-                  <Select value={acePoc} onValueChange={setAcePoc} disabled={acePocLoading}>
-                    <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-ace-poc">
-                      <SelectValue placeholder={acePocLoading ? "Loading…" : "Select a POC"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {acePocOptions.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </motion.div>
-
-                {!deviceDefaultLocation.current && (
-                  <motion.div
-                    key="field-location"
-                    custom={5}
-                    variants={fieldVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="space-y-1.5"
-                  >
-                    <Label className="text-base">Location <span className="text-destructive">*</span></Label>
-                    <Select
-                      value={location}
-                      onValueChange={(v) => { setLocation(v); setSubmitError(null); }}
-                    >
-                      <SelectTrigger className="h-14 text-base" data-testid="select-kiosk-location">
-                        <SelectValue placeholder="Select your location" />
+                  <motion.div key="field-title" custom={0} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Title</Label>
+                    <Select value={formTitle} onValueChange={setFormTitle}>
+                      <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-title">
+                        <SelectValue placeholder="Select title (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="New Jersey">New Jersey</SelectItem>
-                        <SelectItem value="Michigan">Michigan</SelectItem>
+                        {TITLE_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </motion.div>
-                )}
 
-                {/* Custom fields */}
-                {customFields.map((field, idx) => (
-                  <motion.div
-                    key={`field-custom-${field.id}`}
-                    custom={6 + idx}
-                    variants={fieldVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="space-y-1.5"
-                  >
-                    <Label className="text-base">
-                      {field.label}
-                      {field.required && <span className="text-destructive"> *</span>}
-                      {!field.required && <span className="text-muted-foreground text-sm font-normal"> (Optional)</span>}
-                    </Label>
-                    {field.fieldType === "select" ? (
-                      <Select value={customFieldValues[field.id] ?? ""} onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}>
-                        <SelectTrigger className="h-14 text-base" data-testid={`select-kiosk-custom-${field.id}`}>
-                          <SelectValue placeholder={field.placeholder ?? "Select an option"} />
+                  <motion.div key="field-name" custom={1} variants={fieldVariants} initial="hidden" animate="visible" className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">First Name <span className="text-red-500">*</span></Label>
+                      <Input className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" required data-testid="input-kiosk-first-name" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Last Name <span className="text-red-500">*</span></Label>
+                      <Input className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" required data-testid="input-kiosk-last-name" />
+                    </div>
+                  </motion.div>
+
+                  <motion.div key="field-phone" custom={2} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Phone Number <span className="text-red-500">*</span></Label>
+                    <Input className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" required data-testid="input-kiosk-phone" />
+                  </motion.div>
+
+                  <motion.div key="field-company" custom={3} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Company <span className="text-slate-400 font-normal">(Optional)</span></Label>
+                    <Input className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" data-testid="input-kiosk-company" />
+                  </motion.div>
+
+                  <motion.div key="field-poc" custom={4} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ace POC <span className="text-slate-400 font-normal">(Optional)</span></Label>
+                    <Select value={acePoc} onValueChange={setAcePoc} disabled={acePocLoading}>
+                      <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-ace-poc">
+                        <SelectValue placeholder={acePocLoading ? "Loading…" : "Select a POC"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {acePocOptions.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </motion.div>
+
+                  {!deviceDefaultLocation.current && (
+                    <motion.div key="field-location" custom={5} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Location <span className="text-red-500">*</span></Label>
+                      <Select value={location} onValueChange={(v) => { setLocation(v); setSubmitError(null); }}>
+                        <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-location">
+                          <SelectValue placeholder="Select your location" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(() => {
-                            try {
-                              const opts = JSON.parse(field.options ?? "[]");
-                              return opts.map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>);
-                            } catch {
-                              return null;
-                            }
-                          })()}
+                          <SelectItem value="New Jersey">New Jersey</SelectItem>
+                          <SelectItem value="Michigan">Michigan</SelectItem>
                         </SelectContent>
                       </Select>
-                    ) : (
+                    </motion.div>
+                  )}
+
+                  {customFields.map((field, idx) => (
+                    <motion.div key={`field-custom-${field.id}`} custom={6 + idx} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        {field.label}
+                        {field.required && <span className="text-red-500"> *</span>}
+                        {!field.required && <span className="text-slate-400 font-normal"> (Optional)</span>}
+                      </Label>
+                      {field.fieldType === "select" ? (
+                        <Select value={customFieldValues[field.id] ?? ""} onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}>
+                          <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid={`select-kiosk-custom-${field.id}`}>
+                            <SelectValue placeholder={field.placeholder ?? "Select an option"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              try {
+                                const opts = JSON.parse(field.options ?? "[]");
+                                return opts.map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>);
+                              } catch { return null; }
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600"
+                          type={field.fieldType}
+                          value={customFieldValues[field.id] ?? ""}
+                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+                          placeholder={field.placeholder ?? ""}
+                          required={field.required}
+                          data-testid={`input-kiosk-custom-${field.id}`}
+                        />
+                      )}
+                    </motion.div>
+                  ))}
+
+                  {plusOneEnabled && (
+                    <motion.div key="field-plusone" custom={6 + customFields.length} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <Users className="inline h-4 w-4 mr-1.5" />
+                        Group size
+                      </Label>
                       <Input
-                        className="h-14 text-base"
-                        type={field.fieldType}
-                        value={customFieldValues[field.id] ?? ""}
-                        onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-                        placeholder={field.placeholder ?? ""}
-                        required={field.required}
-                        data-testid={`input-kiosk-custom-${field.id}`}
+                        className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600"
+                        type="number" min={1} max={20}
+                        value={plusOneCount}
+                        onChange={(e) => setPlusOneCount(Number(e.target.value))}
+                        data-testid="input-kiosk-plus-one"
                       />
-                    )}
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  )}
 
-                {/* Plus one */}
-                {plusOneEnabled && (
-                  <motion.div
-                    key="field-plusone"
-                    custom={6 + customFields.length}
-                    variants={fieldVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="space-y-1.5"
-                  >
-                    <Label className="text-base">
-                      <Users className="inline h-4 w-4 mr-1.5" />
-                      Group size
-                    </Label>
-                    <Input
-                      className="h-14 text-base"
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={plusOneCount}
-                      onChange={(e) => setPlusOneCount(Number(e.target.value))}
-                      data-testid="input-kiosk-plus-one"
-                    />
+                  <motion.div key="field-submit" custom={7 + customFields.length + (plusOneEnabled ? 1 : 0)} variants={fieldVariants} initial="hidden" animate="visible" className="pt-2">
+                    <Button type="submit" className="w-full h-14 text-lg font-semibold rounded-xl bg-blue-600 hover:bg-blue-700" data-testid="button-kiosk-continue">
+                      Continue
+                      <ChevronRight className="ml-2 h-5 w-5" />
+                    </Button>
                   </motion.div>
-                )}
-
-                <motion.div
-                  key="field-submit"
-                  custom={7 + customFields.length + (plusOneEnabled ? 1 : 0)}
-                  variants={fieldVariants}
-                  initial="hidden"
-                  animate="visible"
-                >
-                  <Button type="submit" className="w-full h-16 text-xl font-bold mt-2" data-testid="button-kiosk-continue">
-                    Continue
-                    <ChevronRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </motion.div>
-              </form>
-            )}
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Documents Step ── */}
       {step === "documents" && enabledDocs.length > 0 && (
-        <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl mx-auto w-full">
-          <div className="flex items-center justify-between mb-6">
-            <p className="text-sm font-bold tracking-tight">Ace Electronics Defense Systems</p>
-            <span className="text-sm text-muted-foreground">{currentDocIndex + 1} of {enabledDocs.length}</span>
+        <div className="flex-1 min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col">
+          {/* Header */}
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Ace Electronics</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Please review and agree</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-full px-3 py-1">
+                {currentDocIndex + 1} / {enabledDocs.length}
+              </span>
+            </div>
           </div>
 
-          <h2 className="text-2xl font-bold mb-2">{enabledDocs[currentDocIndex].title}</h2>
-          <div className="flex-1 overflow-auto border rounded-xl p-5 bg-muted/30 mb-6 text-sm leading-relaxed whitespace-pre-wrap" data-testid="text-document-content">
-            {substituteDocumentVars(enabledDocs[currentDocIndex].content, {
-              firstName: firstName.trim(),
-              lastName: lastName.trim(),
-              company: company.trim(),
-              email: email.trim(),
-            })}
+          <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl mx-auto w-full">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{enabledDocs[currentDocIndex].title}</h2>
+            <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 mb-6 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300 shadow-sm" data-testid="text-document-content">
+              {substituteDocumentVars(enabledDocs[currentDocIndex].content, {
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                company: company.trim(),
+                email: email.trim(),
+              })}
+            </div>
+            <Button className="w-full h-14 text-lg font-semibold rounded-xl bg-blue-600 hover:bg-blue-700" onClick={handleDocAgree} data-testid="button-kiosk-agree">
+              I Agree & Continue
+            </Button>
           </div>
-
-          <Button
-            className="w-full h-16 text-xl font-bold"
-            onClick={handleDocAgree}
-            data-testid="button-kiosk-agree"
-          >
-            I Agree
-          </Button>
         </div>
       )}
 
       {/* ── Photo Step ── */}
       {step === "photo" && photoEnabled && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6" data-testid="screen-kiosk-photo">
-          <p className="text-sm font-bold tracking-tight">Ace Electronics Defense Systems</p>
-          <div>
-            <h2 className="text-2xl font-bold text-center">Take a Photo</h2>
-            <p className="text-muted-foreground text-center text-sm mt-1">We'll use this for your visitor badge.</p>
+        <div className="flex-1 min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col" data-testid="screen-kiosk-photo">
+          {/* Header */}
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center gap-3 shrink-0">
+            <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
+            <div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Ace Electronics</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Visitor badge photo</p>
+            </div>
           </div>
 
-          {cameraError ? (
-            <div className="text-center space-y-4">
-              <Camera className="h-16 w-16 text-muted-foreground mx-auto" />
-              <p className="text-muted-foreground">Camera not available</p>
-              <Button className="h-14 text-lg px-8" onClick={() => submitCheckin(null, acknowledgedDocs)} data-testid="button-kiosk-skip-photo">
-                Skip Photo
-              </Button>
+          <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Take a Photo</h2>
+              <p className="text-slate-500 dark:text-slate-400 mt-1">We'll use this for your visitor badge.</p>
             </div>
-          ) : photoData ? (
-            <div className="space-y-4 flex flex-col items-center">
-              <img src={photoData} alt="Captured" className="rounded-2xl shadow-lg max-w-xs w-full" data-testid="img-kiosk-preview" />
-              <div className="flex gap-3">
-                <Button variant="outline" className="h-12 px-6" onClick={() => setPhotoData(null)} data-testid="button-kiosk-retake">Retake</Button>
-                <Button className="h-12 px-8 text-base font-bold" onClick={handlePhotoNext} data-testid="button-kiosk-use-photo">Use Photo</Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 flex flex-col items-center">
-              <div className="rounded-2xl overflow-hidden shadow-lg w-full max-w-xs aspect-[3/4] bg-muted">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              </div>
-              <canvas ref={canvasRef} className="hidden" />
-              <div className="flex gap-3">
-                <Button variant="outline" className="h-12 px-6" onClick={() => submitCheckin(null, acknowledgedDocs)} data-testid="button-kiosk-skip-photo">
-                  Skip
-                </Button>
-                <Button className="h-14 w-14 rounded-full p-0 text-2xl" onClick={capturePhoto} data-testid="button-kiosk-capture">
-                  <Camera className="h-6 w-6" />
+
+            {cameraError ? (
+              <div className="text-center space-y-5">
+                <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto">
+                  <Camera className="h-12 w-12 text-slate-400" />
+                </div>
+                <p className="text-slate-500 dark:text-slate-400">Camera not available</p>
+                <Button className="h-13 text-base px-10 rounded-xl bg-blue-600 hover:bg-blue-700" onClick={() => submitCheckin(null, acknowledgedDocs)} data-testid="button-kiosk-skip-photo">
+                  Continue without photo
                 </Button>
               </div>
-            </div>
-          )}
+            ) : photoData ? (
+              <div className="space-y-5 flex flex-col items-center">
+                <img src={photoData} alt="Captured" className="rounded-2xl shadow-xl max-w-xs w-full border-4 border-white dark:border-slate-700" data-testid="img-kiosk-preview" />
+                <div className="flex gap-3">
+                  <Button variant="outline" className="h-13 px-7 rounded-xl" onClick={() => setPhotoData(null)} data-testid="button-kiosk-retake">Retake</Button>
+                  <Button className="h-13 px-9 text-base font-semibold rounded-xl bg-blue-600 hover:bg-blue-700" onClick={handlePhotoNext} data-testid="button-kiosk-use-photo">Use this photo</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5 flex flex-col items-center">
+                <div className="rounded-2xl overflow-hidden shadow-xl w-full max-w-xs aspect-[3/4] bg-slate-200 dark:bg-slate-700 border-4 border-white dark:border-slate-600">
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                </div>
+                <canvas ref={canvasRef} className="hidden" />
+                <div className="flex gap-4 items-center">
+                  <Button variant="outline" className="h-13 px-6 rounded-xl text-slate-600" onClick={() => submitCheckin(null, acknowledgedDocs)} data-testid="button-kiosk-skip-photo">
+                    Skip
+                  </Button>
+                  <Button
+                    className="h-16 w-16 rounded-full p-0 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-900/30"
+                    onClick={capturePhoto}
+                    data-testid="button-kiosk-capture"
+                  >
+                    <Camera className="h-7 w-7" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* ── Thank You Step ── */}
       {step === "thanks" && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8" data-testid="screen-kiosk-thanks">
-          <p className="text-lg font-bold tracking-tight">Ace Electronics Defense Systems</p>
-          <CheckCircle className="h-24 w-24 text-green-500" />
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl font-bold">Welcome, {visitorName.split(" ")[0]}!</h2>
-            <p className="text-xl text-muted-foreground">You're all checked in. Enjoy your visit!</p>
+        <div
+          className="flex-1 min-h-screen flex flex-col items-center justify-center gap-8 p-10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+          data-testid="screen-kiosk-thanks"
+        >
+          {/* Success ring */}
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
+            <div className="relative w-28 h-28 rounded-full bg-green-500/10 border-2 border-green-500/40 flex items-center justify-center">
+              <CheckCircle className="h-16 w-16 text-green-400" />
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">Returning to start in 5 seconds…</p>
+
+          <div className="text-center space-y-3">
+            <h2 className="text-5xl font-bold text-white">
+              Welcome, {visitorName.split(" ")[0]}!
+            </h2>
+            <p className="text-xl text-slate-300">You're all checked in. Enjoy your visit!</p>
+          </div>
+
+          <div className="flex items-center gap-2 text-slate-500">
+            <div className="h-1.5 w-1.5 rounded-full bg-slate-600 animate-pulse" />
+            <p className="text-sm">Returning to start in 5 seconds…</p>
+          </div>
+
+          <img src={logoIdleSrc} alt="Ace Electronics" className="h-12 w-auto object-contain opacity-40 mt-4" />
         </div>
       )}
     </div>
