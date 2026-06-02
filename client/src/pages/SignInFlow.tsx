@@ -854,6 +854,20 @@ function DevicesTab() {
     onError: () => toast({ title: "Error", description: "Failed to remove device.", variant: "destructive" }),
   });
 
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/kiosk/devices/cleanup");
+      return res.json() as Promise<{ deleted: number }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/kiosk/devices"] });
+      toast({ title: `Removed ${data.deleted} unnamed device${data.deleted === 1 ? "" : "s"}` });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to clean up devices.", variant: "destructive" }),
+  });
+
+  const unnamedCount = devices.filter((d) => !d.name && d.computedStatus === "offline").length;
+
   const statusColor = (status: string) => {
     if (status === "active") return "bg-green-500";
     if (status === "idle") return "bg-gray-400";
@@ -885,11 +899,24 @@ function DevicesTab() {
         <p className="text-sm text-muted-foreground">
           Every iPad or tablet that has opened the kiosk URL appears here. A device is Offline if its heartbeat hasn't been received in over 2 minutes.
         </p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-refresh-devices">
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
             Refresh
           </Button>
+          {unnamedCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              disabled={cleanupMutation.isPending}
+              onClick={() => cleanupMutation.mutate()}
+              data-testid="button-cleanup-unnamed-devices"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Remove {unnamedCount} unnamed
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(kioskUrl); toast({ title: "Copied", description: "Kiosk URL copied to clipboard." }); }} data-testid="button-copy-kiosk-url">
             Copy Kiosk URL
           </Button>

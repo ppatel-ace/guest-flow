@@ -1088,6 +1088,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete device (protected)
+  app.delete("/api/kiosk/devices/cleanup", requireAuth, async (req, res) => {
+    try {
+      const count = await storage.deleteUnnamedKioskDevices();
+      res.json({ deleted: count });
+    } catch (error) {
+      console.error("[kiosk/devices/cleanup]", error);
+      res.status(500).json({ error: "Failed to clean up devices" });
+    }
+  });
+
   app.delete("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
     try {
       const deleted = await storage.deleteKioskDevice(req.params.id);

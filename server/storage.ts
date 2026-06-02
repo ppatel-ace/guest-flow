@@ -16,7 +16,7 @@ import {
   type AcePoc,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, ilike, sql, asc, desc } from "drizzle-orm";
+import { eq, or, ilike, sql, asc, desc, and, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface MonthlyCheckIn {
@@ -200,6 +200,7 @@ export interface IStorage {
   getAllKioskDevices(): Promise<KioskDevice[]>;
   updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null; locationSource?: string | null }): Promise<KioskDevice | undefined>;
   deleteKioskDevice(id: string): Promise<boolean>;
+  deleteUnnamedKioskDevices(): Promise<number>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
   upsertCompanyByName(name: string): Promise<Company>;
@@ -661,6 +662,15 @@ export class DatabaseStorage implements IStorage {
   async deleteKioskDevice(id: string): Promise<boolean> {
     const result = await db.delete(kioskDevices).where(eq(kioskDevices.id, id)).returning();
     return result.length > 0;
+  }
+
+  async deleteUnnamedKioskDevices(): Promise<number> {
+    // Delete unnamed devices that haven't sent a heartbeat in the last 5 minutes (clearly offline)
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+    const result = await db.delete(kioskDevices).where(
+      and(isNull(kioskDevices.name), sql`${kioskDevices.lastSeen} < ${cutoff}`)
+    ).returning();
+    return result.length;
   }
 
   // ─── CRM ────────────────────────────────────────────────────────────────────
