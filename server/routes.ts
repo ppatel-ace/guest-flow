@@ -730,34 +730,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Fire-and-forget email notification if a POC was selected
-      const pocName = body.acePoc as string | null | undefined;
-      if (pocName) {
-        (async () => {
-          try {
-            const [poc, globalEmails] = await Promise.all([
-              storage.getAcePocByName(pocName),
-              storage.getNotificationEmails(),
-            ]);
-            const pocEmails: string[] = poc?.emails ?? [];
-            const merged = [...new Set([...pocEmails, ...globalEmails])];
-            if (merged.length > 0) {
-              await sendCheckInNotification(
-                {
-                  fullName,
-                  email: body.email ?? null,
-                  company: body.company ?? null,
-                  documentsAgreed: body.documentsAgreed ?? null,
-                },
-                pocName,
-                merged
-              );
-            }
-          } catch (err) {
-            console.error("[guest-checkin] email notification error:", err);
+      // Fire-and-forget email notification
+      const pocName = (body.acePoc as string | null | undefined) ?? null;
+      (async () => {
+        try {
+          const [poc, globalEmails] = await Promise.all([
+            pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
+            storage.getNotificationEmails(),
+          ]);
+          const pocEmails: string[] = poc?.emails ?? [];
+          if (pocEmails.length > 0 || globalEmails.length > 0) {
+            await sendCheckInNotification(
+              {
+                fullName,
+                email: body.email ?? null,
+                company: body.company ?? null,
+                documentsAgreed: body.documentsAgreed ?? null,
+              },
+              pocName,
+              pocEmails,
+              globalEmails
+            );
           }
-        })();
-      }
+        } catch (err) {
+          console.error("[guest-checkin] email notification error:", err);
+        }
+      })();
 
       res.status(201).json(customer ?? { name: fullName });
     } catch (error) {
@@ -1196,35 +1194,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         documentsAgreed: body.documentsAgreed ?? null,
       });
 
-      // Fire-and-forget email notification if a POC was selected
-      const pocName = body.acePoc as string | null | undefined;
-      if (pocName) {
-        (async () => {
-          try {
-            const [poc, globalEmails] = await Promise.all([
-              storage.getAcePocByName(pocName),
-              storage.getNotificationEmails(),
-            ]);
-            const pocEmails: string[] = poc?.emails ?? [];
-            const merged = [...new Set([...pocEmails, ...globalEmails])];
-            if (merged.length > 0) {
-              await sendCheckInNotification(
-                {
-                  fullName,
-                  email: visitor.email,
-                  company: visitor.company,
-                  usCitizen: body.usCitizen ?? null,
-                  documentsAgreed: visitor.documentsAgreed ?? null,
-                },
-                pocName,
-                merged
-              );
-            }
-          } catch (err) {
-            console.error("[kiosk/checkin] email notification error:", err);
+      // Fire-and-forget email notification
+      const pocName = (body.acePoc as string | null | undefined) ?? null;
+      (async () => {
+        try {
+          const [poc, globalEmails] = await Promise.all([
+            pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
+            storage.getNotificationEmails(),
+          ]);
+          const pocEmails: string[] = poc?.emails ?? [];
+          if (pocEmails.length > 0 || globalEmails.length > 0) {
+            await sendCheckInNotification(
+              {
+                fullName,
+                email: visitor.email,
+                company: visitor.company,
+                usCitizen: body.usCitizen ?? null,
+                documentsAgreed: visitor.documentsAgreed ?? null,
+              },
+              pocName,
+              pocEmails,
+              globalEmails
+            );
           }
-        })();
-      }
+        } catch (err) {
+          console.error("[kiosk/checkin] email notification error:", err);
+        }
+      })();
 
       res.status(201).json(visitor);
     } catch (error) {
