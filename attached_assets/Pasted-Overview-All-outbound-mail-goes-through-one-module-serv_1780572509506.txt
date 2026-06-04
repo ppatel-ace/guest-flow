@@ -1,0 +1,62 @@
+Overview
+All outbound mail goes through one module: server/emailService.ts. Nothing sends email directly from the UI or random routes — they call sendEmail() or helpers built on top of it (sendCalibrationReminder, sendTimerNotification, etc.).
+
+If M365 isn’t configured, scheduled jobs skip email and manual sends throw a clear error. The app checks that with isEmailAvailable() (tenant ID, client ID, and client secret must all be set).
+
+Microsoft 365 setup (app-only, no user login)
+JobTrack uses an Azure AD app registration in your GCC-High tenant (login.microsoftonline.us, graph.microsoft.us, smtp.office365.us). It does not log in as a person typing a password.
+
+Env variable	Purpose
+MS365_TENANT_ID
+Azure AD directory (tenant)
+MS365_CLIENT_ID
+App registration client ID
+MS365_CLIENT_SECRET
+App secret
+MS365_FROM_EMAIL
+Sender mailbox (default no-reply@aceelectronics.com)
+MS365_EMAIL_TRANSPORT
+graph (default) or smtp
+Flow:
+
+Get a token — @azure/msal-node runs the client credentials flow (acquireTokenByClientCredential).
+Send the message — either Microsoft Graph or SMTP with that token.
+Log — success/failure is logged server-side; Graph/MSAL errors are turned into short, actionable messages.
+There is no per-user Outlook login in the app; the registered app acts on behalf of the tenant and sends as the mailbox in MS365_FROM_EMAIL.
+
+Two ways to send (Graph vs SMTP)
+Controlled by MS365_EMAIL_TRANSPORT (default graph).
+
+1. Microsoft Graph (default)
+Token scope: https://graph.microsoft.us/.default
+API: POST https://graph.microsoft.us/v1.0/users/{MS365_FROM_EMAIL}/sendMail
+Body: JSON with subject, HTML/text body, toRecipients, optional file attachments (base64)
+saveToSentItems: false so messages aren’t stored in Sent Items by default
+2. SMTP + OAuth2 (alternate)
+Token scope: https://outlook.office365.us/.default
+Nodemailer → smtp.office365.us:587 with STARTTLS and OAuth2 (accessToken)
+Same from/to/subject/HTML/attachments as Graph
+DEPLOYMENT.md documents Azure setup: app registration, client secret, and permissions such as Mail.Send (Graph) or SMTP.SendAsApp (SMTP path).
+
+What triggers emails
+Scheduled (cron in server/scheduler.ts)
+Only runs email crons when isEmailAvailable() is true:
+
+Calibration reminders — equipment/instruments due within ~3 weeks; HTML table; fixed QA recipients (e.g. sweber, amanda.ariano)
+Capacity planning report — daily, matrix-driven time (NJ-canonical)
+EOD employee reports — per region, from cron matrix
+Shipped items report — weekly email (Friday 9:30 AM Eastern)
+Timer notifications — e.g. end-of-day auto-pause, bundled and emailed to supervisors
+Event-driven (during normal app use)
+sendTimerNotification() is called from routes.ts when timers are auto-paused, authoritatively stopped after 6 PM, or similar. Recipients come from getSupervisorEmailsByRegion() — active supervisors with an email on their technician record, optionally filtered by region (NJ/MD/MI).
+
+On-demand / admin
+Test email — root-only API in routes.ts; proves M365 wiring
+Capacity / EOD / shipped items — can be triggered manually from settings/admin flows
+DB alerts — db.ts can import sendEmail for operational notifications
+Each feature builds HTML (often styled tables), then calls sendEmail({ to, subject, html, attachments? }).
+
+Recipient resolution
+Supervisor alerts — technicians table: active, isSupervisor === 1, and email set
+Calibration — hardcoded list in scheduler (can be extended)
+Reports — settings/matrix overrides or supervisor lists depending on the report
