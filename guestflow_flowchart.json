@@ -1,0 +1,450 @@
+{
+  "name": "GuestFlow Application Architecture",
+  "version": "1.0",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "terminal",
+      "label": "Visitor Arrives at ACE HQ",
+      "position": {
+        "x": 560,
+        "y": 60
+      },
+      "size": {
+        "width": 220,
+        "height": 56
+      }
+    },
+    {
+      "id": "kiosk",
+      "type": "process",
+      "label": "Kiosk iPad (/kiosk)",
+      "position": {
+        "x": 280,
+        "y": 170
+      },
+      "size": {
+        "width": 180,
+        "height": 56
+      }
+    },
+    {
+      "id": "mobile",
+      "type": "process",
+      "label": "Mobile / QR Code (/guest-check-in)",
+      "position": {
+        "x": 740,
+        "y": 170
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    },
+    {
+      "id": "captcha",
+      "type": "process",
+      "label": "Bot Protection (Turnstile CAPTCHA)",
+      "position": {
+        "x": 460,
+        "y": 290
+      },
+      "size": {
+        "width": 240,
+        "height": 56
+      }
+    },
+    {
+      "id": "lookup",
+      "type": "process",
+      "label": "Returning Visitor Lookup (Email Auto-fill)",
+      "position": {
+        "x": 460,
+        "y": 390
+      },
+      "size": {
+        "width": 240,
+        "height": 56
+      }
+    },
+    {
+      "id": "form",
+      "type": "process",
+      "label": "Check-in Form (Name \u00b7 Company \u00b7 POC \u00b7 Documents \u00b7 Photo)",
+      "position": {
+        "x": 380,
+        "y": 490
+      },
+      "size": {
+        "width": 400,
+        "height": 56
+      }
+    },
+    {
+      "id": "api",
+      "type": "process",
+      "label": "Express.js API POST /api/kiosk/checkin",
+      "position": {
+        "x": 420,
+        "y": 590
+      },
+      "size": {
+        "width": 320,
+        "height": 56
+      }
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Supabase PostgreSQL Save visitor record",
+      "position": {
+        "x": 420,
+        "y": 690
+      },
+      "size": {
+        "width": 320,
+        "height": 56
+      }
+    },
+    {
+      "id": "poc_dec",
+      "type": "decision",
+      "label": "POC Selected?",
+      "position": {
+        "x": 560,
+        "y": 810
+      },
+      "size": {
+        "width": 160,
+        "height": 80
+      }
+    },
+    {
+      "id": "poc_email",
+      "type": "email",
+      "label": "POC Email \"{Name} is here to see you\"",
+      "position": {
+        "x": 200,
+        "y": 960
+      },
+      "size": {
+        "width": 200,
+        "height": 72
+      }
+    },
+    {
+      "id": "global_poc",
+      "type": "email",
+      "label": "Global List Email \"{Name} is here \u2014 visiting {POC}\"",
+      "position": {
+        "x": 520,
+        "y": 960
+      },
+      "size": {
+        "width": 220,
+        "height": 72
+      }
+    },
+    {
+      "id": "global_gen",
+      "type": "email",
+      "label": "Global List Email \"{Name} has checked in\"",
+      "position": {
+        "x": 840,
+        "y": 960
+      },
+      "size": {
+        "width": 200,
+        "height": 72
+      }
+    },
+    {
+      "id": "dashboard",
+      "type": "process",
+      "label": "Admin Dashboard Updated (Real-time status change)",
+      "position": {
+        "x": 390,
+        "y": 1110
+      },
+      "size": {
+        "width": 380,
+        "height": 56
+      }
+    },
+    {
+      "id": "end",
+      "type": "terminal",
+      "label": "Check-in Complete \u2713",
+      "position": {
+        "x": 480,
+        "y": 1210
+      },
+      "size": {
+        "width": 220,
+        "height": 56
+      }
+    },
+    {
+      "id": "adm_login",
+      "type": "admin",
+      "label": "Admin Login (/ace-admin)",
+      "position": {
+        "x": 1010,
+        "y": 290
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    },
+    {
+      "id": "adm_dash",
+      "type": "admin",
+      "label": "View Dashboard (All visitors)",
+      "position": {
+        "x": 1010,
+        "y": 390
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    },
+    {
+      "id": "adm_mgmt",
+      "type": "admin",
+      "label": "Manage Customers (Add \u00b7 Import CSV)",
+      "position": {
+        "x": 1010,
+        "y": 490
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    },
+    {
+      "id": "adm_invite",
+      "type": "admin",
+      "label": "Send Invitation (QR Code Email)",
+      "position": {
+        "x": 1010,
+        "y": 590
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    },
+    {
+      "id": "adm_analytics",
+      "type": "admin",
+      "label": "Analytics & Bot Stats",
+      "position": {
+        "x": 1010,
+        "y": 690
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    },
+    {
+      "id": "adm_scan",
+      "type": "admin",
+      "label": "Staff Scans QR (/scan)",
+      "position": {
+        "x": 1010,
+        "y": 790
+      },
+      "size": {
+        "width": 200,
+        "height": 56
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "start",
+      "to": "kiosk",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "start",
+      "to": "mobile",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "kiosk",
+      "to": "captcha",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "mobile",
+      "to": "captcha",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "captcha",
+      "to": "lookup",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "lookup",
+      "to": "form",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "form",
+      "to": "api",
+      "label": "Submit",
+      "style": "solid"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "db",
+      "to": "poc_dec",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "poc_dec",
+      "to": "poc_email",
+      "label": "YES",
+      "style": "solid"
+    },
+    {
+      "from": "poc_dec",
+      "to": "global_poc",
+      "label": "YES",
+      "style": "solid"
+    },
+    {
+      "from": "poc_dec",
+      "to": "global_gen",
+      "label": "NO",
+      "style": "solid"
+    },
+    {
+      "from": "poc_email",
+      "to": "dashboard",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "global_poc",
+      "to": "dashboard",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "global_gen",
+      "to": "dashboard",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "dashboard",
+      "to": "end",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "adm_login",
+      "to": "adm_dash",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "adm_dash",
+      "to": "adm_mgmt",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "adm_mgmt",
+      "to": "adm_invite",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "adm_invite",
+      "to": "adm_scan",
+      "label": "Guest\narrives",
+      "style": "solid"
+    },
+    {
+      "from": "adm_dash",
+      "to": "adm_analytics",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "adm_scan",
+      "to": "api",
+      "label": "QR\ncheckin",
+      "style": "dashed"
+    }
+  ],
+  "flows": {
+    "guest_kiosk": [
+      "start",
+      "kiosk",
+      "captcha",
+      "lookup",
+      "form",
+      "api",
+      "db",
+      "poc_dec",
+      "poc_email",
+      "global_poc",
+      "dashboard",
+      "end"
+    ],
+    "guest_mobile": [
+      "start",
+      "mobile",
+      "captcha",
+      "lookup",
+      "form",
+      "api",
+      "db",
+      "poc_dec",
+      "global_poc",
+      "dashboard",
+      "end"
+    ],
+    "guest_no_poc": [
+      "start",
+      "kiosk",
+      "captcha",
+      "lookup",
+      "form",
+      "api",
+      "db",
+      "poc_dec",
+      "global_gen",
+      "dashboard",
+      "end"
+    ],
+    "admin": [
+      "adm_login",
+      "adm_dash",
+      "adm_mgmt",
+      "adm_invite",
+      "adm_scan",
+      "api"
+    ]
+  }
+}
