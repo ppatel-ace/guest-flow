@@ -1,450 +1,995 @@
 {
-  "name": "GuestFlow Application Architecture",
-  "version": "1.0",
-  "nodes": [
+  "name": "GuestFlow — ACE Electronics Visitor Management System",
+  "version": "2.0",
+  "description": "Customer invitation and check-in management system. Visitors arrive via kiosk iPad or the aceelectronics.com website. Backend is Express.js + Supabase PostgreSQL. Emails send via Microsoft Graph API (GCC High).",
+
+  "entry_points": [
     {
-      "id": "start",
-      "type": "terminal",
-      "label": "Visitor Arrives at ACE HQ",
-      "position": {
-        "x": 560,
-        "y": 60
-      },
-      "size": {
-        "width": 220,
-        "height": 56
-      }
+      "source": "aceelectronics.com",
+      "description": "CLICK HERE button on the 2026 MDEX/XPONENTIAL Attendees section",
+      "destination": "/guest-check-in",
+      "type": "external_website_link"
     },
     {
-      "id": "kiosk",
-      "type": "process",
-      "label": "Kiosk iPad (/kiosk)",
-      "position": {
-        "x": 280,
-        "y": 170
-      },
-      "size": {
-        "width": 180,
-        "height": 56
-      }
+      "source": "QR Code (email invitation)",
+      "description": "Unique QR code emailed to pre-registered customers links directly to check-in",
+      "destination": "/guest-check-in",
+      "type": "qr_code"
     },
     {
-      "id": "mobile",
-      "type": "process",
-      "label": "Mobile / QR Code (/guest-check-in)",
-      "position": {
-        "x": 740,
-        "y": 170
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
+      "source": "Kiosk iPad (ACE HQ reception)",
+      "description": "Fixed iPad running the native iOS Capacitor app pointed at the deployed backend",
+      "destination": "/kiosk",
+      "type": "ios_kiosk_app"
     },
     {
-      "id": "captcha",
-      "type": "process",
-      "label": "Bot Protection (Turnstile CAPTCHA)",
-      "position": {
-        "x": 460,
-        "y": 290
-      },
-      "size": {
-        "width": 240,
-        "height": 56
-      }
+      "source": "Staff QR Scanner",
+      "description": "Staff member scans a guest QR code at reception",
+      "destination": "/scan",
+      "type": "internal_staff"
     },
     {
-      "id": "lookup",
-      "type": "process",
-      "label": "Returning Visitor Lookup (Email Auto-fill)",
-      "position": {
-        "x": 460,
-        "y": 390
-      },
-      "size": {
-        "width": 240,
-        "height": 56
-      }
-    },
-    {
-      "id": "form",
-      "type": "process",
-      "label": "Check-in Form (Name \u00b7 Company \u00b7 POC \u00b7 Documents \u00b7 Photo)",
-      "position": {
-        "x": 380,
-        "y": 490
-      },
-      "size": {
-        "width": 400,
-        "height": 56
-      }
-    },
-    {
-      "id": "api",
-      "type": "process",
-      "label": "Express.js API POST /api/kiosk/checkin",
-      "position": {
-        "x": 420,
-        "y": 590
-      },
-      "size": {
-        "width": 320,
-        "height": 56
-      }
-    },
-    {
-      "id": "db",
-      "type": "database",
-      "label": "Supabase PostgreSQL Save visitor record",
-      "position": {
-        "x": 420,
-        "y": 690
-      },
-      "size": {
-        "width": 320,
-        "height": 56
-      }
-    },
-    {
-      "id": "poc_dec",
-      "type": "decision",
-      "label": "POC Selected?",
-      "position": {
-        "x": 560,
-        "y": 810
-      },
-      "size": {
-        "width": 160,
-        "height": 80
-      }
-    },
-    {
-      "id": "poc_email",
-      "type": "email",
-      "label": "POC Email \"{Name} is here to see you\"",
-      "position": {
-        "x": 200,
-        "y": 960
-      },
-      "size": {
-        "width": 200,
-        "height": 72
-      }
-    },
-    {
-      "id": "global_poc",
-      "type": "email",
-      "label": "Global List Email \"{Name} is here \u2014 visiting {POC}\"",
-      "position": {
-        "x": 520,
-        "y": 960
-      },
-      "size": {
-        "width": 220,
-        "height": 72
-      }
-    },
-    {
-      "id": "global_gen",
-      "type": "email",
-      "label": "Global List Email \"{Name} has checked in\"",
-      "position": {
-        "x": 840,
-        "y": 960
-      },
-      "size": {
-        "width": 200,
-        "height": 72
-      }
-    },
-    {
-      "id": "dashboard",
-      "type": "process",
-      "label": "Admin Dashboard Updated (Real-time status change)",
-      "position": {
-        "x": 390,
-        "y": 1110
-      },
-      "size": {
-        "width": 380,
-        "height": 56
-      }
-    },
-    {
-      "id": "end",
-      "type": "terminal",
-      "label": "Check-in Complete \u2713",
-      "position": {
-        "x": 480,
-        "y": 1210
-      },
-      "size": {
-        "width": 220,
-        "height": 56
-      }
-    },
-    {
-      "id": "adm_login",
-      "type": "admin",
-      "label": "Admin Login (/ace-admin)",
-      "position": {
-        "x": 1010,
-        "y": 290
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
-    },
-    {
-      "id": "adm_dash",
-      "type": "admin",
-      "label": "View Dashboard (All visitors)",
-      "position": {
-        "x": 1010,
-        "y": 390
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
-    },
-    {
-      "id": "adm_mgmt",
-      "type": "admin",
-      "label": "Manage Customers (Add \u00b7 Import CSV)",
-      "position": {
-        "x": 1010,
-        "y": 490
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
-    },
-    {
-      "id": "adm_invite",
-      "type": "admin",
-      "label": "Send Invitation (QR Code Email)",
-      "position": {
-        "x": 1010,
-        "y": 590
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
-    },
-    {
-      "id": "adm_analytics",
-      "type": "admin",
-      "label": "Analytics & Bot Stats",
-      "position": {
-        "x": 1010,
-        "y": 690
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
-    },
-    {
-      "id": "adm_scan",
-      "type": "admin",
-      "label": "Staff Scans QR (/scan)",
-      "position": {
-        "x": 1010,
-        "y": 790
-      },
-      "size": {
-        "width": 200,
-        "height": 56
-      }
+      "source": "Admin",
+      "description": "ACE staff log into the admin dashboard",
+      "destination": "/ace-admin",
+      "type": "internal_admin"
     }
   ],
-  "edges": [
-    {
-      "from": "start",
-      "to": "kiosk",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "start",
-      "to": "mobile",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "kiosk",
-      "to": "captcha",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "mobile",
-      "to": "captcha",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "captcha",
-      "to": "lookup",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "lookup",
-      "to": "form",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "form",
-      "to": "api",
-      "label": "Submit",
-      "style": "solid"
-    },
-    {
-      "from": "api",
-      "to": "db",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "db",
-      "to": "poc_dec",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "poc_dec",
-      "to": "poc_email",
-      "label": "YES",
-      "style": "solid"
-    },
-    {
-      "from": "poc_dec",
-      "to": "global_poc",
-      "label": "YES",
-      "style": "solid"
-    },
-    {
-      "from": "poc_dec",
-      "to": "global_gen",
-      "label": "NO",
-      "style": "solid"
-    },
-    {
-      "from": "poc_email",
-      "to": "dashboard",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "global_poc",
-      "to": "dashboard",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "global_gen",
-      "to": "dashboard",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "dashboard",
-      "to": "end",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "adm_login",
-      "to": "adm_dash",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "adm_dash",
-      "to": "adm_mgmt",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "adm_mgmt",
-      "to": "adm_invite",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "adm_invite",
-      "to": "adm_scan",
-      "label": "Guest\narrives",
-      "style": "solid"
-    },
-    {
-      "from": "adm_dash",
-      "to": "adm_analytics",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "adm_scan",
-      "to": "api",
-      "label": "QR\ncheckin",
-      "style": "dashed"
-    }
-  ],
-  "flows": {
-    "guest_kiosk": [
-      "start",
-      "kiosk",
-      "captcha",
-      "lookup",
-      "form",
-      "api",
-      "db",
-      "poc_dec",
-      "poc_email",
-      "global_poc",
-      "dashboard",
-      "end"
+
+  "frontend_routes": {
+    "public": [
+      {
+        "path": "/guest-check-in",
+        "component": "GuestCheckIn",
+        "description": "Public guest check-in form. Entry point from aceelectronics.com CLICK HERE button and QR code invitation emails.",
+        "features": [
+          "Cloudflare Turnstile CAPTCHA (visible or invisible mode)",
+          "CAPTCHA bypass window configurable by admin (captcha_bypass_start/end)",
+          "HMAC-signed timing token to detect bot speed",
+          "Email domain suggestions (@aceelectronics.com etc)",
+          "ACE POC selector (searchable dropdown from /api/ace-pocs)",
+          "US Citizen / Resident question",
+          "Document review and agreement",
+          "Plus-one count field",
+          "Location field",
+          "Configurable title, description, event info via page_settings",
+          "Success message configurable by admin"
+        ]
+      },
+      {
+        "path": "/kiosk",
+        "component": "Kiosk",
+        "description": "Full-screen kiosk app for the iPad at ACE HQ reception desk. Runs as native iOS app via Capacitor.",
+        "features": [
+          "Idle screen with animated ACE logo (framer-motion entrance + float)",
+          "Dark navy idle screen design",
+          "Returning visitor email lookup — auto-fills form for repeat visitors",
+          "Check-in form (name, email, phone, company, POC, US citizen, location)",
+          "Document review and e-signature step",
+          "Optional photo capture using device camera",
+          "POC selector (from /api/ace-pocs)",
+          "US Citizen / Resident question",
+          "Auto-timeout back to idle (configurable seconds)",
+          "Kiosk device auto-registration on first load",
+          "Periodic heartbeat to report device status (idle/active)"
+        ]
+      },
+      {
+        "path": "/scan",
+        "component": "StandaloneCheckIn",
+        "description": "Staff-facing QR code scanner. Opens device camera, reads QR code, instantly checks in the pre-registered guest via /api/check-in/qr."
+      },
+      {
+        "path": "/ace-admin",
+        "component": "Login",
+        "description": "Admin login page. Username and password, session-based auth."
+      },
+      {
+        "path": "/dashboard",
+        "component": "Login",
+        "description": "Alias for /ace-admin login redirect."
+      }
     ],
-    "guest_mobile": [
-      "start",
-      "mobile",
-      "captcha",
-      "lookup",
-      "form",
-      "api",
-      "db",
-      "poc_dec",
-      "global_poc",
-      "dashboard",
-      "end"
-    ],
-    "guest_no_poc": [
-      "start",
-      "kiosk",
-      "captcha",
-      "lookup",
-      "form",
-      "api",
-      "db",
-      "poc_dec",
-      "global_gen",
-      "dashboard",
-      "end"
-    ],
-    "admin": [
-      "adm_login",
-      "adm_dash",
-      "adm_mgmt",
-      "adm_invite",
-      "adm_scan",
-      "api"
+    "protected_admin": [
+      {
+        "path": "/",
+        "component": "Dashboard",
+        "description": "Overview dashboard.",
+        "features": ["Total visitor count", "Check-ins today", "Monthly trend bar chart", "Recent activity feed", "Quick action buttons"]
+      },
+      {
+        "path": "/customers",
+        "component": "Customers",
+        "description": "Manage pre-registered / invited customers.",
+        "features": ["List with status badges (pending/confirmed/checked-in)", "Search by name, email, phone", "Add individual customer", "Edit customer details", "Delete customer", "Send invitation email with QR code", "View QR code"]
+      },
+      {
+        "path": "/check-in",
+        "component": "CheckIn",
+        "description": "Manual check-in by staff for a specific customer by lookup."
+      },
+      {
+        "path": "/invitations",
+        "component": "Invitations",
+        "description": "View and manage invitation statuses. Filter by pending/confirmed/checked-in."
+      },
+      {
+        "path": "/import",
+        "component": "Import",
+        "description": "Bulk import customers from CSV or Excel file. Parses client-side with PapaParse (CSV) or XLSX library."
+      },
+      {
+        "path": "/public-pages",
+        "component": "PublicPages",
+        "description": "Configure public-facing page content.",
+        "features": ["Page title and description", "Event name, date, location", "Success message and title", "Photo capture toggle", "Plus-one toggle", "Kiosk timeout duration", "CAPTCHA bypass time window"]
+      },
+      {
+        "path": "/export",
+        "component": "Export",
+        "description": "Export visitor and lead data to CSV/Excel."
+      },
+      {
+        "path": "/sign-in-flow",
+        "component": "SignInFlow",
+        "description": "Configure the check-in flow.",
+        "features": ["Custom form field management (add/edit/delete/reorder)", "Document management (NDAs, policies — add/edit/enable/reorder)", "ACE POC roster management (add/remove POCs, set email addresses)", "Global notification email list (always-notify recipients)", "Kiosk device management (view devices, rename, set location, delete)", "Kiosk settings (timeout, photo, plus-one)"]
+      },
+      {
+        "path": "/analytics",
+        "component": "EnvoyAnalytics",
+        "description": "Visitor analytics and security monitoring.",
+        "features": ["Time-series check-in trend charts (day/week/month bucket)", "Bot and security block statistics", "Missing US citizen data count", "Visitor profile viewer with full history", "Visitor merge tool (combine duplicate profiles)", "Internal staff notes per visitor"]
+      }
     ]
+  },
+
+  "api_routes": {
+    "authentication": [
+      {
+        "method": "POST", "path": "/api/login", "auth_required": false,
+        "description": "Admin login. Validates username and password, creates server session.",
+        "db_ops": ["session write"]
+      },
+      {
+        "method": "POST", "path": "/api/logout", "auth_required": false,
+        "description": "Destroys admin session.",
+        "db_ops": ["session destroy"]
+      },
+      {
+        "method": "GET", "path": "/api/session", "auth_required": false,
+        "description": "Check whether the current admin session is active.",
+        "db_ops": []
+      }
+    ],
+    "guest_checkin": [
+      {
+        "method": "POST", "path": "/api/guest-checkin", "auth_required": false,
+        "rate_limited": true, "rate_limiter": "guestCheckinLimiter",
+        "description": "Primary public guest check-in from aceelectronics.com or QR code link. Validates Turnstile CAPTCHA token and HMAC timing token. Creates lead record. Upserts CRM company and contact. Triggers MS365 Graph email notifications to POC and global list.",
+        "request_fields": ["title", "firstName", "lastName", "email", "phoneNumber", "company", "acePoc", "location", "usCitizen", "documentsAgreed", "plusOneCount", "turnstileToken", "timingToken"],
+        "db_ops": [
+          "leads.insert",
+          "customers.get_by_email (check for pre-registration)",
+          "companies.upsert_by_name",
+          "contacts.upsert_by_email",
+          "visits.insert",
+          "ace_pocs.get_by_name (resolve POC emails)",
+          "page_settings.get_notification_emails"
+        ],
+        "email_triggered": true,
+        "email_types": ["POC notification", "Global list notification"]
+      },
+      {
+        "method": "POST", "path": "/api/guest-register", "auth_required": false,
+        "rate_limited": true, "rate_limiter": "guestRegisterLimiter",
+        "description": "Register a new guest contact in the CRM without a full check-in.",
+        "db_ops": ["companies.upsert_by_name", "contacts.upsert_by_email", "visits.insert"]
+      },
+      {
+        "method": "POST", "path": "/api/check-in/qr", "auth_required": false,
+        "description": "Check in a pre-registered customer by their QR code value.",
+        "db_ops": ["customers.get_by_qr_code", "customers.check_in (status → checked-in, sets checked_in_at)"]
+      },
+      {
+        "method": "POST", "path": "/api/check-in/phone", "auth_required": false,
+        "description": "Check in a pre-registered customer by phone number lookup.",
+        "db_ops": ["customers.get_by_phone", "customers.check_in"]
+      },
+      {
+        "method": "POST", "path": "/api/check-in/email", "auth_required": false,
+        "description": "Check in a pre-registered customer by email lookup.",
+        "db_ops": ["customers.get_by_email", "customers.check_in"]
+      }
+    ],
+    "kiosk": [
+      {
+        "method": "POST", "path": "/api/kiosk/register", "auth_required": false,
+        "description": "Register kiosk device on first load using a device fingerprint. Creates or retrieves kiosk_devices record. Returns default location.",
+        "db_ops": ["kiosk_devices.register_or_get (upsert by device_id)"]
+      },
+      {
+        "method": "POST", "path": "/api/kiosk/heartbeat", "auth_required": false,
+        "description": "Periodic ping (every ~30s) from kiosk to update last_seen timestamp and current status.",
+        "db_ops": ["kiosk_devices.update last_seen, status"]
+      },
+      {
+        "method": "GET", "path": "/api/kiosk/visitor-lookup", "auth_required": false,
+        "rate_limited": true, "rate_limiter": "visitorLookupLimiter",
+        "description": "Look up a returning visitor by email to auto-fill the kiosk form (name, company, POC).",
+        "db_ops": ["visitors.lookup_by_email (most recent record)"]
+      },
+      {
+        "method": "GET", "path": "/api/kiosk/visitor-search", "auth_required": false,
+        "rate_limited": true, "rate_limiter": "visitorSearchLimiter",
+        "description": "Search visitors by name or email for kiosk autocomplete suggestions.",
+        "db_ops": ["visitors.search (case-insensitive, partial match)"]
+      },
+      {
+        "method": "POST", "path": "/api/kiosk/checkin", "auth_required": false,
+        "rate_limited": true, "rate_limiter": "kioskCheckinLimiter",
+        "description": "Full kiosk check-in. Creates visitor record (with optional base64 photo). Upserts CRM company and contact. Records document agreement. Triggers MS365 Graph email notifications.",
+        "request_fields": ["fullName", "email", "phoneNumber", "company", "acePoc", "usCitizen", "location", "photoData (base64)", "documentsAgreed"],
+        "db_ops": [
+          "visitors.insert",
+          "companies.upsert_by_name",
+          "contacts.upsert_by_email",
+          "visits.insert",
+          "ace_pocs.get_by_name (resolve POC emails)",
+          "page_settings.get_notification_emails"
+        ],
+        "email_triggered": true,
+        "email_types": ["POC notification", "Global list notification"]
+      },
+      {
+        "method": "GET", "path": "/api/kiosk/settings", "auth_required": false,
+        "description": "Fetch kiosk display and behaviour settings (timeout, photo toggle, etc.).",
+        "db_ops": ["page_settings.get (kiosk_settings key)"]
+      },
+      {
+        "method": "PUT", "path": "/api/kiosk/settings", "auth_required": true,
+        "description": "Update kiosk settings.",
+        "db_ops": ["page_settings.upsert"]
+      },
+      {
+        "method": "GET", "path": "/api/kiosk/devices", "auth_required": true,
+        "description": "List all registered kiosk devices with status and last-seen time.",
+        "db_ops": ["kiosk_devices.get_all"]
+      },
+      {
+        "method": "GET", "path": "/api/kiosk/device-info", "auth_required": false,
+        "description": "Get info for the current device by its fingerprint.",
+        "db_ops": ["kiosk_devices.get_by_device_id"]
+      },
+      {
+        "method": "PUT", "path": "/api/kiosk/devices/:id", "auth_required": true,
+        "description": "Rename a kiosk device or set its default location.",
+        "db_ops": ["kiosk_devices.update name, default_location, location_source"]
+      },
+      {
+        "method": "DELETE", "path": "/api/kiosk/devices/cleanup", "auth_required": true,
+        "description": "Delete all unnamed/stale kiosk device registrations.",
+        "db_ops": ["kiosk_devices.delete_where name IS NULL"]
+      },
+      {
+        "method": "DELETE", "path": "/api/kiosk/devices/:id", "auth_required": true,
+        "description": "Delete a specific kiosk device registration.",
+        "db_ops": ["kiosk_devices.delete by id"]
+      }
+    ],
+    "customers": [
+      {
+        "method": "GET", "path": "/api/customers", "auth_required": false,
+        "description": "List all pre-registered customers ordered alphabetically.",
+        "db_ops": ["customers.select all ORDER BY LOWER(name)"]
+      },
+      {
+        "method": "GET", "path": "/api/customers/search", "auth_required": false,
+        "description": "Case-insensitive search across customer name, email, and phone.",
+        "db_ops": ["customers.search (ILIKE)"]
+      },
+      {
+        "method": "GET", "path": "/api/customers/:id", "auth_required": false,
+        "description": "Get a single customer by UUID.",
+        "db_ops": ["customers.select where id = :id"]
+      },
+      {
+        "method": "POST", "path": "/api/customers", "auth_required": false,
+        "description": "Create a new pre-registered customer. Auto-generates a UUID QR code. Status defaults to 'pending'.",
+        "db_ops": ["customers.insert"]
+      },
+      {
+        "method": "PUT", "path": "/api/customers/:id", "auth_required": true,
+        "description": "Update customer name, email, phone, or status.",
+        "db_ops": ["customers.update where id = :id"]
+      },
+      {
+        "method": "DELETE", "path": "/api/customers/:id", "auth_required": true,
+        "description": "Delete a customer record.",
+        "db_ops": ["customers.delete where id = :id"]
+      },
+      {
+        "method": "POST", "path": "/api/customers/:id/invite", "auth_required": true,
+        "description": "Send invitation email with personalized QR code to the customer. Sets invited_at timestamp and status to 'confirmed'.",
+        "db_ops": ["customers.get by id", "customers.update invited_at, status = confirmed"],
+        "email_triggered": true,
+        "email_type": "Customer invitation with QR code"
+      },
+      {
+        "method": "POST", "path": "/api/customers/:id/check-in", "auth_required": false,
+        "description": "Mark a customer as checked-in. Sets checked_in_at and status to 'checked-in'.",
+        "db_ops": ["customers.update checked_in_at, status = checked-in"]
+      },
+      {
+        "method": "POST", "path": "/api/customers/import", "auth_required": true,
+        "description": "Bulk import customers from parsed CSV/Excel rows. Auto-generates QR codes for each.",
+        "db_ops": ["customers.insert (bulk)"]
+      }
+    ],
+    "visitors": [
+      {
+        "method": "GET", "path": "/api/visitors", "auth_required": true,
+        "description": "List all kiosk and walk-in visitor records.",
+        "db_ops": ["visitors.select all ORDER BY signed_in_at DESC"]
+      },
+      {
+        "method": "POST", "path": "/api/visitors/bulk-import", "auth_required": true,
+        "description": "Bulk import historical visitor records.",
+        "db_ops": ["visitors.bulk insert (deduplication logic)"]
+      },
+      {
+        "method": "GET", "path": "/api/visitors/profile", "auth_required": true,
+        "description": "Full visitor profile by email or name: all visits, internal notes, merge history.",
+        "db_ops": ["visitors.get by email/name", "visitor_notes.get by lookup_key", "visitor_merge_events.get"]
+      },
+      {
+        "method": "GET", "path": "/api/visitors/notes", "auth_required": true,
+        "description": "Get internal staff notes for a visitor by email or name lookup key.",
+        "db_ops": ["visitor_notes.select where lookup_key = :key"]
+      },
+      {
+        "method": "PUT", "path": "/api/visitors/notes", "auth_required": true,
+        "description": "Create or update internal staff notes for a visitor.",
+        "db_ops": ["visitor_notes.upsert by lookup_key"]
+      },
+      {
+        "method": "GET", "path": "/api/visitors/missing-us-citizen-count", "auth_required": true,
+        "description": "Count of visitor records with no US citizen/resident answer recorded.",
+        "db_ops": ["visitors.count where us_citizen IS NULL"]
+      },
+      {
+        "method": "GET", "path": "/api/visitors/merge-events", "auth_required": true,
+        "description": "Audit log of all visitor profile merge operations.",
+        "db_ops": ["visitor_merge_events.select all"]
+      },
+      {
+        "method": "POST", "path": "/api/visitors/merge", "auth_required": true,
+        "description": "Merge two visitor profiles. Moves all visit records to the primary profile. Creates a merge event audit record.",
+        "db_ops": ["visitors.update source records to primary key", "visitor_merge_events.insert"]
+      },
+      {
+        "method": "PUT", "path": "/api/visitors/by-key", "auth_required": true,
+        "description": "Update name, email, company, or phone across all visitor records matching a lookup key.",
+        "db_ops": ["visitors.update where email or full_name = :key"]
+      },
+      {
+        "method": "DELETE", "path": "/api/visitors/by-key", "auth_required": true,
+        "description": "Delete all visitor records matching a lookup key (email or name).",
+        "db_ops": ["visitors.delete where email or full_name = :key"]
+      }
+    ],
+    "leads": [
+      {
+        "method": "GET", "path": "/api/leads", "auth_required": true,
+        "description": "List all lead records created by /api/guest-checkin submissions.",
+        "db_ops": ["leads.select all ORDER BY submitted_at DESC"]
+      },
+      {
+        "method": "PATCH", "path": "/api/leads/:id", "auth_required": true,
+        "description": "Update a lead record (e.g. associate a customer ID).",
+        "db_ops": ["leads.update where id = :id"]
+      },
+      {
+        "method": "DELETE", "path": "/api/leads/:id", "auth_required": true,
+        "description": "Delete a lead record.",
+        "db_ops": ["leads.delete where id = :id"]
+      }
+    ],
+    "crm": [
+      {
+        "method": "GET", "path": "/api/crm/companies", "auth_required": true,
+        "description": "List all companies with total visit count.",
+        "db_ops": ["companies.select all with visit count JOIN visits"]
+      },
+      {
+        "method": "GET", "path": "/api/crm/companies/:id", "auth_required": true,
+        "description": "Get a company with its full contact list and visit history.",
+        "db_ops": ["companies.get by id", "contacts.select where company_id = :id", "visits.select where company_id = :id"]
+      },
+      {
+        "method": "GET", "path": "/api/crm/contacts", "auth_required": true,
+        "description": "List all contacts with total visit count.",
+        "db_ops": ["contacts.select all with visit count JOIN visits"]
+      },
+      {
+        "method": "GET", "path": "/api/crm/contacts/:id", "auth_required": true,
+        "description": "Get a contact with their full visit history and company info.",
+        "db_ops": ["contacts.get by id JOIN companies", "visits.select where contact_id = :id"]
+      }
+    ],
+    "ace_pocs": [
+      {
+        "method": "GET", "path": "/api/ace-pocs", "auth_required": false,
+        "description": "List all ACE Points of Contact. Used to populate the POC dropdown on both check-in forms.",
+        "db_ops": ["ace_pocs.select all ORDER BY name"]
+      },
+      {
+        "method": "POST", "path": "/api/ace-pocs", "auth_required": true,
+        "description": "Add a new ACE POC to the roster.",
+        "db_ops": ["ace_pocs.insert"]
+      },
+      {
+        "method": "DELETE", "path": "/api/ace-pocs/:id", "auth_required": true,
+        "description": "Remove a POC from the roster.",
+        "db_ops": ["ace_pocs.delete where id = :id"]
+      },
+      {
+        "method": "PATCH", "path": "/api/ace-pocs/:id/emails", "auth_required": true,
+        "description": "Set the email address list for a POC. These addresses receive the personal 'is here to see you' email.",
+        "db_ops": ["ace_pocs.update emails[] where id = :id"]
+      }
+    ],
+    "notification_emails": [
+      {
+        "method": "GET", "path": "/api/notification-emails", "auth_required": true,
+        "description": "Get the global always-notify email list. These addresses receive a notification on every single check-in.",
+        "db_ops": ["page_settings.get notification_emails key"]
+      },
+      {
+        "method": "PATCH", "path": "/api/notification-emails", "auth_required": true,
+        "description": "Update the global always-notify email list.",
+        "db_ops": ["page_settings.upsert notification_emails key"]
+      }
+    ],
+    "form_fields": [
+      {
+        "method": "GET", "path": "/api/form-fields", "auth_required": false,
+        "description": "List all custom form fields in display order.",
+        "db_ops": ["form_fields.select all ORDER BY sort_order"]
+      },
+      {
+        "method": "POST", "path": "/api/form-fields", "auth_required": true,
+        "description": "Add a custom field to the check-in form (text, select, checkbox, etc.).",
+        "db_ops": ["form_fields.insert"]
+      },
+      {
+        "method": "PUT", "path": "/api/form-fields/reorder", "auth_required": true,
+        "description": "Update sort_order for all form fields (drag-and-drop reorder).",
+        "db_ops": ["form_fields.update sort_order for each id in ordered array"]
+      },
+      {
+        "method": "PUT", "path": "/api/form-fields/:id", "auth_required": true,
+        "description": "Update a form field's label, type, placeholder, required flag, or options.",
+        "db_ops": ["form_fields.update where id = :id"]
+      },
+      {
+        "method": "DELETE", "path": "/api/form-fields/:id", "auth_required": true,
+        "description": "Delete a custom form field.",
+        "db_ops": ["form_fields.delete where id = :id"]
+      }
+    ],
+    "documents": [
+      {
+        "method": "GET", "path": "/api/documents", "auth_required": false,
+        "description": "List documents. Pass ?enabled=true to get only active documents shown to kiosk visitors.",
+        "db_ops": ["documents.select all ORDER BY sort_order (optionally WHERE enabled = true)"]
+      },
+      {
+        "method": "POST", "path": "/api/documents", "auth_required": true,
+        "description": "Create a new document (NDA, visitor policy, etc.).",
+        "db_ops": ["documents.insert"]
+      },
+      {
+        "method": "PUT", "path": "/api/documents/reorder", "auth_required": true,
+        "description": "Update sort_order for all documents.",
+        "db_ops": ["documents.update sort_order for each id in ordered array"]
+      },
+      {
+        "method": "PUT", "path": "/api/documents/:id", "auth_required": true,
+        "description": "Update document title, content, or enabled status.",
+        "db_ops": ["documents.update where id = :id"]
+      },
+      {
+        "method": "DELETE", "path": "/api/documents/:id", "auth_required": true,
+        "description": "Delete a document.",
+        "db_ops": ["documents.delete where id = :id"]
+      }
+    ],
+    "page_settings": [
+      {
+        "method": "GET", "path": "/api/page-settings/:key", "auth_required": false,
+        "description": "Fetch configurable page content by key (e.g. guest_checkin_page). Returns title, description, event info, CAPTCHA bypass window.",
+        "db_ops": ["page_settings.select where key = :key"]
+      },
+      {
+        "method": "PUT", "path": "/api/page-settings/:key", "auth_required": true,
+        "description": "Create or update page settings for a given key.",
+        "db_ops": ["page_settings.upsert where key = :key"]
+      }
+    ],
+    "analytics": [
+      {
+        "method": "GET", "path": "/api/analytics/visitors", "auth_required": true,
+        "description": "Time-series visitor check-in counts. Query params: start (ISO date), end (ISO date), bucket (day | week | month).",
+        "db_ops": ["visitors.group by date_trunc(bucket, signed_in_at) WHERE signed_in_at BETWEEN start AND end"]
+      },
+      {
+        "method": "GET", "path": "/api/stats/monthly-checkins", "auth_required": false,
+        "description": "Monthly check-in totals for the dashboard bar chart.",
+        "db_ops": ["customers.group by month(checked_in_at)"]
+      }
+    ],
+    "security": [
+      {
+        "method": "GET", "path": "/api/captcha-mode", "auth_required": false,
+        "description": "Returns current CAPTCHA mode (visible/invisible) and an HMAC-signed timing token. Checks if the current time falls within the admin-configured CAPTCHA bypass window.",
+        "db_ops": ["page_settings.get captcha_bypass_start, captcha_bypass_end"],
+        "returns": ["mode (visible|invisible)", "timingToken (HMAC signed with FINGERPRINT_HMAC_SECRET)", "bypassActive (boolean)"]
+      },
+      {
+        "method": "GET", "path": "/api/admin/security-status", "auth_required": true,
+        "description": "Current security configuration: CAPTCHA enabled, Turnstile configured, rate limiter active.",
+        "db_ops": []
+      },
+      {
+        "method": "GET", "path": "/api/admin/bot-stats", "auth_required": true,
+        "description": "In-memory count of requests blocked by rate limiter and CAPTCHA validation failures.",
+        "db_ops": []
+      }
+    ],
+    "qr_code": [
+      {
+        "method": "GET", "path": "/api/generate-qr", "auth_required": false,
+        "description": "Generate a 400px PNG QR code data URL for any given ?url= query parameter. Uses the qrcode npm library server-side.",
+        "db_ops": []
+      }
+    ],
+    "setup": [
+      {
+        "method": "POST", "path": "/api/setup/init-schema", "auth_required": true,
+        "description": "Run Drizzle ORM schema migrations to initialize or update database tables.",
+        "db_ops": ["schema migrations via Drizzle Kit"]
+      },
+      {
+        "method": "POST", "path": "/api/setup/import-sql", "auth_required": true,
+        "description": "Execute raw SQL import for bulk data loading.",
+        "db_ops": ["raw SQL execution"]
+      }
+    ]
+  },
+
+  "database": {
+    "provider": "Supabase (PostgreSQL)",
+    "driver": "@neondatabase/serverless — WebSocket connection pooling",
+    "orm": "Drizzle ORM",
+    "validation": "drizzle-zod — auto-generates Zod schemas from table definitions",
+    "connection": "DATABASE_URL environment variable",
+    "tables": [
+      {
+        "name": "customers",
+        "description": "Pre-registered / invited guests. Each has a unique QR code. Status tracks invitation and check-in lifecycle.",
+        "columns": {
+          "id": "varchar UUID PK — gen_random_uuid()",
+          "name": "text NOT NULL",
+          "email": "text NOT NULL UNIQUE",
+          "phone": "text nullable",
+          "status": "enum (pending | confirmed | checked-in) default pending",
+          "qr_code": "text NOT NULL UNIQUE — UUID generated server-side",
+          "invited_at": "timestamp nullable — set when invitation email sent",
+          "checked_in_at": "timestamp nullable — set on check-in",
+          "created_at": "timestamp default now()",
+          "metadata": "text nullable — JSON string for extra fields"
+        }
+      },
+      {
+        "name": "visitors",
+        "description": "Every kiosk and walk-in check-in. One row per visit. Includes optional photo and document agreement.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "full_name": "text NOT NULL",
+          "email": "text nullable",
+          "phone_number": "text nullable",
+          "company": "text nullable",
+          "ace_poc": "text nullable — selected POC name",
+          "signed_in_at": "timestamp default now()",
+          "signed_out_at": "timestamp nullable",
+          "us_citizen": "text nullable — 'Yes' | 'No' | 'Permanent Resident'",
+          "purpose": "text nullable",
+          "location": "text nullable — ACE office location",
+          "source": "text default 'kiosk' — kiosk | guest-form",
+          "notes": "text nullable",
+          "photo_data": "text nullable — base64 encoded JPEG from kiosk camera",
+          "documents_agreed": "text nullable — comma-separated document titles agreed to",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "leads",
+        "description": "Form submissions from /guest-check-in (aceelectronics.com CLICK HERE or QR invitation). Richer event data than visitors table.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "title": "text nullable — Mr/Ms/Dr etc",
+          "first_name": "text NOT NULL",
+          "last_name": "text NOT NULL",
+          "email": "text NOT NULL",
+          "phone_number": "text NOT NULL",
+          "company": "text nullable",
+          "ace_poc": "text nullable",
+          "event_name": "text nullable",
+          "submitted_at": "timestamp default now()",
+          "customer_id": "varchar nullable FK → customers.id",
+          "photo_data": "text nullable — base64",
+          "plus_one_count": "integer default 0",
+          "documents_agreed": "text nullable",
+          "location": "text nullable"
+        }
+      },
+      {
+        "name": "ace_pocs",
+        "description": "ACE Points of Contact roster. Names shown in dropdown on both check-in forms. Email arrays used to send personal notifications.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "name": "text NOT NULL UNIQUE",
+          "emails": "text[] — array of @aceelectronics.com email addresses",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "page_settings",
+        "description": "Configurable content for public-facing pages and kiosk behaviour. Keyed by page identifier string.",
+        "columns": {
+          "key": "varchar PK — e.g. 'guest_checkin_page'",
+          "title": "text NOT NULL",
+          "description": "text NOT NULL",
+          "success_message": "text nullable",
+          "success_title": "text nullable",
+          "event_name": "text nullable",
+          "event_date": "text nullable",
+          "event_location": "text nullable",
+          "captcha_bypass_start": "text nullable — ISO datetime string",
+          "captcha_bypass_end": "text nullable — ISO datetime string",
+          "photo_enabled": "boolean default false",
+          "plus_one_enabled": "boolean default false",
+          "kiosk_timeout_seconds": "integer default 30",
+          "updated_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "form_fields",
+        "description": "Admin-configured custom fields appended to the check-in form.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "label": "text NOT NULL",
+          "field_type": "text default 'text' — text | select | checkbox | date etc",
+          "placeholder": "text nullable",
+          "required": "boolean default false",
+          "options": "text nullable — comma-separated options for select fields",
+          "sort_order": "integer default 0",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "documents",
+        "description": "Documents guests must review and agree to on the kiosk (NDAs, visitor policies).",
+        "columns": {
+          "id": "varchar UUID PK",
+          "title": "text NOT NULL",
+          "content": "text NOT NULL — full document body text",
+          "enabled": "boolean default true — only enabled docs shown on kiosk",
+          "sort_order": "integer default 0",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "kiosk_devices",
+        "description": "Registered iPad/kiosk devices. Auto-created on first load, identified by device fingerprint hash.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "device_id": "text NOT NULL UNIQUE — browser fingerprint hash",
+          "name": "text nullable — admin-assigned friendly name",
+          "status": "text default 'idle' — idle | active",
+          "last_seen": "timestamp — updated on every heartbeat",
+          "user_agent": "text nullable",
+          "ip_address": "text nullable",
+          "default_location": "text nullable — pre-fill location for this device",
+          "location_source": "text nullable — 'device' | 'admin'",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "companies",
+        "description": "CRM company records. Auto-upserted by name on every check-in.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "name": "text NOT NULL UNIQUE",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "contacts",
+        "description": "CRM contact records linked to companies. Auto-upserted by email on every check-in.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "company_id": "varchar nullable FK → companies.id",
+          "title": "text nullable",
+          "first_name": "text NOT NULL",
+          "last_name": "text NOT NULL",
+          "email": "text NOT NULL UNIQUE",
+          "phone": "text nullable",
+          "ace_poc": "text nullable",
+          "created_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "visits",
+        "description": "Individual visit events. One row per check-in, linking a contact to an event/location. Feeds CRM visit history.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "contact_id": "varchar NOT NULL FK → contacts.id",
+          "company_id": "varchar nullable FK → companies.id",
+          "event_name": "text nullable",
+          "event_date": "text nullable",
+          "event_location": "text nullable",
+          "ace_poc": "text nullable",
+          "visited_at": "timestamp default now()",
+          "custom_fields": "text nullable — JSON string"
+        }
+      },
+      {
+        "name": "visitor_notes",
+        "description": "Internal staff notes about a visitor. One row per unique visitor (keyed by email or name).",
+        "columns": {
+          "id": "varchar UUID PK",
+          "lookup_key": "text NOT NULL UNIQUE — email or full_name",
+          "notes": "text default ''",
+          "updated_at": "timestamp default now()"
+        }
+      },
+      {
+        "name": "visitor_merge_events",
+        "description": "Audit trail when two visitor profiles are merged by an admin.",
+        "columns": {
+          "id": "varchar UUID PK",
+          "primary_key": "text NOT NULL — email/name of the profile kept",
+          "secondary_name": "text NOT NULL — name of the profile absorbed",
+          "secondary_email": "text nullable",
+          "visits_moved": "integer NOT NULL — how many visit records were reassigned",
+          "merged_at": "timestamp default now()"
+        }
+      }
+    ]
+  },
+
+  "email_service": {
+    "provider": "Microsoft 365 GCC High",
+    "transport": "Microsoft Graph API — HTTP POST (no SMTP, no nodemailer)",
+    "token_authority": "https://login.microsoftonline.us/{EMAIL_TENANT_ID}",
+    "token_scope": "https://graph.microsoft.us/.default",
+    "token_method": "Client Credentials flow — MSAL ConfidentialClientApplication (acquireTokenByClientCredential)",
+    "send_endpoint": "POST https://graph.microsoft.us/v1.0/users/{EMAIL_FROM}/sendMail",
+    "save_to_sent_items": false,
+    "required_azure_app_permission": "Mail.Send (Application permission on Office 365 Exchange Online GCC High)",
+    "recipient_filter": "Only sends to @aceelectronics.com addresses — all others silently dropped",
+    "deduplication": "If an address appears in both POC list and global list, it only receives the POC email",
+    "email_types": [
+      {
+        "id": "poc_notification",
+        "trigger": "Guest checks in AND selects a POC",
+        "recipients": "Addresses in ace_pocs.emails for the selected POC",
+        "subject": "{VisitorFullName} is here to see you",
+        "body_headline": "{VisitorFullName} is here to see you.",
+        "body_subline": "Checked in at Ace Electronics HQ on {date/time CT}.",
+        "detail_rows": ["Visitor name", "Email address", "Organization / Company", "Here to see: You", "US citizen or resident", "Document: Signed today"]
+      },
+      {
+        "id": "global_notification_with_poc",
+        "trigger": "Guest checks in AND selects a POC",
+        "recipients": "Global always-notify list (from page_settings), excluding any addresses already in POC list",
+        "subject": "{VisitorFullName} is here — visiting {POCName}",
+        "body_headline": "{VisitorFullName} is here — visiting {POCName}.",
+        "body_subline": "Checked in at Ace Electronics HQ on {date/time CT}.",
+        "detail_rows": ["Visitor name", "Email address", "Organization / Company", "Here to see: POC Name", "US citizen or resident", "Document: Signed today"]
+      },
+      {
+        "id": "global_notification_no_poc",
+        "trigger": "Guest checks in WITHOUT selecting a POC",
+        "recipients": "Global always-notify list",
+        "subject": "{VisitorFullName} has checked in at Ace Electronics HQ",
+        "body_headline": "{VisitorFullName} has checked in at Ace Electronics HQ.",
+        "body_subline": "Checked in at Ace Electronics HQ on {date/time CT}.",
+        "detail_rows": ["Visitor name", "Email address", "Organization / Company", "US citizen or resident"]
+      },
+      {
+        "id": "customer_invitation",
+        "trigger": "Admin clicks Invite on a pre-registered customer",
+        "recipients": "The customer's own email address",
+        "subject": "You're invited — your QR code is inside",
+        "content": ["Personalized greeting", "QR code image (400px PNG)", "Direct check-in URL", "Event name, date, and location from page_settings"]
+      }
+    ]
+  },
+
+  "security": {
+    "captcha": {
+      "provider": "Cloudflare Turnstile",
+      "modes": ["visible — shown to all users", "invisible — silent challenge"],
+      "bypass_window": "Admin can set captcha_bypass_start and captcha_bypass_end in page_settings. During this window CAPTCHA is skipped for known event attendees.",
+      "server_validation": "POST https://challenges.cloudflare.com/turnstile/v0/siteverify with TURNSTILE_SECRET_KEY"
+    },
+    "timing_token": {
+      "description": "HMAC-SHA256 signed token issued at form load time. Validated on submission to detect bots that submit instantly.",
+      "signing_secret": "FINGERPRINT_HMAC_SECRET environment variable"
+    },
+    "rate_limiting": {
+      "library": "express-rate-limit",
+      "limiters": [
+        { "name": "guestCheckinLimiter", "route": "POST /api/guest-checkin" },
+        { "name": "guestRegisterLimiter", "route": "POST /api/guest-register" },
+        { "name": "visitorLookupLimiter", "route": "GET /api/kiosk/visitor-lookup" },
+        { "name": "visitorSearchLimiter", "route": "GET /api/kiosk/visitor-search" },
+        { "name": "kioskCheckinLimiter", "route": "POST /api/kiosk/checkin" }
+      ]
+    },
+    "admin_auth": "Session-based authentication via express-session. requireAuth middleware protects all admin-only API routes."
+  },
+
+  "environment_variables": {
+    "required": [
+      { "name": "DATABASE_URL", "description": "Supabase PostgreSQL connection string (Neon serverless WebSocket format)" },
+      { "name": "EMAIL_FROM", "description": "Sender email address — e.g. no-reply@aceelectronics.com" },
+      { "name": "EMAIL_TENANT_ID", "description": "Azure AD GCC High Tenant ID" },
+      { "name": "EMAIL_CLIENT_ID", "description": "Azure App Registration Client ID" },
+      { "name": "EMAIL_CLIENT_SECRET", "description": "Azure App Registration Client Secret" },
+      { "name": "TURNSTILE_SECRET_KEY", "description": "Cloudflare Turnstile server-side secret key (for server-side token verification)" },
+      { "name": "VITE_TURNSTILE_SITE_KEY", "description": "Cloudflare Turnstile frontend site key (VITE_ prefix makes it available client-side)" },
+      { "name": "FINGERPRINT_HMAC_SECRET", "description": "Secret for HMAC-signing timing tokens used in bot detection" }
+    ],
+    "optional": [
+      { "name": "EMAIL_FROM_NAME", "description": "Friendly sender display name in email clients. Default: ACE Guest Check-In" }
+    ]
+  },
+
+  "ios_app": {
+    "framework": "Capacitor 7",
+    "bundle_id": "com.aceelectronics.guestflow",
+    "app_name": "ACE GuestFlow",
+    "min_ios_version": "16.0",
+    "web_dir": "dist/public",
+    "server_url": "Deployed backend URL configured in capacitor.config.ts — iPad always loads the live app from the server",
+    "distribution": "Direct USB install via Xcode — no App Store",
+    "signing": "Apple Developer Program individual account ($99/year)",
+    "config_file": "capacitor.config.ts",
+    "xcode_workspace": "ios/App/App.xcworkspace",
+    "update_strategy": {
+      "backend_or_ui_change": "Deploy updated server — iPad auto-reflects changes on next load, no Xcode rebuild needed",
+      "native_config_change": "npm run build → npx cap sync ios → Xcode Archive → install via USB"
+    }
+  },
+
+  "third_party_libraries": {
+    "frontend": [
+      { "name": "React 18", "purpose": "UI framework" },
+      { "name": "Vite", "purpose": "Build tool and dev server with HMR" },
+      { "name": "Wouter", "purpose": "Client-side routing" },
+      { "name": "TanStack Query v5", "purpose": "Server state management and data fetching" },
+      { "name": "Shadcn/ui + Radix UI", "purpose": "Accessible headless UI components" },
+      { "name": "Tailwind CSS", "purpose": "Utility-first styling" },
+      { "name": "React Hook Form + Zod", "purpose": "Form state and validation" },
+      { "name": "framer-motion", "purpose": "Animations (kiosk idle logo entrance and float)" },
+      { "name": "PapaParse", "purpose": "CSV parsing for bulk customer import" },
+      { "name": "XLSX", "purpose": "Excel file parsing for bulk import" },
+      { "name": "qrcode (npm)", "purpose": "Server-side QR code PNG generation" },
+      { "name": "Lucide React", "purpose": "Icon library" },
+      { "name": "date-fns", "purpose": "Date formatting" }
+    ],
+    "backend": [
+      { "name": "Express.js", "purpose": "HTTP server and REST API" },
+      { "name": "Drizzle ORM", "purpose": "Type-safe database queries" },
+      { "name": "@neondatabase/serverless", "purpose": "Supabase/PostgreSQL WebSocket connection pooling" },
+      { "name": "MSAL Node (@azure/msal-node)", "purpose": "Microsoft OAuth2 token acquisition for Graph API" },
+      { "name": "express-session", "purpose": "Admin session management" },
+      { "name": "express-rate-limit", "purpose": "Rate limiting on public endpoints" },
+      { "name": "zod", "purpose": "Runtime request body validation" }
+    ]
+  },
+
+  "flows": {
+    "guest_via_aceelectronics_website": {
+      "description": "Visitor clicks CLICK HERE on aceelectronics.com 2026 MDEX/XPONENTIAL section → completes check-in form → saved to database → email notifications sent",
+      "steps": [
+        "aceelectronics.com → CLICK HERE → /guest-check-in",
+        "GET /api/captcha-mode (get CAPTCHA mode + timing token)",
+        "GET /api/ace-pocs (populate POC dropdown)",
+        "GET /api/page-settings/guest_checkin_page (title, description, event info)",
+        "GET /api/documents (if any documents to agree to)",
+        "Visitor fills form: title, firstName, lastName, email, phone, company, acePoc, usCitizen, location",
+        "POST /api/guest-checkin",
+        "  → Validate Turnstile token (Cloudflare API)",
+        "  → Validate HMAC timing token",
+        "  → leads.insert",
+        "  → companies.upsert_by_name",
+        "  → contacts.upsert_by_email",
+        "  → visits.insert",
+        "  → ace_pocs.get_by_name → resolve POC emails",
+        "  → page_settings.get_notification_emails",
+        "  → MS365 Graph API: send POC email ('is here to see you')",
+        "  → MS365 Graph API: send global list email ('is here — visiting POC')",
+        "Success message displayed to visitor"
+      ]
+    },
+    "kiosk_walkin": {
+      "description": "Visitor walks up to reception iPad kiosk → optional returning visitor lookup → fills form → agrees to documents → optional photo → checks in → notifications sent",
+      "steps": [
+        "/kiosk — Idle screen shown (animated ACE logo)",
+        "POST /api/kiosk/register (first load — register device)",
+        "POST /api/kiosk/heartbeat (every ~30 seconds)",
+        "GET /api/kiosk/settings (timeout, photo toggle)",
+        "GET /api/ace-pocs (POC dropdown)",
+        "GET /api/documents?enabled=true (documents step)",
+        "Visitor taps screen → email entry",
+        "GET /api/kiosk/visitor-lookup?email=... (auto-fill for returning visitor)",
+        "Visitor completes / confirms form fields",
+        "Visitor reviews and agrees to documents",
+        "(Optional) Photo captured via device camera",
+        "POST /api/kiosk/checkin",
+        "  → visitors.insert (with photo_data, documents_agreed)",
+        "  → companies.upsert_by_name",
+        "  → contacts.upsert_by_email",
+        "  → visits.insert",
+        "  → ace_pocs.get_by_name → resolve POC emails",
+        "  → page_settings.get_notification_emails",
+        "  → MS365 Graph API: send POC email",
+        "  → MS365 Graph API: send global list email",
+        "Success screen shown → auto-timeout → back to idle"
+      ]
+    },
+    "qr_code_checkin": {
+      "description": "Pre-invited customer receives invitation email, scans QR code, and is instantly checked in",
+      "steps": [
+        "Admin creates customer: POST /api/customers",
+        "  → customers.insert (status: pending, qr_code: UUID)",
+        "Admin sends invitation: POST /api/customers/:id/invite",
+        "  → GET /api/generate-qr (generate QR PNG for check-in URL)",
+        "  → MS365 Graph API: send invitation email with QR code to customer",
+        "  → customers.update invited_at, status = confirmed",
+        "Customer receives email → scans QR code with phone",
+        "Browser opens /guest-check-in?qr={qrCode}",
+        "POST /api/check-in/qr { qrCode }",
+        "  → customers.get_by_qr_code",
+        "  → customers.update checked_in_at, status = checked-in"
+      ]
+    },
+    "admin_bulk_import": {
+      "description": "Admin uploads a CSV or Excel file to pre-register many customers at once",
+      "steps": [
+        "Admin navigates to /import",
+        "Uploads CSV or Excel file",
+        "PapaParse (CSV) or XLSX library parses file client-side",
+        "POST /api/customers/import with array of customer objects",
+        "  → customers.insert (bulk) — auto-generates UUID QR code for each"
+      ]
+    },
+    "admin_manage_notifications": {
+      "description": "Admin configures who gets notified on each check-in",
+      "steps": [
+        "Admin navigates to /sign-in-flow",
+        "GET /api/ace-pocs — view POC roster",
+        "POST /api/ace-pocs — add a new POC",
+        "PATCH /api/ace-pocs/:id/emails — set email addresses for a POC",
+        "GET /api/notification-emails — view global always-notify list",
+        "PATCH /api/notification-emails — update global list",
+        "Changes take effect immediately on next check-in"
+      ]
+    }
   }
 }
