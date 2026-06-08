@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
     // Point this to your deployed backend URL (Replit Deploy, Railway, etc.)
     // Once set, any backend/UI update is reflected on the iPad without a rebuild.
     // Example: 'https://your-app.replit.app'
-    url: 'https://YOUR-DEPLOYED-BACKEND-URL',
+    url: 'https://guestflow.aceelectronics.com',
     cleartext: false,
     androidScheme: 'https',
   },
