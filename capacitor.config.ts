@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.aceelectronics.guestflow',
+  appId: 'com.shivam.guestflow',
   appName: 'ACE GuestFlow',
   webDir: 'dist/public',
   server: {
