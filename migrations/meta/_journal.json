@@ -71,6 +71,13 @@
       "when": 1748600000000,
       "tag": "0008_kiosk_missing_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1749571200000,
+      "tag": "0009_device_feature_toggles",
+      "breakpoints": true
     }
   ]
 }
