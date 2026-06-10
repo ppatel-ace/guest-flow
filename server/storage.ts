@@ -1014,17 +1014,17 @@ export class DatabaseStorage implements IStorage {
     const secondaryRep = secondaryRows[0] ?? null;
 
     // Update all secondary visitor rows to use the primary's identity
-    let updatedRows: { id: string }[] = [];
+    let updatedRows: unknown[] = [];
     if (secondaryKey.includes('@')) {
       updatedRows = await db.update(visitors)
         .set({ fullName: primaryRep.fullName, email: primaryRep.email, company: primaryRep.company })
         .where(sql`LOWER(${visitors.email}) = ${secondaryKey}`)
-        .returning({ id: visitors.id });
+        .returning();
     } else {
       updatedRows = await db.update(visitors)
         .set({ fullName: primaryRep.fullName, email: primaryRep.email, company: primaryRep.company })
         .where(sql`LOWER(${visitors.fullName}) = ${secondaryKey}`)
-        .returning({ id: visitors.id });
+        .returning();
     }
 
     // Merge internal notes: append secondary's notes onto primary's, then clear secondary
@@ -1064,24 +1064,24 @@ export class DatabaseStorage implements IStorage {
 
   async updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null }): Promise<{ updated: number }> {
     const isEmail = lookupKey.includes('@');
-    let rows: { id: string }[];
+    let rows: unknown[];
     if (isEmail) {
       rows = await db.update(visitors)
         .set(data)
         .where(sql`LOWER(${visitors.email}) = ${lookupKey.toLowerCase()}`)
-        .returning({ id: visitors.id });
+        .returning();
     } else {
       rows = await db.update(visitors)
         .set(data)
         .where(sql`LOWER(${visitors.fullName}) = ${lookupKey.toLowerCase()}`)
-        .returning({ id: visitors.id });
+        .returning();
     }
     return { updated: rows.length };
   }
 
   async deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }> {
     const isEmail = lookupKey.includes('@');
-    let rows: { id: string }[];
+    let rows: unknown[];
 
     await db.delete(visitorNotes)
       .where(sql`LOWER(${visitorNotes.lookupKey}) = ${lookupKey.toLowerCase()}`);
@@ -1092,11 +1092,11 @@ export class DatabaseStorage implements IStorage {
     if (isEmail) {
       rows = await db.delete(visitors)
         .where(sql`LOWER(${visitors.email}) = ${lookupKey.toLowerCase()}`)
-        .returning({ id: visitors.id });
+        .returning();
     } else {
       rows = await db.delete(visitors)
         .where(sql`LOWER(${visitors.fullName}) = ${lookupKey.toLowerCase()}`)
-        .returning({ id: visitors.id });
+        .returning();
     }
     return { deleted: rows.length };
   }

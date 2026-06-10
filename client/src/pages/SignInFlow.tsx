@@ -2224,12 +2224,12 @@ function ContactsTab() {
     }
     const flagged = new Set<string>();
     // Map from lookupKey → array of other contacts in the same duplicate group
-    const groups = new Map<string, typeof groupedVisitors>();
-    for (const [, visitors] of nameMap) {
+    const groups = new Map<string, GroupedVisitor[]>();
+    for (const [, visitors] of Array.from(nameMap)) {
       if (visitors.length > 1) {
-        visitors.forEach(v => {
+        visitors.forEach((v: GroupedVisitor) => {
           flagged.add(v.lookupKey);
-          groups.set(v.lookupKey, visitors.filter(o => o.lookupKey !== v.lookupKey));
+          groups.set(v.lookupKey, visitors.filter((o: GroupedVisitor) => o.lookupKey !== v.lookupKey));
         });
       }
     }
