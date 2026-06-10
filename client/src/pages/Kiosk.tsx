@@ -81,7 +81,7 @@ function getOrCreateDeviceId(): string {
 
 const APP_VERSION = "1.0.0";
 
-function parseDeviceInfo(ua: string): { deviceType: string; osVersion: string } {
+function parseDeviceInfoFromUA(ua: string): { deviceType: string; osVersion: string } {
   if (ua.includes("iPad")) {
     const m = ua.match(/CPU OS (\d+)[_.](\d+)/);
     const ver = m ? `${m[1]}.${m[2]}` : "Unknown";
@@ -102,10 +102,42 @@ function parseDeviceInfo(ua: string): { deviceType: string; osVersion: string } 
   return { deviceType: "Unknown", osVersion: "Unknown" };
 }
 
-async function registerDevice(deviceId: string): Promise<string | null> {
+/**
+ * Returns accurate device info using native Capacitor APIs when running inside
+ * the iOS app, falling back to UA-string parsing in a regular browser.
+ *
+ * On native, Device.getId() returns a stable hardware UUID that replaces the
+ * random one we generated, ensuring the same iPad always registers as the same
+ * device even after clearing localStorage.
+ */
+async function getDeviceInfo(): Promise<{ deviceId: string; deviceType: string; osVersion: string }> {
   try {
-    const ua = navigator.userAgent;
-    const { deviceType, osVersion } = parseDeviceInfo(ua);
+    const { Capacitor } = await import("@capacitor/core");
+    if (Capacitor.isNativePlatform()) {
+      const { Device } = await import("@capacitor/device");
+      const [info, idResult] = await Promise.all([Device.getInfo(), Device.getId()]);
+      const hwId = idResult.identifier;
+      // Persist hardware ID so getOrCreateDeviceId() returns it on next sync call
+      localStorage.setItem("kioskDeviceId", hwId);
+      const osLabel = info.operatingSystem === "ios" ? "iPadOS" : info.operatingSystem;
+      return {
+        deviceId: hwId,
+        deviceType: info.model || "iPad",
+        osVersion: `${osLabel} ${info.osVersion}`,
+      };
+    }
+  } catch {
+    // Not running in Capacitor — fall through to UA parsing
+  }
+  return {
+    deviceId: getOrCreateDeviceId(),
+    ...parseDeviceInfoFromUA(navigator.userAgent),
+  };
+}
+
+async function registerDevice(): Promise<{ location: string | null; resolvedDeviceId: string }> {
+  try {
+    const { deviceId, deviceType, osVersion } = await getDeviceInfo();
     await fetch("/api/kiosk/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -114,22 +146,28 @@ async function registerDevice(deviceId: string): Promise<string | null> {
     const infoRes = await fetch(`/api/kiosk/device-info?deviceId=${encodeURIComponent(deviceId)}`);
     if (infoRes.ok) {
       const data = await infoRes.json();
-      return data.defaultLocation ?? null;
+      return { location: data.defaultLocation ?? null, resolvedDeviceId: deviceId };
     }
+    return { location: null, resolvedDeviceId: deviceId };
   } catch {
     // silently ignore
   }
-  return null;
+  return { location: null, resolvedDeviceId: getOrCreateDeviceId() };
 }
 
 async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promise<void> {
   try {
-    const ua = navigator.userAgent;
-    const { deviceType, osVersion } = parseDeviceInfo(ua);
+    const { deviceId: resolvedId, deviceType, osVersion } = await getDeviceInfo();
     await fetch("/api/kiosk/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, status, appVersion: APP_VERSION, deviceType, osVersion }),
+      body: JSON.stringify({
+        deviceId: resolvedId || deviceId,
+        status,
+        appVersion: APP_VERSION,
+        deviceType,
+        osVersion,
+      }),
     });
   } catch {
     // silently ignore
@@ -273,8 +311,10 @@ export default function Kiosk() {
   // ── Device registration & heartbeat ──────────────────────────────────────────
 
   useEffect(() => {
-    registerDevice(deviceId.current).then((loc) => {
-      if (loc) deviceDefaultLocation.current = loc;
+    registerDevice().then(({ location, resolvedDeviceId }) => {
+      // On native Capacitor, resolvedDeviceId is the hardware UUID — update ref
+      deviceId.current = resolvedDeviceId;
+      if (location) deviceDefaultLocation.current = location;
     });
     const interval = setInterval(() => {
       sendHeartbeat(deviceId.current, step === "idle" ? "idle" : "active");
