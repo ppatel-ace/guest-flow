@@ -89,6 +89,8 @@ interface KioskSettings {
   photoEnabled: boolean;
   plusOneEnabled: boolean;
   kioskTimeoutSeconds: number;
+  labelPrinterEnabled: boolean;
+  wifiCouponEnabled: boolean;
 }
 
 interface KioskDevice {
@@ -707,6 +709,102 @@ function PhotoTab() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+// ─── Device Settings Section ──────────────────────────────────────────────────
+
+function DeviceSettingsSection() {
+  const { toast } = useToast();
+  const { data: settings, isLoading } = useQuery<KioskSettings>({ queryKey: ["/api/kiosk/settings"] });
+  const [labelPrinterEnabled, setLabelPrinterEnabled] = useState(false);
+  const [wifiCouponEnabled, setWifiCouponEnabled] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setLabelPrinterEnabled(settings.labelPrinterEnabled ?? false);
+      setWifiCouponEnabled(settings.wifiCouponEnabled ?? false);
+    }
+  }, [settings]);
+
+  const mutation = useMutation({
+    mutationFn: async (data: Partial<KioskSettings>) => {
+      const res = await apiRequest("PUT", "/api/kiosk/settings", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/kiosk/settings"] });
+      toast({ title: "Device setting saved" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to save device setting.", variant: "destructive" }),
+  });
+
+  const handleLabelPrinter = (val: boolean) => {
+    setLabelPrinterEnabled(val);
+    mutation.mutate({ labelPrinterEnabled: val });
+  };
+
+  const handleWifiCoupon = (val: boolean) => {
+    setWifiCouponEnabled(val);
+    mutation.mutate({ wifiCouponEnabled: val });
+  };
+
+  if (isLoading) return <div className="text-sm text-muted-foreground mb-4">Loading...</div>;
+
+  return (
+    <div className="space-y-3 mb-6">
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-primary/10 shrink-0">
+              <Monitor className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-medium text-sm">ID Label Printer</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    When enabled, a visiting label will be printed for each guest after check-in. Printer not yet connected.
+                  </p>
+                </div>
+                <Switch
+                  checked={labelPrinterEnabled}
+                  onCheckedChange={handleLabelPrinter}
+                  disabled={mutation.isPending}
+                  data-testid="switch-label-printer-enabled"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-primary/10 shrink-0">
+              <Monitor className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-medium text-sm">WiFi Coupon Code</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    When enabled, guests will receive a WiFi access code after check-in. Not yet configured.
+                  </p>
+                </div>
+                <Switch
+                  checked={wifiCouponEnabled}
+                  onCheckedChange={handleWifiCoupon}
+                  disabled={mutation.isPending}
+                  data-testid="switch-wifi-coupon-enabled"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -3047,15 +3145,26 @@ export default function SignInFlow() {
         </TabsContent>
 
         <TabsContent value="devices">
-          <Card>
-            <CardHeader>
-              <CardTitle>Devices</CardTitle>
-              <CardDescription>Live list of iPads and tablets currently running the kiosk.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DevicesTab />
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Device Features</CardTitle>
+                <CardDescription>Enable or disable hardware features connected to the kiosk.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DeviceSettingsSection />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Connected Devices</CardTitle>
+                <CardDescription>Live list of iPads and tablets currently running the kiosk.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DevicesTab />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="visitor-log">

@@ -109,6 +109,8 @@ export interface KioskCheckinSettings {
   photoEnabled: boolean;
   plusOneEnabled: boolean;
   kioskTimeoutSeconds: number;
+  labelPrinterEnabled: boolean;
+  wifiCouponEnabled: boolean;
 }
 
 const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
@@ -125,6 +127,8 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     photoEnabled: false,
     plusOneEnabled: false,
     kioskTimeoutSeconds: 30,
+    labelPrinterEnabled: false,
+    wifiCouponEnabled: false,
   },
   guest_checkin_page: {
     title: "Check-In",
@@ -139,6 +143,8 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     photoEnabled: false,
     plusOneEnabled: false,
     kioskTimeoutSeconds: 30,
+    labelPrinterEnabled: false,
+    wifiCouponEnabled: false,
   },
   kiosk_settings: {
     title: "Kiosk",
@@ -153,6 +159,8 @@ const PAGE_DEFAULTS: Record<string, Omit<InsertPageSettings, 'key'>> = {
     photoEnabled: false,
     plusOneEnabled: false,
     kioskTimeoutSeconds: 30,
+    labelPrinterEnabled: false,
+    wifiCouponEnabled: false,
   },
 };
 
@@ -600,6 +608,8 @@ export class DatabaseStorage implements IStorage {
       photoEnabled: row.photoEnabled ?? false,
       plusOneEnabled: row.plusOneEnabled ?? false,
       kioskTimeoutSeconds: row.kioskTimeoutSeconds ?? 30,
+      labelPrinterEnabled: row.labelPrinterEnabled ?? false,
+      wifiCouponEnabled: row.wifiCouponEnabled ?? false,
     };
   }
 
@@ -612,6 +622,8 @@ export class DatabaseStorage implements IStorage {
       photoEnabled: merged.photoEnabled,
       plusOneEnabled: merged.plusOneEnabled,
       kioskTimeoutSeconds: merged.kioskTimeoutSeconds,
+      labelPrinterEnabled: merged.labelPrinterEnabled,
+      wifiCouponEnabled: merged.wifiCouponEnabled,
     });
     return merged;
   }

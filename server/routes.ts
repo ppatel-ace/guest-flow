@@ -964,6 +964,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         photoEnabled: z.boolean().optional(),
         plusOneEnabled: z.boolean().optional(),
         kioskTimeoutSeconds: z.number().int().min(5).max(300).optional(),
+        labelPrinterEnabled: z.boolean().optional(),
+        wifiCouponEnabled: z.boolean().optional(),
       });
       const data = schema.parse(req.body);
       const settings = await storage.updateKioskSettings(data);

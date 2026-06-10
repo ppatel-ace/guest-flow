@@ -578,7 +578,7 @@ export default function Kiosk() {
       {/* ── Idle Screen ── */}
       {step === "idle" && (
         <div
-          className="flex-1 flex flex-col items-center justify-center cursor-pointer p-10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen"
+          className="flex-1 flex flex-col items-center justify-center cursor-pointer p-10 bg-[#F8F5F0] min-h-screen"
           onClick={startFlow}
           data-testid="screen-kiosk-idle"
         >
@@ -601,20 +601,20 @@ export default function Kiosk() {
 
           {/* Welcome text */}
           <div className="text-center space-y-3 mb-14">
-            <p className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Ace Electronics</p>
-            <h1 className="text-6xl font-bold text-white tracking-tight">Welcome</h1>
-            <p className="text-slate-400 text-xl">Please sign in to continue</p>
+            <p className="text-slate-500 text-sm font-semibold uppercase tracking-widest">Ace Electronics</p>
+            <h1 className="text-6xl font-bold text-slate-900 tracking-tight">Welcome</h1>
+            <p className="text-slate-500 text-xl">Please sign in to continue</p>
           </div>
 
           {/* Tap CTA */}
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping" />
-              <div className="relative h-20 w-20 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/50">
+              <div className="relative h-20 w-20 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                 <ChevronRight className="h-9 w-9 text-white" />
               </div>
             </div>
-            <p className="text-slate-300 text-lg font-medium">Tap anywhere to check in</p>
+            <p className="text-slate-600 text-lg font-medium">Tap anywhere to check in</p>
           </div>
         </div>
       )}

@@ -41,6 +41,8 @@ export const pageSettings = pgTable("page_settings", {
   photoEnabled: boolean("photo_enabled").default(false),
   plusOneEnabled: boolean("plus_one_enabled").default(false),
   kioskTimeoutSeconds: integer("kiosk_timeout_seconds").default(30),
+  labelPrinterEnabled: boolean("label_printer_enabled").default(false),
+  wifiCouponEnabled: boolean("wifi_coupon_enabled").default(false),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
