@@ -1,0 +1,13 @@
+app_identifier("com.aceelectronics.guestflow")
+
+# Your Apple Developer account Apple ID (email).
+# Set via APPLE_ID env var or replace the placeholder below.
+apple_id(ENV["APPLE_ID"] || "your-apple-id@example.com")
+
+# The App Store Connect Team ID (found in App Store Connect → Users → your account → Team).
+# Set via APP_STORE_CONNECT_TEAM_ID env var or replace below.
+itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"])
+
+# The Apple Developer Portal Team ID (found in developer.apple.com → Membership).
+# Set via TEAM_ID env var or replace below.
+team_id(ENV["TEAM_ID"])
