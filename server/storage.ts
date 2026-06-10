@@ -205,7 +205,7 @@ export interface IStorage {
   updateKioskSettings(data: Partial<KioskCheckinSettings>): Promise<KioskCheckinSettings>;
   // Kiosk devices
   registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string): Promise<{ device: KioskDevice; isNew: boolean }>;
-  heartbeatKioskDevice(deviceId: string, status: string, appVersion?: string): Promise<KioskDevice | undefined>;
+  heartbeatKioskDevice(deviceId: string, status: string, appVersion?: string, deviceType?: string, osVersion?: string): Promise<KioskDevice | undefined>;
   getAllKioskDevices(): Promise<KioskDevice[]>;
   updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null; locationSource?: string | null }): Promise<KioskDevice | undefined>;
   deleteKioskDevice(id: string): Promise<boolean>;
@@ -666,11 +666,13 @@ export class DatabaseStorage implements IStorage {
     return { device: created, isNew: true };
   }
 
-  async heartbeatKioskDevice(deviceId: string, status: string, appVersion?: string): Promise<KioskDevice | undefined> {
+  async heartbeatKioskDevice(deviceId: string, status: string, appVersion?: string, deviceType?: string, osVersion?: string): Promise<KioskDevice | undefined> {
     const [device] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
     if (!device) return undefined;
     const updateData: Record<string, unknown> = { lastSeen: new Date(), status };
     if (appVersion) updateData.appVersion = appVersion;
+    if (deviceType) updateData.deviceType = deviceType;
+    if (osVersion) updateData.osVersion = osVersion;
     const [updated] = await db
       .update(kioskDevices)
       .set(updateData)

@@ -124,10 +124,12 @@ async function registerDevice(deviceId: string): Promise<string | null> {
 
 async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promise<void> {
   try {
+    const ua = navigator.userAgent;
+    const { deviceType, osVersion } = parseDeviceInfo(ua);
     await fetch("/api/kiosk/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, status, appVersion: APP_VERSION }),
+      body: JSON.stringify({ deviceId, status, appVersion: APP_VERSION, deviceType, osVersion }),
     });
   } catch {
     // silently ignore
