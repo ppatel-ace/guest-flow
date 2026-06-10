@@ -9,15 +9,18 @@ COPY . .
 
 RUN npm run build
 
+# Prune dev/optional deps in-place — no install scripts run, just directory removal
+RUN npm prune --omit=dev --omit=optional
+
 FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --omit=optional
-
+# Copy the already-pruned node_modules — no second npm ci needed
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
+COPY package.json ./
 
 ENV NODE_ENV=production
 ENV PORT=5000
