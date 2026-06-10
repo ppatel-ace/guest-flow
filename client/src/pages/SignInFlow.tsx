@@ -53,7 +53,22 @@ import {
   ArrowUpDown,
   AlertTriangle,
   UserCog,
+  Tablet,
+  Printer,
+  Wifi,
+  Network,
+  Bluetooth,
+  MoreVertical,
+  ArrowLeft,
+  Check,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -104,6 +119,18 @@ interface KioskDevice {
   ipAddress: string | null;
   defaultLocation: string | null;
   locationSource: string | null;
+  deviceType: string | null;
+  osVersion: string | null;
+  appVersion: string | null;
+}
+
+interface PrinterRecord {
+  id: string;
+  name: string;
+  model: string;
+  connectionType: string;
+  status: string;
+  createdAt: string;
 }
 
 interface VisitorMergeEvent {
@@ -713,101 +740,6 @@ function PhotoTab() {
   );
 }
 
-// ─── Device Settings Section ──────────────────────────────────────────────────
-
-function DeviceSettingsSection() {
-  const { toast } = useToast();
-  const { data: settings, isLoading } = useQuery<KioskSettings>({ queryKey: ["/api/kiosk/settings"] });
-  const [labelPrinterEnabled, setLabelPrinterEnabled] = useState(false);
-  const [wifiCouponEnabled, setWifiCouponEnabled] = useState(false);
-
-  useEffect(() => {
-    if (settings) {
-      setLabelPrinterEnabled(settings.labelPrinterEnabled ?? false);
-      setWifiCouponEnabled(settings.wifiCouponEnabled ?? false);
-    }
-  }, [settings]);
-
-  const mutation = useMutation({
-    mutationFn: async (data: Partial<KioskSettings>) => {
-      const res = await apiRequest("PUT", "/api/kiosk/settings", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/kiosk/settings"] });
-      toast({ title: "Device setting saved" });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to save device setting.", variant: "destructive" }),
-  });
-
-  const handleLabelPrinter = (val: boolean) => {
-    setLabelPrinterEnabled(val);
-    mutation.mutate({ labelPrinterEnabled: val });
-  };
-
-  const handleWifiCoupon = (val: boolean) => {
-    setWifiCouponEnabled(val);
-    mutation.mutate({ wifiCouponEnabled: val });
-  };
-
-  if (isLoading) return <div className="text-sm text-muted-foreground mb-4">Loading...</div>;
-
-  return (
-    <div className="space-y-3 mb-6">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-lg bg-primary/10 shrink-0">
-              <Monitor className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-medium text-sm">ID Label Printer</h3>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    When enabled, a visiting label will be printed for each guest after check-in. Printer not yet connected.
-                  </p>
-                </div>
-                <Switch
-                  checked={labelPrinterEnabled}
-                  onCheckedChange={handleLabelPrinter}
-                  disabled={mutation.isPending}
-                  data-testid="switch-label-printer-enabled"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-lg bg-primary/10 shrink-0">
-              <Monitor className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-medium text-sm">WiFi Coupon Code</h3>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    When enabled, guests will receive a WiFi access code after check-in. Not yet configured.
-                  </p>
-                </div>
-                <Switch
-                  checked={wifiCouponEnabled}
-                  onCheckedChange={handleWifiCoupon}
-                  disabled={mutation.isPending}
-                  data-testid="switch-wifi-coupon-enabled"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 // ─── Plus One Tab ─────────────────────────────────────────────────────────────
 
@@ -914,16 +846,47 @@ function PlusOneTab() {
 
 // ─── Devices Tab ──────────────────────────────────────────────────────────────
 
+const PRINTER_MODELS = [
+  { id: "Brother QL-820NWB", label: "Brother QL-820NWB", subtitle: "Wi-Fi, Ethernet & Bluetooth" },
+  { id: "Brother QL-720NW", label: "Brother QL-720NW", subtitle: "Wi-Fi & Ethernet" },
+  { id: "Brother QL-710W", label: "Brother QL-710W", subtitle: "Wi-Fi" },
+  { id: "Other", label: "Other Printer", subtitle: "Generic label printer" },
+];
+
+const CONNECTION_TYPES = [
+  { id: "wifi", label: "Wi-Fi", icon: Wifi },
+  { id: "ethernet", label: "Ethernet", icon: Network },
+  { id: "bluetooth", label: "Bluetooth", icon: Bluetooth },
+];
+
+function connectionLabel(ct: string) {
+  return CONNECTION_TYPES.find((c) => c.id === ct)?.label ?? ct;
+}
+
 function DevicesTab() {
   const { toast } = useToast();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-  const [editingLocation, setEditingLocation] = useState("none");
-  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const { data: devices = [], isLoading, refetch } = useQuery<KioskDevice[]>({
+  // iPad device state
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState("");
+  const [renameLocation, setRenameLocation] = useState("none");
+  const [deleteDeviceId, setDeleteDeviceId] = useState<string | null>(null);
+
+  // Printer state
+  const [showAddPrinter, setShowAddPrinter] = useState(false);
+  const [printerStep, setPrinterStep] = useState<1 | 2 | 3>(1);
+  const [printerModel, setPrinterModel] = useState("");
+  const [printerName, setPrinterName] = useState("");
+  const [printerConnection, setPrinterConnection] = useState("wifi");
+  const [deletePrinterId, setDeletePrinterId] = useState<string | null>(null);
+
+  const { data: devices = [], isLoading: devicesLoading, refetch } = useQuery<KioskDevice[]>({
     queryKey: ["/api/kiosk/devices"],
     refetchInterval: 30000,
+  });
+
+  const { data: printerList = [], isLoading: printersLoading } = useQuery<PrinterRecord[]>({
+    queryKey: ["/api/printers"],
   });
 
   const renameMutation = useMutation({
@@ -937,17 +900,17 @@ function DevicesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kiosk/devices"] });
       toast({ title: "Device saved" });
-      setEditingId(null);
+      setRenameId(null);
     },
     onError: () => toast({ title: "Error", description: "Failed to save device.", variant: "destructive" }),
   });
 
-  const deleteMutation = useMutation({
+  const deleteDeviceMutation = useMutation({
     mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/kiosk/devices/${id}`); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kiosk/devices"] });
       toast({ title: "Device removed" });
-      setDeleteId(null);
+      setDeleteDeviceId(null);
     },
     onError: () => toast({ title: "Error", description: "Failed to remove device.", variant: "destructive" }),
   });
@@ -964,146 +927,429 @@ function DevicesTab() {
     onError: () => toast({ title: "Error", description: "Failed to clean up devices.", variant: "destructive" }),
   });
 
+  const addPrinterMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/printers", {
+        name: printerName.trim(),
+        model: printerModel,
+        connectionType: printerConnection,
+        status: "offline",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/printers"] });
+      toast({ title: "Printer added" });
+      setShowAddPrinter(false);
+      resetPrinterDialog();
+    },
+    onError: () => toast({ title: "Error", description: "Failed to add printer.", variant: "destructive" }),
+  });
+
+  const deletePrinterMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/printers/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/printers"] });
+      toast({ title: "Printer removed" });
+      setDeletePrinterId(null);
+    },
+    onError: () => toast({ title: "Error", description: "Failed to remove printer.", variant: "destructive" }),
+  });
+
+  const resetPrinterDialog = () => {
+    setPrinterStep(1);
+    setPrinterModel("");
+    setPrinterName("");
+    setPrinterConnection("wifi");
+  };
+
   const unnamedCount = devices.filter((d) => !d.name && d.computedStatus === "offline").length;
-
-  const statusColor = (status: string) => {
-    if (status === "active") return "bg-green-500";
-    if (status === "idle") return "bg-gray-400";
-    return "bg-red-500";
-  };
-
-  const statusLabel = (status: string) => {
-    if (status === "active") return "Active";
-    if (status === "idle") return "Idle";
-    return "Offline";
-  };
-
-  const parseUA = (ua: string | null): string => {
-    if (!ua) return "Unknown";
-    if (ua.includes("iPad")) return "iPad";
-    if (ua.includes("iPhone")) return "iPhone";
-    if (ua.includes("Android")) return "Android";
-    if (ua.includes("Chrome")) return "Chrome";
-    if (ua.includes("Safari")) return "Safari";
-    if (ua.includes("Firefox")) return "Firefox";
-    return ua.slice(0, 40);
-  };
-
   const kioskUrl = `${window.location.origin}/kiosk`;
 
+  const statusBadge = (status: string) => {
+    if (status === "active") return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400">
+        <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+        Online
+      </span>
+    );
+    if (status === "idle") return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+        <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+        Idle
+      </span>
+    );
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 shrink-0" />
+        Offline
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <p className="text-sm text-muted-foreground">
-          Every iPad or tablet that has opened the kiosk URL appears here. A device is Offline if its heartbeat hasn't been received in over 2 minutes.
-        </p>
-        <div className="flex gap-2 flex-wrap">
-          <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-refresh-devices">
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-            Refresh
-          </Button>
-          {unnamedCount > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              disabled={cleanupMutation.isPending}
-              onClick={() => cleanupMutation.mutate()}
-              data-testid="button-cleanup-unnamed-devices"
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Remove {unnamedCount} unnamed
+    <div className="space-y-8">
+
+      {/* ── iPads section ─────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+          <div>
+            <h3 className="font-semibold text-sm">iPads</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Devices that have opened the kiosk URL. Offline if no heartbeat in 2 min.
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {unnamedCount > 0 && (
+              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive h-8 text-xs"
+                disabled={cleanupMutation.isPending}
+                onClick={() => cleanupMutation.mutate()}
+                data-testid="button-cleanup-unnamed-devices"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Remove {unnamedCount} unnamed
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => refetch()} data-testid="button-refresh-devices">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Refresh
             </Button>
+            <Button size="sm" variant="outline" className="h-8 text-xs"
+              onClick={() => { navigator.clipboard?.writeText(kioskUrl); toast({ title: "Copied", description: "Kiosk URL copied to clipboard." }); }}
+              data-testid="button-copy-kiosk-url"
+            >
+              Copy Kiosk URL
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          {devicesLoading ? (
+            <div className="text-sm text-muted-foreground py-4">Loading devices...</div>
+          ) : devices.length === 0 ? (
+            <div className="py-10 text-center border border-dashed rounded-lg space-y-2">
+              <Tablet className="h-8 w-8 text-muted-foreground mx-auto" />
+              <p className="text-sm text-muted-foreground">No devices connected yet.</p>
+              <p className="text-xs text-muted-foreground">Open <code className="bg-muted px-1 rounded">/kiosk</code> on an iPad to register it.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {devices.map((device) => (
+                <div key={device.id}
+                  className="rounded-xl border bg-card p-4 flex gap-4 items-start"
+                  data-testid={`card-device-${device.id}`}
+                >
+                  <div className="shrink-0 p-2.5 rounded-xl bg-muted">
+                    <Tablet className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">
+                          {device.name || <span className="text-muted-foreground italic">Unnamed device</span>}
+                        </div>
+                        {statusBadge(device.computedStatus)}
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" data-testid={`button-menu-device-${device.id}`}>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { setRenameId(device.id); setRenameName(device.name ?? ""); setRenameLocation(device.defaultLocation || "none"); }} data-testid={`menu-rename-device-${device.id}`}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteDeviceId(device.id)} data-testid={`menu-delete-device-${device.id}`}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">Device</span>
+                        <span className="text-xs truncate">{device.deviceType ?? "Unknown"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">OS</span>
+                        <span className="text-xs truncate">{device.osVersion ?? "Unknown"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">IP Address</span>
+                        <span className="text-xs font-mono truncate">
+                          {device.computedStatus === "offline" ? <span className="text-muted-foreground">Disconnected</span> : (device.ipAddress ?? "—")}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">App version</span>
+                        <span className="text-xs truncate">{device.appVersion ?? "—"}</span>
+                      </div>
+                      {device.defaultLocation && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-20 shrink-0">Location</span>
+                          <span className="text-xs truncate">
+                            {device.defaultLocation}
+                            {device.locationSource === "auto" && <span className="ml-1 text-blue-500 dark:text-blue-400">(auto)</span>}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">Last seen</span>
+                        <span className="text-xs text-muted-foreground truncate">{formatDistanceToNow(new Date(device.lastSeen), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(kioskUrl); toast({ title: "Copied", description: "Kiosk URL copied to clipboard." }); }} data-testid="button-copy-kiosk-url">
-            Copy Kiosk URL
-          </Button>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-sm text-muted-foreground py-2">Loading devices...</div>
-      ) : devices.length === 0 ? (
-        <div className="py-10 text-center border border-dashed rounded-md space-y-2">
-          <Monitor className="h-8 w-8 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">No devices have connected yet.</p>
-          <p className="text-xs text-muted-foreground">Open <code className="bg-muted px-1 rounded">/kiosk</code> on an iPad or tablet to register it.</p>
+      {/* ── Printers section ──────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+          <div>
+            <h3 className="font-semibold text-sm">Printers</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Label printers connected to the kiosk for printing visitor badges.
+            </p>
+          </div>
+          <Button size="sm" className="h-8 text-xs" onClick={() => { resetPrinterDialog(); setShowAddPrinter(true); }} data-testid="button-add-printer">
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Add Printer
+          </Button>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {devices.map((device) => (
-            <div key={device.id} className="rounded-md border px-4 py-3 flex items-center gap-4" data-testid={`row-device-${device.id}`}>
-              <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusColor(device.computedStatus)}`} />
-              <div className="flex-1 min-w-0">
-                {editingId === device.id ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      placeholder="Device name"
-                      className="h-7 text-sm w-48"
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      autoFocus
-                      data-testid={`input-device-name-${device.id}`}
-                    />
-                    <Select value={editingLocation} onValueChange={setEditingLocation}>
-                      <SelectTrigger className="h-7 text-sm w-36" data-testid={`select-device-location-${device.id}`}>
-                        <SelectValue placeholder="No location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No default</SelectItem>
-                        <SelectItem value="New Jersey">New Jersey</SelectItem>
-                        <SelectItem value="Michigan">Michigan</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button size="sm" className="h-7" onClick={() => renameMutation.mutate({ id: device.id, name: editingName, defaultLocation: editingLocation === "none" ? "" : editingLocation })} data-testid={`button-save-device-name-${device.id}`}>Save</Button>
-                    <Button size="sm" variant="outline" className="h-7" onClick={() => setEditingId(null)}>Cancel</Button>
-                  </div>
-                ) : (
-                  <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
-                    {device.name || <span className="text-muted-foreground italic">Unnamed device</span>}
-                    {device.defaultLocation && (
-                      <span className="text-xs text-muted-foreground border rounded px-1.5 py-0.5">{device.defaultLocation}</span>
-                    )}
-                    {device.defaultLocation && device.locationSource === "auto" && (
-                      <span className="text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">Auto-detected</span>
-                    )}
-                  </div>
-                )}
-                <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                  <span className="text-xs text-muted-foreground font-mono">{device.deviceId.slice(0, 12)}…</span>
-                  <Badge variant="outline" className="text-xs">{statusLabel(device.computedStatus)}</Badge>
-                  <span className="text-xs text-muted-foreground">Last seen {formatDistanceToNow(new Date(device.lastSeen), { addSuffix: true })}</span>
-                  <span className="text-xs text-muted-foreground">{parseUA(device.userAgent)}</span>
-                </div>
-              </div>
-              <div className="flex gap-1 shrink-0">
-                <Button size="icon" variant="ghost" onClick={() => { setEditingId(device.id); setEditingName(device.name ?? ""); setEditingLocation(device.defaultLocation || "none"); }} data-testid={`button-rename-device-${device.id}`}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setDeleteId(device.id)} data-testid={`button-delete-device-${device.id}`}>
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
-      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <div className="mt-3">
+          {printersLoading ? (
+            <div className="text-sm text-muted-foreground py-4">Loading printers...</div>
+          ) : printerList.length === 0 ? (
+            <div className="py-8 text-center border border-dashed rounded-lg space-y-2">
+              <Printer className="h-7 w-7 text-muted-foreground mx-auto" />
+              <p className="text-sm text-muted-foreground">No printers added yet.</p>
+              <p className="text-xs text-muted-foreground">Add a Brother QL label printer to enable badge printing.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {printerList.map((p) => (
+                <div key={p.id}
+                  className="rounded-xl border bg-card p-4 flex gap-4 items-start"
+                  data-testid={`card-printer-${p.id}`}
+                >
+                  <div className="shrink-0 p-2.5 rounded-xl bg-muted">
+                    <Printer className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{p.name}</div>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 shrink-0" />
+                          Offline
+                        </span>
+                      </div>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                        onClick={() => setDeletePrinterId(p.id)}
+                        data-testid={`button-delete-printer-${p.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">Model</span>
+                        <span className="text-xs truncate">{p.model}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">Connection</span>
+                        <span className="text-xs truncate">{connectionLabel(p.connectionType)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Rename device dialog ────────────────────────────────────────────── */}
+      <Dialog open={renameId !== null} onOpenChange={(open) => !open && setRenameId(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename Device</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="rename-device-name">Device name</Label>
+              <Input
+                id="rename-device-name"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                placeholder="e.g. Lobby iPad"
+                autoFocus
+                data-testid="input-rename-device"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rename-device-location">Default location</Label>
+              <Select value={renameLocation} onValueChange={setRenameLocation}>
+                <SelectTrigger id="rename-device-location" className="h-9 text-sm" data-testid="select-rename-device-location">
+                  <SelectValue placeholder="No default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No default</SelectItem>
+                  <SelectItem value="New Jersey">New Jersey</SelectItem>
+                  <SelectItem value="Michigan">Michigan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameId(null)}>Cancel</Button>
+            <Button
+              onClick={() => renameId && renameMutation.mutate({ id: renameId, name: renameName, defaultLocation: renameLocation === "none" ? "" : renameLocation })}
+              disabled={renameMutation.isPending}
+              data-testid="button-save-rename-device"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete device confirmation ──────────────────────────────────────── */}
+      <AlertDialog open={deleteDeviceId !== null} onOpenChange={(open) => !open && setDeleteDeviceId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Device</AlertDialogTitle>
-            <AlertDialogDescription>This device will be removed from the registry. It can re-register next time it opens the kiosk.</AlertDialogDescription>
+            <AlertDialogDescription>This device will be removed. It can re-register next time it opens the kiosk.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-delete-device">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteId && deleteMutation.mutate(deleteId)} data-testid="button-confirm-delete-device">Remove</AlertDialogAction>
+            <AlertDialogAction onClick={() => deleteDeviceId && deleteDeviceMutation.mutate(deleteDeviceId)} data-testid="button-confirm-delete-device">Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Delete printer confirmation ─────────────────────────────────────── */}
+      <AlertDialog open={deletePrinterId !== null} onOpenChange={(open) => !open && setDeletePrinterId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Printer</AlertDialogTitle>
+            <AlertDialogDescription>This printer will be removed from the list.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-printer">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletePrinterId && deletePrinterMutation.mutate(deletePrinterId)} data-testid="button-confirm-delete-printer">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Add Printer dialog (3 steps) ────────────────────────────────────── */}
+      <Dialog open={showAddPrinter} onOpenChange={(open) => { if (!open) { setShowAddPrinter(false); resetPrinterDialog(); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {printerStep === 1 && "Select printer model"}
+              {printerStep === 2 && (
+                <span className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-6 w-6 -ml-1" onClick={() => setPrinterStep(1)}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  Name your printer
+                </span>
+              )}
+              {printerStep === 3 && (
+                <span className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-6 w-6 -ml-1" onClick={() => setPrinterStep(2)}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  Connection type
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {printerStep === 1 && (
+            <div className="grid grid-cols-2 gap-2 py-2">
+              {PRINTER_MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`rounded-xl border-2 p-3 text-left transition-colors hover:bg-accent focus:outline-none ${printerModel === m.id ? "border-primary bg-primary/5" : "border-border"}`}
+                  onClick={() => { setPrinterModel(m.id); setPrinterStep(2); }}
+                  data-testid={`button-printer-model-${m.id.replace(/\s+/g, "-")}`}
+                >
+                  <Printer className="h-6 w-6 text-muted-foreground mb-1.5" />
+                  <div className="font-medium text-sm leading-tight">{m.label}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.subtitle}</div>
+                  {printerModel === m.id && <Check className="h-3.5 w-3.5 text-primary mt-1" />}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {printerStep === 2 && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="printer-name">Printer name</Label>
+                <Input
+                  id="printer-name"
+                  value={printerName}
+                  onChange={(e) => setPrinterName(e.target.value)}
+                  placeholder="e.g. Lobby Printer"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter" && printerName.trim()) setPrinterStep(3); }}
+                  data-testid="input-printer-name"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPrinterStep(1)}>Back</Button>
+                <Button onClick={() => setPrinterStep(3)} disabled={!printerName.trim()} data-testid="button-printer-name-next">
+                  Next
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {printerStep === 3 && (
+            <div className="space-y-4 py-2">
+              <RadioGroup value={printerConnection} onValueChange={setPrinterConnection} className="gap-2">
+                {CONNECTION_TYPES.map((ct) => {
+                  const Icon = ct.icon;
+                  return (
+                    <label
+                      key={ct.id}
+                      className={`flex items-center gap-3 rounded-xl border-2 p-3 cursor-pointer transition-colors ${printerConnection === ct.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent"}`}
+                      data-testid={`label-connection-${ct.id}`}
+                    >
+                      <RadioGroupItem value={ct.id} id={`conn-${ct.id}`} className="sr-only" />
+                      <Icon className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <span className="font-medium text-sm">{ct.label}</span>
+                      {printerConnection === ct.id && <Check className="h-4 w-4 text-primary ml-auto" />}
+                    </label>
+                  );
+                })}
+              </RadioGroup>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPrinterStep(2)}>Back</Button>
+                <Button
+                  onClick={() => addPrinterMutation.mutate()}
+                  disabled={addPrinterMutation.isPending}
+                  data-testid="button-add-printer-confirm"
+                >
+                  Add Printer
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3145,26 +3391,15 @@ export default function SignInFlow() {
         </TabsContent>
 
         <TabsContent value="devices">
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Device Features</CardTitle>
-                <CardDescription>Enable or disable hardware features connected to the kiosk.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DeviceSettingsSection />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Connected Devices</CardTitle>
-                <CardDescription>Live list of iPads and tablets currently running the kiosk.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DevicesTab />
-              </CardContent>
-            </Card>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Devices</CardTitle>
+              <CardDescription>Manage iPads running the kiosk and label printers connected to them.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DevicesTab />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="visitor-log">

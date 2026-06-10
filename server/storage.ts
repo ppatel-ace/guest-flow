@@ -1,6 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
-  documents, kioskDevices, visitors, visitorNotes, visitorMergeEvents, acePocs,
+  documents, kioskDevices, printers, visitors, visitorNotes, visitorMergeEvents, acePocs,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -10,6 +10,7 @@ import {
   type Visit, type InsertVisit,
   type Document, type InsertDocument,
   type KioskDevice, type InsertKioskDevice,
+  type Printer, type InsertPrinter,
   type Visitor, type InsertVisitor,
   type VisitorNote,
   type VisitorMergeEvent,
@@ -203,12 +204,16 @@ export interface IStorage {
   getKioskSettings(): Promise<KioskCheckinSettings>;
   updateKioskSettings(data: Partial<KioskCheckinSettings>): Promise<KioskCheckinSettings>;
   // Kiosk devices
-  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<{ device: KioskDevice; isNew: boolean }>;
-  heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined>;
+  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string): Promise<{ device: KioskDevice; isNew: boolean }>;
+  heartbeatKioskDevice(deviceId: string, status: string, appVersion?: string): Promise<KioskDevice | undefined>;
   getAllKioskDevices(): Promise<KioskDevice[]>;
   updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null; locationSource?: string | null }): Promise<KioskDevice | undefined>;
   deleteKioskDevice(id: string): Promise<boolean>;
   deleteUnnamedKioskDevices(): Promise<number>;
+  // Printers
+  getAllPrinters(): Promise<Printer[]>;
+  createPrinter(data: InsertPrinter): Promise<Printer>;
+  deletePrinter(id: string): Promise<boolean>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
   upsertCompanyByName(name: string): Promise<Company>;
@@ -630,12 +635,19 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Kiosk devices ────────────────────────────────────────────────────────────
 
-  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined): Promise<{ device: KioskDevice; isNew: boolean }> {
+  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string): Promise<{ device: KioskDevice; isNew: boolean }> {
     const [existing] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
     if (existing) {
       const [updated] = await db
         .update(kioskDevices)
-        .set({ lastSeen: new Date(), userAgent: userAgent ?? existing.userAgent, ipAddress: ipAddress ?? existing.ipAddress })
+        .set({
+          lastSeen: new Date(),
+          userAgent: userAgent ?? existing.userAgent,
+          ipAddress: ipAddress ?? existing.ipAddress,
+          deviceType: deviceType ?? existing.deviceType,
+          osVersion: osVersion ?? existing.osVersion,
+          appVersion: appVersion ?? existing.appVersion,
+        })
         .where(eq(kioskDevices.id, existing.id))
         .returning();
       return { device: updated, isNew: false };
@@ -647,16 +659,21 @@ export class DatabaseStorage implements IStorage {
       lastSeen: new Date(),
       userAgent: userAgent ?? null,
       ipAddress: ipAddress ?? null,
+      deviceType: deviceType ?? null,
+      osVersion: osVersion ?? null,
+      appVersion: appVersion ?? null,
     }).returning();
     return { device: created, isNew: true };
   }
 
-  async heartbeatKioskDevice(deviceId: string, status: string): Promise<KioskDevice | undefined> {
+  async heartbeatKioskDevice(deviceId: string, status: string, appVersion?: string): Promise<KioskDevice | undefined> {
     const [device] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
     if (!device) return undefined;
+    const updateData: Record<string, unknown> = { lastSeen: new Date(), status };
+    if (appVersion) updateData.appVersion = appVersion;
     const [updated] = await db
       .update(kioskDevices)
-      .set({ lastSeen: new Date(), status })
+      .set(updateData)
       .where(eq(kioskDevices.id, device.id))
       .returning();
     return updated || undefined;
@@ -683,6 +700,22 @@ export class DatabaseStorage implements IStorage {
       and(isNull(kioskDevices.name), sql`${kioskDevices.lastSeen} < ${cutoff}`)
     ).returning();
     return result.length;
+  }
+
+  // ─── Printers ────────────────────────────────────────────────────────────────
+
+  async getAllPrinters(): Promise<Printer[]> {
+    return await db.select().from(printers).orderBy(asc(printers.createdAt));
+  }
+
+  async createPrinter(data: InsertPrinter): Promise<Printer> {
+    const [printer] = await db.insert(printers).values(data).returning();
+    return printer;
+  }
+
+  async deletePrinter(id: string): Promise<boolean> {
+    const result = await db.delete(printers).where(eq(printers.id, id)).returning();
+    return result.length > 0;
   }
 
   // ─── CRM ────────────────────────────────────────────────────────────────────

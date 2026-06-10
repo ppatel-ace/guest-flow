@@ -129,6 +129,9 @@ export const kioskDevices = pgTable("kiosk_devices", {
   ipAddress: text("ip_address"),
   defaultLocation: text("default_location"),
   locationSource: text("location_source"),
+  deviceType: text("device_type"),
+  osVersion: text("os_version"),
+  appVersion: text("app_version"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -139,6 +142,25 @@ export const insertKioskDeviceSchema = createInsertSchema(kioskDevices).omit({
 
 export type InsertKioskDevice = z.infer<typeof insertKioskDeviceSchema>;
 export type KioskDevice = typeof kioskDevices.$inferSelect;
+
+// ─── Printers table ───────────────────────────────────────────────────────────
+
+export const printers = pgTable("printers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  model: text("model").notNull(),
+  connectionType: text("connection_type").notNull().default('wifi'),
+  status: text("status").notNull().default('offline'),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertPrinterSchema = createInsertSchema(printers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPrinter = z.infer<typeof insertPrinterSchema>;
+export type Printer = typeof printers.$inferSelect;
 
 // ─── CRM tables ───────────────────────────────────────────────────────────────
 

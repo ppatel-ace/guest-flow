@@ -78,6 +78,13 @@
       "when": 1749571200000,
       "tag": "0009_device_feature_toggles",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1749657600000,
+      "tag": "0010_printers_and_device_metadata",
+      "breakpoints": true
     }
   ]
 }

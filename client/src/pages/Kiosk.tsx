@@ -79,12 +79,37 @@ function getOrCreateDeviceId(): string {
   return id;
 }
 
+const APP_VERSION = "1.0.0";
+
+function parseDeviceInfo(ua: string): { deviceType: string; osVersion: string } {
+  if (ua.includes("iPad")) {
+    const m = ua.match(/CPU OS (\d+)[_.](\d+)/);
+    const ver = m ? `${m[1]}.${m[2]}` : "Unknown";
+    return { deviceType: "iPad", osVersion: `iPadOS ${ver}` };
+  }
+  if (ua.includes("iPhone")) {
+    const m = ua.match(/CPU iPhone OS (\d+)[_.](\d+)/);
+    const ver = m ? `${m[1]}.${m[2]}` : "Unknown";
+    return { deviceType: "iPhone", osVersion: `iOS ${ver}` };
+  }
+  if (ua.includes("Android")) {
+    const m = ua.match(/Android (\d+\.?\d*)/);
+    const ver = m ? m[1] : "Unknown";
+    return { deviceType: "Android Tablet", osVersion: `Android ${ver}` };
+  }
+  if (ua.includes("Windows")) return { deviceType: "Windows PC", osVersion: "Windows" };
+  if (ua.includes("Macintosh")) return { deviceType: "Mac", osVersion: "macOS" };
+  return { deviceType: "Unknown", osVersion: "Unknown" };
+}
+
 async function registerDevice(deviceId: string): Promise<string | null> {
   try {
+    const ua = navigator.userAgent;
+    const { deviceType, osVersion } = parseDeviceInfo(ua);
     await fetch("/api/kiosk/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId }),
+      body: JSON.stringify({ deviceId, deviceType, osVersion, appVersion: APP_VERSION }),
     });
     const infoRes = await fetch(`/api/kiosk/device-info?deviceId=${encodeURIComponent(deviceId)}`);
     if (infoRes.ok) {
@@ -102,7 +127,7 @@ async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promi
     await fetch("/api/kiosk/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, status }),
+      body: JSON.stringify({ deviceId, status, appVersion: APP_VERSION }),
     });
   } catch {
     // silently ignore

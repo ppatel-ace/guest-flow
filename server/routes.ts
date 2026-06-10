@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema } from "@shared/schema";
+import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema, insertPrinterSchema } from "@shared/schema";
 import { z } from "zod";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
@@ -984,13 +984,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register a device (public - called on first kiosk load)
   app.post("/api/kiosk/register", async (req, res) => {
     try {
-      const { deviceId } = req.body;
+      const { deviceId, deviceType, osVersion, appVersion } = req.body;
       if (!deviceId || typeof deviceId !== "string") {
         return res.status(400).json({ error: "deviceId is required" });
       }
       const ua = req.headers["user-agent"];
       const ip = req.ip;
-      const { device, isNew } = await storage.registerKioskDevice(deviceId, ua, ip);
+      const { device, isNew } = await storage.registerKioskDevice(
+        deviceId, ua, ip,
+        typeof deviceType === "string" ? deviceType : undefined,
+        typeof osVersion === "string" ? osVersion : undefined,
+        typeof appVersion === "string" ? appVersion : undefined,
+      );
       // Auto-detect location from IP only on first registration (never overwrite admin-cleared location)
       if (isNew) {
         const detected = detectLocationFromIp(ip);
@@ -1011,12 +1016,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Heartbeat (public - called every 30s by kiosk)
   app.post("/api/kiosk/heartbeat", async (req, res) => {
     try {
-      const { deviceId, status } = req.body;
+      const { deviceId, status, appVersion } = req.body;
       if (!deviceId || typeof deviceId !== "string") {
         return res.status(400).json({ error: "deviceId is required" });
       }
       const validStatus = ["idle", "active"].includes(status) ? status : "idle";
-      const device = await storage.heartbeatKioskDevice(deviceId, validStatus);
+      const device = await storage.heartbeatKioskDevice(
+        deviceId, validStatus,
+        typeof appVersion === "string" ? appVersion : undefined,
+      );
       if (!device) {
         // Device not found — re-register it
         const ua = req.headers["user-agent"];
@@ -1028,6 +1036,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[kiosk/heartbeat]", error);
       res.status(500).json({ error: "Failed to send heartbeat" });
+    }
+  });
+
+  // ── Printers ─────────────────────────────────────────────────────────────────
+
+  app.get("/api/printers", requireAuth, async (_req, res) => {
+    try {
+      const all = await storage.getAllPrinters();
+      res.json(all);
+    } catch (error) {
+      console.error("[printers GET]", error);
+      res.status(500).json({ error: "Failed to fetch printers" });
+    }
+  });
+
+  app.post("/api/printers", requireAuth, async (req, res) => {
+    try {
+      const data = insertPrinterSchema.parse(req.body);
+      const printer = await storage.createPrinter(data);
+      res.status(201).json(printer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid printer data", details: error.errors });
+      }
+      console.error("[printers POST]", error);
+      res.status(500).json({ error: "Failed to create printer" });
+    }
+  });
+
+  app.delete("/api/printers/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deletePrinter(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Printer not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("[printers DELETE]", error);
+      res.status(500).json({ error: "Failed to delete printer" });
     }
   });
 
