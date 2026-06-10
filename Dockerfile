@@ -14,7 +14,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --omit=optional
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
