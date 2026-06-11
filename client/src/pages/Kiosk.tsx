@@ -68,80 +68,17 @@ type FormStage = "email" | "fields";
 
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
+import { getKioskDeviceInfo, getOrCreateDeviceId } from "@/lib/kiosk-device";
+
 // ─── Device heartbeat helpers ─────────────────────────────────────────────────
-
-function getOrCreateDeviceId(): string {
-  let id = localStorage.getItem("kioskDeviceId");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("kioskDeviceId", id);
-  }
-  return id;
-}
-
-const APP_VERSION = "1.0.0";
-
-function parseDeviceInfoFromUA(ua: string): { deviceType: string; osVersion: string } {
-  if (ua.includes("iPad")) {
-    const m = ua.match(/CPU OS (\d+)[_.](\d+)/);
-    const ver = m ? `${m[1]}.${m[2]}` : "Unknown";
-    return { deviceType: "iPad", osVersion: `iPadOS ${ver}` };
-  }
-  if (ua.includes("iPhone")) {
-    const m = ua.match(/CPU iPhone OS (\d+)[_.](\d+)/);
-    const ver = m ? `${m[1]}.${m[2]}` : "Unknown";
-    return { deviceType: "iPhone", osVersion: `iOS ${ver}` };
-  }
-  if (ua.includes("Android")) {
-    const m = ua.match(/Android (\d+\.?\d*)/);
-    const ver = m ? m[1] : "Unknown";
-    return { deviceType: "Android Tablet", osVersion: `Android ${ver}` };
-  }
-  if (ua.includes("Windows")) return { deviceType: "Windows PC", osVersion: "Windows" };
-  if (ua.includes("Macintosh")) return { deviceType: "Mac", osVersion: "macOS" };
-  return { deviceType: "Unknown", osVersion: "Unknown" };
-}
-
-/**
- * Returns accurate device info using native Capacitor APIs when running inside
- * the iOS app, falling back to UA-string parsing in a regular browser.
- *
- * On native, Device.getId() returns a stable hardware UUID that replaces the
- * random one we generated, ensuring the same iPad always registers as the same
- * device even after clearing localStorage.
- */
-async function getDeviceInfo(): Promise<{ deviceId: string; deviceType: string; osVersion: string }> {
-  try {
-    const { Capacitor } = await import("@capacitor/core");
-    if (Capacitor.isNativePlatform()) {
-      const { Device } = await import("@capacitor/device");
-      const [info, idResult] = await Promise.all([Device.getInfo(), Device.getId()]);
-      const hwId = idResult.identifier;
-      // Persist hardware ID so getOrCreateDeviceId() returns it on next sync call
-      localStorage.setItem("kioskDeviceId", hwId);
-      const osLabel = info.operatingSystem === "ios" ? "iPadOS" : info.operatingSystem;
-      return {
-        deviceId: hwId,
-        deviceType: info.model || "iPad",
-        osVersion: `${osLabel} ${info.osVersion}`,
-      };
-    }
-  } catch {
-    // Not running in Capacitor — fall through to UA parsing
-  }
-  return {
-    deviceId: getOrCreateDeviceId(),
-    ...parseDeviceInfoFromUA(navigator.userAgent),
-  };
-}
 
 async function registerDevice(): Promise<{ location: string | null; resolvedDeviceId: string }> {
   try {
-    const { deviceId, deviceType, osVersion } = await getDeviceInfo();
+    const { deviceId, deviceType, osVersion, appVersion } = await getKioskDeviceInfo();
     await fetch("/api/kiosk/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, deviceType, osVersion, appVersion: APP_VERSION }),
+      body: JSON.stringify({ deviceId, deviceType, osVersion, appVersion }),
     });
     const infoRes = await fetch(`/api/kiosk/device-info?deviceId=${encodeURIComponent(deviceId)}`);
     if (infoRes.ok) {
@@ -157,14 +94,14 @@ async function registerDevice(): Promise<{ location: string | null; resolvedDevi
 
 async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promise<void> {
   try {
-    const { deviceId: resolvedId, deviceType, osVersion } = await getDeviceInfo();
+    const { deviceId: resolvedId, deviceType, osVersion, appVersion } = await getKioskDeviceInfo();
     await fetch("/api/kiosk/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         deviceId: resolvedId || deviceId,
         status,
-        appVersion: APP_VERSION,
+        appVersion,
         deviceType,
         osVersion,
       }),

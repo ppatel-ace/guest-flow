@@ -1021,17 +1021,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "deviceId is required" });
       }
       const validStatus = ["idle", "active"].includes(status) ? status : "idle";
+      const ua = req.headers["user-agent"];
+      const ip = req.ip;
       const device = await storage.heartbeatKioskDevice(
-        deviceId, validStatus,
+        deviceId,
+        validStatus,
+        ip,
         typeof appVersion === "string" ? appVersion : undefined,
         typeof deviceType === "string" ? deviceType : undefined,
         typeof osVersion === "string" ? osVersion : undefined,
       );
       if (!device) {
         // Device not found — re-register it
-        const ua = req.headers["user-agent"];
-        const ip = req.ip;
-        const { device: registered } = await storage.registerKioskDevice(deviceId, ua, ip);
+        const { device: registered } = await storage.registerKioskDevice(
+          deviceId,
+          ua,
+          ip,
+          typeof deviceType === "string" ? deviceType : undefined,
+          typeof osVersion === "string" ? osVersion : undefined,
+          typeof appVersion === "string" ? appVersion : undefined,
+        );
         return res.json(registered);
       }
       res.json(device);
