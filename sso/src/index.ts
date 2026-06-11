@@ -223,6 +223,28 @@ function loginPage(opts: { redirectUri: string; error?: string }): string {
 </html>`;
 }
 
+// ─── redirect_uri validation ──────────────────────────────────────────────────
+// Only allow redirects to trusted origins: *.APP_DOMAIN, localhost, 127.0.0.1
+// This prevents open-redirect attacks if this service is reachable externally.
+
+function isTrustedRedirectUri(uri: string): boolean {
+  if (!uri || uri === "/") return true;
+  // Relative paths (no scheme) are always safe
+  if (!uri.startsWith("http://") && !uri.startsWith("https://")) return true;
+  try {
+    const { hostname } = new URL(uri);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    // Allow exact match or any subdomain of APP_DOMAIN
+    if (
+      hostname === APP_DOMAIN ||
+      hostname.endsWith(`.${APP_DOMAIN}`)
+    ) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Express app ──────────────────────────────────────────────────────────────
 
 const app = express();
@@ -237,7 +259,8 @@ app.get("/health", (_req, res) => {
 
 // ── Login page ────────────────────────────────────────────────────────────────
 app.get("/", (req: Request, res: Response) => {
-  const redirectUri = (req.query.redirect_uri as string) || "/";
+  const raw = (req.query.redirect_uri as string) || "/";
+  const redirectUri = isTrustedRedirectUri(raw) ? raw : "/";
   // If already authenticated, send directly to redirect_uri
   const token = req.cookies?.ace_sso;
   if (token && verifyToken(token)) {
@@ -254,7 +277,8 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     password?: string;
     redirect_uri?: string;
   };
-  const redirectUri = redirect_uri || "/";
+  const raw = redirect_uri || "/";
+  const redirectUri = isTrustedRedirectUri(raw) ? raw : "/";
 
   if (!email || !password) {
     res.setHeader("Content-Type", "text/html");

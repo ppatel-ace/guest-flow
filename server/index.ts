@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
 import session from "express-session";
 import pgSimple from "connect-pg-simple";
 import pkg from "pg";
@@ -19,6 +20,7 @@ const app = express();
 // Trust the first proxy hop so req.ip reflects the real client IP from X-Forwarded-For.
 // Required for correct per-client rate limiting behind Replit's reverse proxy.
 app.set("trust proxy", 1);
+app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 

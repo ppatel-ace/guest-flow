@@ -23,11 +23,12 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/logout");
+      const res = await apiRequest("POST", "/api/logout");
+      return res.json() as Promise<{ success: boolean; ssoLogoutUrl?: string }>;
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       queryClient.setQueryData(["/api/session"], { authenticated: false });
-      // If the server returns an SSO logout URL, follow it
+      // If the server returns an SSO logout URL, follow it (clears cookie domain-wide)
       if (data?.ssoLogoutUrl) {
         window.location.href = data.ssoLogoutUrl;
       } else {
