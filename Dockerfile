@@ -3,7 +3,7 @@ FROM node:20 AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -16,7 +16,7 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Copy the already-pruned node_modules — no second npm ci needed
+# Copy the already-pruned node_modules — no second npm install needed
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
