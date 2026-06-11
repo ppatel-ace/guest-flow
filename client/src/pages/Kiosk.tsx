@@ -892,9 +892,9 @@ export default function Kiosk() {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl mx-auto w-full">
+          <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl mx-auto w-full min-h-0">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{enabledDocs[currentDocIndex].title}</h2>
-            <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 mb-6 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300 shadow-sm" data-testid="text-document-content">
+            <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 mb-6 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300 shadow-sm" style={{ WebkitOverflowScrolling: "touch" }} data-testid="text-document-content">
               {substituteDocumentVars(enabledDocs[currentDocIndex].content, {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
