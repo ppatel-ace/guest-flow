@@ -152,9 +152,39 @@ const guestCheckinLimiter = rateLimit({
   },
 });
 
-// Authentication middleware
-const requireAuth = (req: any, res: any, next: any) => {
+// ─── JWT / SSO helper ─────────────────────────────────────────────────────────
+
+let _jwtLib: typeof import("jsonwebtoken") | null = null;
+async function getJwt() {
+  if (!_jwtLib) _jwtLib = (await import("jsonwebtoken")).default as any;
+  return _jwtLib!;
+}
+
+async function verifyAceSsoToken(token: string): Promise<{ sub: string; email: string; name: string } | null> {
+  const secret = process.env.SSO_JWT_SECRET;
+  if (!secret || !token) return null;
+  try {
+    const jwt = await getJwt();
+    return jwt.verify(token, secret) as { sub: string; email: string; name: string };
+  } catch {
+    return null;
+  }
+}
+
+// Authentication middleware — checks the ace_sso JWT cookie first (SSO path),
+// then falls back to the legacy express-session flag for local dev/backward compat.
+const requireAuth = async (req: any, res: any, next: any) => {
+  const ssoToken = req.cookies?.ace_sso;
+  if (ssoToken) {
+    const payload = await verifyAceSsoToken(ssoToken);
+    if (payload) {
+      req.user = { id: payload.sub, email: payload.email, name: payload.name };
+      return next();
+    }
+  }
+  // Fallback: legacy session auth
   if (req.session?.authenticated) {
+    req.user = { email: "admin", name: "Admin" };
     return next();
   }
   res.status(401).json({ error: "Unauthorized" });
@@ -164,14 +194,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   logEmailConfigStatus();
 
   // Authentication routes
+  // ── Session check ───────────────────────────────────────────────────────────
+  // Returns the current auth state. When SSO is configured and the user is not
+  // authenticated, also returns the ssoLoginUrl so the frontend can redirect.
+  app.get("/api/session", async (req, res) => {
+    // 1. SSO JWT cookie
+    const ssoToken = req.cookies?.ace_sso;
+    if (ssoToken) {
+      const payload = await verifyAceSsoToken(ssoToken);
+      if (payload) {
+        return res.json({
+          authenticated: true,
+          user: { email: payload.email, name: payload.name },
+        });
+      }
+    }
+    // 2. Legacy session
+    if (req.session?.authenticated) {
+      return res.json({ authenticated: true, user: { username: "admin", name: "Admin" } });
+    }
+    // Not authenticated — include ssoLoginUrl if configured
+    const ssoBase = process.env.SSO_LOGIN_URL;
+    if (ssoBase) {
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const redirectUri = `${appUrl}/ace-admin`;
+      return res.json({
+        authenticated: false,
+        ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(redirectUri)}`,
+      });
+    }
+    res.json({ authenticated: false });
+  });
+
+  // ── Login (local fallback — used when SSO_LOGIN_URL is not set) ─────────────
   app.post("/api/login", async (req, res) => {
     try {
+      // When SSO is configured, the frontend should not be POSTing here.
+      // Return a redirect URL so the frontend can follow the SSO flow.
+      const ssoBase = process.env.SSO_LOGIN_URL;
+      if (ssoBase) {
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        const redirectUri = `${appUrl}/ace-admin`;
+        return res.json({ redirect: `${ssoBase}?redirect_uri=${encodeURIComponent(redirectUri)}` });
+      }
+
       const { username, password } = req.body;
-      
-      // Simple hardcoded authentication
       if (username === "admin" && password === "admin") {
         req.session.authenticated = true;
-        res.json({ success: true, user: { username: "admin" } });
+        res.json({ success: true, user: { username: "admin", name: "Admin" } });
       } else {
         res.status(401).json({ error: "Invalid credentials" });
       }
@@ -180,21 +250,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Logout ───────────────────────────────────────────────────────────────────
   app.post("/api/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ error: "Logout failed" });
+    // Clear the SSO cookie (must match domain/secure settings set by the SSO service)
+    const domain = process.env.APP_DOMAIN;
+    const isLocalDomain = !domain || domain === "localhost" || domain === "127.0.0.1";
+    res.clearCookie("ace_sso", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      ...(isLocalDomain ? {} : { domain: `.${domain}` }),
+    });
+
+    // Destroy the legacy session as well
+    req.session.destroy(() => {
+      // If SSO is configured, tell the frontend to hit the SSO logout endpoint
+      const ssoBase = process.env.SSO_LOGIN_URL;
+      if (ssoBase) {
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        const logoutUrl = ssoBase.replace(/\/?$/, "").replace(/api\/auth\/login$/, "")
+          + (ssoBase.includes("/api/") ? "" : "") + "/api/auth/logout";
+        // Derive the SSO service base URL (strip path if SSO_LOGIN_URL points to the root)
+        const ssoServiceUrl = new URL(ssoBase).origin;
+        const redirectAfterLogout = `${appUrl}/ace-admin`;
+        return res.json({
+          success: true,
+          ssoLogoutUrl: `${ssoServiceUrl}/api/auth/logout?redirect_uri=${encodeURIComponent(redirectAfterLogout)}`,
+        });
       }
       res.json({ success: true });
     });
-  });
-
-  app.get("/api/session", (req, res) => {
-    if (req.session?.authenticated) {
-      res.json({ authenticated: true, user: { username: "admin" } });
-    } else {
-      res.json({ authenticated: false });
-    }
   });
   
   // Generate QR code (public - no auth required)

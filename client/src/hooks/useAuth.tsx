@@ -3,12 +3,15 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface AuthUser {
-  username: string;
+  email?: string;
+  name?: string;
+  username?: string;
 }
 
 interface SessionResponse {
   authenticated: boolean;
   user?: AuthUser;
+  ssoLoginUrl?: string;
 }
 
 export function useAuth() {
@@ -22,15 +25,21 @@ export function useAuth() {
     mutationFn: async () => {
       return await apiRequest("POST", "/api/logout");
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.setQueryData(["/api/session"], { authenticated: false });
-      setLocation("/ace-admin");
+      // If the server returns an SSO logout URL, follow it
+      if (data?.ssoLogoutUrl) {
+        window.location.href = data.ssoLogoutUrl;
+      } else {
+        setLocation("/ace-admin");
+      }
     },
   });
 
   return {
     isAuthenticated: session?.authenticated ?? false,
     user: session?.user,
+    ssoLoginUrl: session?.ssoLoginUrl,
     isLoading,
     logout: logoutMutation.mutate,
   };

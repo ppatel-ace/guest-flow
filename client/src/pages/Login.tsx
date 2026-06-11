@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn } from "lucide-react";
+import { LogIn, ExternalLink } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl } = useAuth();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +28,13 @@ export default function Login() {
       setLocation("/");
     }
   }, [authLoading, isAuthenticated, setLocation]);
+
+  // If SSO is configured and user isn't authenticated, redirect to SSO login page
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated && ssoLoginUrl) {
+      window.location.href = ssoLoginUrl;
+    }
+  }, [authLoading, isAuthenticated, ssoLoginUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +54,12 @@ export default function Login() {
 
       const data = await response.json();
 
+      // If the server returned an SSO redirect URL, follow it
+      if (data.redirect) {
+        window.location.href = data.redirect;
+        return;
+      }
+
       // Update session cache directly with authenticated state
       queryClient.setQueryData(["/api/session"], {
         authenticated: true,
@@ -58,9 +71,7 @@ export default function Login() {
         description: "You have been logged in successfully",
       });
 
-      // Small delay to ensure state updates propagate
       await new Promise(resolve => setTimeout(resolve, 100));
-      
       setLocation("/");
     } catch (error) {
       toast({
@@ -72,6 +83,22 @@ export default function Login() {
       setIsLoading(false);
     }
   };
+
+  // Show a brief loading state while redirecting to SSO
+  if (!authLoading && !isAuthenticated && ssoLoginUrl) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-8 pb-8 text-center">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <ExternalLink className="h-6 w-6 text-primary" />
+            </div>
+            <p className="text-sm text-muted-foreground">Redirecting to ACE sign-in…</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
@@ -111,9 +138,9 @@ export default function Login() {
                 data-testid="input-password"
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isLoading}
               data-testid="button-login"
             >

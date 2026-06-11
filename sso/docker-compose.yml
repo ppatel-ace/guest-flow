@@ -1,0 +1,28 @@
+services:
+  ace-auth:
+    build: .
+    container_name: ace-auth
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      - NODE_ENV=production
+      # PostgreSQL connection string for the SSO users table.
+      # Can point to the shared ace-db or any other Postgres instance.
+      - DATABASE_URL=${DATABASE_URL}
+      # Secret used to sign JWTs. Must be the same value in every app
+      # that validates ACE SSO tokens (GuestFlow, JobTrack, etc.).
+      - SSO_JWT_SECRET=${SSO_JWT_SECRET}
+      # Parent domain for the shared cookie, e.g. "aceelectronics.com"
+      - APP_DOMAIN=${APP_DOMAIN:-aceelectronics.com}
+      # Seed an initial admin user on first start (only runs if no users exist).
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      # Name shown for the seeded admin user
+      - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Admin}
+    networks:
+      - ace-network
+
+networks:
+  ace-network:
+    external: true
