@@ -154,6 +154,9 @@ const guestCheckinLimiter = rateLimit({
 
 // ─── JWT / SSO helper ─────────────────────────────────────────────────────────
 
+const SSO_JWT_EXPIRY_SECONDS = 8 * 60 * 60; // must match sso/src/index.ts
+const SSO_REFRESH_THRESHOLD_SECONDS = 2 * 60 * 60; // refresh when < 2 hours remain
+
 let _jwtLib: typeof import("jsonwebtoken") | null = null;
 async function getJwt() {
   if (!_jwtLib) _jwtLib = (await import("jsonwebtoken")).default as any;
@@ -171,6 +174,43 @@ async function verifyAceSsoToken(token: string): Promise<{ sub: string; email: s
   }
 }
 
+// Transparently re-issues the ace_sso cookie when the token is within the last
+// 2 hours of its 8-hour window. Runs on every authenticated request so sessions
+// stay alive indefinitely for active users without any user-visible interruption.
+async function refreshSsoTokenIfNeeded(
+  token: string,
+  payload: { sub: string; email: string; name: string },
+  res: any
+): Promise<void> {
+  try {
+    const secret = process.env.SSO_JWT_SECRET;
+    if (!secret) return;
+    const jwt = await getJwt();
+    const decoded = jwt.decode(token) as { exp?: number } | null;
+    if (!decoded?.exp) return;
+    const secondsRemaining = decoded.exp - Math.floor(Date.now() / 1000);
+    if (secondsRemaining >= SSO_REFRESH_THRESHOLD_SECONDS) return;
+
+    const newToken = jwt.sign(
+      { sub: payload.sub, email: payload.email, name: payload.name },
+      secret,
+      { expiresIn: SSO_JWT_EXPIRY_SECONDS }
+    );
+
+    const domain = process.env.APP_DOMAIN;
+    const isLocalDomain = !domain || domain === "localhost" || domain === "127.0.0.1";
+    res.cookie("ace_sso", newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: SSO_JWT_EXPIRY_SECONDS * 1000,
+      ...(isLocalDomain ? {} : { domain: `.${domain}` }),
+    });
+  } catch {
+    // Non-critical — session continues with the existing token if refresh fails
+  }
+}
+
 // Authentication middleware — checks the ace_sso JWT cookie first (SSO path),
 // then falls back to the legacy express-session flag for local dev/backward compat.
 const requireAuth = async (req: any, res: any, next: any) => {
@@ -179,6 +219,7 @@ const requireAuth = async (req: any, res: any, next: any) => {
     const payload = await verifyAceSsoToken(ssoToken);
     if (payload) {
       req.user = { id: payload.sub, email: payload.email, name: payload.name };
+      await refreshSsoTokenIfNeeded(ssoToken, payload, res);
       return next();
     }
   }
@@ -203,6 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (ssoToken) {
       const payload = await verifyAceSsoToken(ssoToken);
       if (payload) {
+        await refreshSsoTokenIfNeeded(ssoToken, payload, res);
         return res.json({
           authenticated: true,
           user: { email: payload.email, name: payload.name },

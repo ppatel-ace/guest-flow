@@ -11,6 +11,7 @@ const JWT_SECRET = process.env.SSO_JWT_SECRET || "";
 const APP_DOMAIN = process.env.APP_DOMAIN || "aceelectronics.com";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const JWT_EXPIRY_SECONDS = 8 * 60 * 60; // 8 hours
+const REFRESH_THRESHOLD_SECONDS = 2 * 60 * 60; // refresh when < 2 hours remain
 
 if (!JWT_SECRET) {
   console.error("ERROR: SSO_JWT_SECRET environment variable is required");
@@ -88,6 +89,28 @@ function verifyToken(token: string): JwtPayload | null {
   } catch {
     return null;
   }
+}
+
+function needsRefresh(token: string): boolean {
+  try {
+    const decoded = jwt.decode(token) as { exp?: number } | null;
+    if (!decoded?.exp) return false;
+    const secondsRemaining = decoded.exp - Math.floor(Date.now() / 1000);
+    return secondsRemaining < REFRESH_THRESHOLD_SECONDS;
+  } catch {
+    return false;
+  }
+}
+
+function setAuthCookie(res: Response, token: string): void {
+  const isLocalDomain = APP_DOMAIN === "localhost" || APP_DOMAIN === "127.0.0.1";
+  res.cookie("ace_sso", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: JWT_EXPIRY_SECONDS * 1000,
+    ...(isLocalDomain ? {} : { domain: `.${APP_DOMAIN}` }),
+  });
 }
 
 // ─── Login page HTML ──────────────────────────────────────────────────────────
@@ -261,10 +284,17 @@ app.get("/health", (_req, res) => {
 app.get("/", (req: Request, res: Response) => {
   const raw = (req.query.redirect_uri as string) || "/";
   const redirectUri = isTrustedRedirectUri(raw) ? raw : "/";
-  // If already authenticated, send directly to redirect_uri
+  // If already authenticated, send directly to redirect_uri (refresh if near expiry)
   const token = req.cookies?.ace_sso;
-  if (token && verifyToken(token)) {
-    return res.redirect(redirectUri);
+  if (token) {
+    const payload = verifyToken(token);
+    if (payload) {
+      if (needsRefresh(token)) {
+        const newToken = signToken({ sub: payload.sub, email: payload.email, name: payload.name });
+        setAuthCookie(res, newToken);
+      }
+      return res.redirect(redirectUri);
+    }
   }
   res.setHeader("Content-Type", "text/html");
   res.send(loginPage({ redirectUri }));
@@ -310,20 +340,7 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     }
 
     const token = signToken({ sub: user.id, email: user.email, name: user.name });
-
-    // Set the shared SSO cookie on the parent domain so all subdomains receive it.
-    // In non-production (APP_DOMAIN=localhost) omit the domain attribute.
-    const isLocalDomain =
-      APP_DOMAIN === "localhost" || APP_DOMAIN === "127.0.0.1";
-
-    res.cookie("ace_sso", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: JWT_EXPIRY_SECONDS * 1000,
-      ...(isLocalDomain ? {} : { domain: `.${APP_DOMAIN}` }),
-    });
-
+    setAuthCookie(res, token);
     return res.redirect(redirectUri);
   } catch (err) {
     console.error("[login]", err);
@@ -364,6 +381,12 @@ app.get("/api/auth/validate", (req: Request, res: Response) => {
   const payload = verifyToken(token);
   if (!payload) {
     return res.status(401).json({ valid: false, error: "Invalid or expired token" });
+  }
+
+  // Transparently refresh the cookie when within 2 hours of expiry
+  if (needsRefresh(token)) {
+    const newToken = signToken({ sub: payload.sub, email: payload.email, name: payload.name });
+    setAuthCookie(res, newToken);
   }
 
   res.json({
