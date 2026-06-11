@@ -1,0 +1,28 @@
+services:
+  estimatepro:
+    build: .
+    container_name: estimatepro-app
+    restart: unless-stopped
+    ports:
+      - "6058:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET:-change_this_to_a_long_random_secret}
+      # ── ACE SSO ──────────────────────────────────────────────────────────────
+      # Shared secret used to verify the ace_sso JWT cookie issued by ace-auth.
+      # Must be identical to the SSO_JWT_SECRET set in the ace-auth service.
+      SSO_JWT_SECRET: ${SSO_JWT_SECRET:-}
+      # Public URL of the ace-auth login page, e.g. https://sso.aceelectronics.com
+      # Leave unset in local dev to fall back to a local login form.
+      SSO_LOGIN_URL: ${SSO_LOGIN_URL:-}
+      # Parent domain used when setting / clearing the shared ace_sso cookie.
+      # Set to "aceelectronics.com" in production; leave unset for localhost.
+      APP_DOMAIN: ${APP_DOMAIN:-}
+    networks:
+      - ace-network
+
+networks:
+  ace-network:
+    external: true

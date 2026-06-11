@@ -16,6 +16,14 @@ services:
       FINGERPRINT_HMAC_SECRET: ${FINGERPRINT_HMAC_SECRET:-change_this_to_a_long_random_secret}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+      # SSO — must match the value set in the ace-auth service.
+      # Leave unset in local dev to fall back to the local login form.
+      SSO_JWT_SECRET: ${SSO_JWT_SECRET:-}
+      # Public URL of the ace-auth login page, e.g. https://sso.aceelectronics.com
+      SSO_LOGIN_URL: ${SSO_LOGIN_URL:-}
+      # Parent domain used when setting / clearing the shared ace_sso cookie.
+      # Set to "aceelectronics.com" in production; leave unset for localhost.
+      APP_DOMAIN: ${APP_DOMAIN:-}
     networks:
       guestflow_net:
         ipv4_address: 172.28.11.2
