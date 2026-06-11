@@ -531,7 +531,7 @@ export default function Kiosk() {
 
   return (
     <div
-      className="min-h-screen flex flex-col select-none"
+      className="h-screen overflow-hidden flex flex-col select-none"
       style={{ touchAction: "manipulation" }}
     >
       {/* Submission error overlay */}
@@ -583,7 +583,7 @@ export default function Kiosk() {
       {/* ── Idle Screen ── */}
       {step === "idle" && (
         <div
-          className="flex-1 flex flex-col items-center justify-center cursor-pointer p-10 bg-[#F8F5F0] min-h-screen"
+          className="flex-1 flex flex-col items-center justify-center cursor-pointer p-10 bg-[#F8F5F0] overflow-hidden"
           onClick={startFlow}
           data-testid="screen-kiosk-idle"
         >
@@ -626,7 +626,7 @@ export default function Kiosk() {
 
       {/* ── Form Step ── */}
       {step === "form" && (
-        <div className="flex-1 min-h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden">
           {/* Header bar */}
           <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -642,7 +642,7 @@ export default function Kiosk() {
           </div>
 
           {/* Form content */}
-          <div className="overflow-auto p-6 md:p-10">
+          <div className="flex-1 overflow-y-auto p-6 md:p-10">
             <div className="max-w-lg mx-auto">
               <div className="mb-6">
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Sign In</h1>
@@ -875,7 +875,7 @@ export default function Kiosk() {
 
       {/* ── Documents Step ── */}
       {step === "documents" && enabledDocs.length > 0 && (
-        <div className="flex-1 min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col">
+        <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -911,7 +911,7 @@ export default function Kiosk() {
 
       {/* ── Photo Step ── */}
       {step === "photo" && photoEnabled && (
-        <div className="flex-1 min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col" data-testid="screen-kiosk-photo">
+        <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden" data-testid="screen-kiosk-photo">
           {/* Header */}
           <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center gap-3 shrink-0">
             <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
@@ -972,7 +972,7 @@ export default function Kiosk() {
       {/* ── Thank You Step ── */}
       {step === "thanks" && (
         <div
-          className="flex-1 min-h-screen flex flex-col items-center justify-center gap-8 p-10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+          className="flex-1 flex flex-col items-center justify-center gap-8 p-10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden"
           data-testid="screen-kiosk-thanks"
         >
           {/* Success ring */}
