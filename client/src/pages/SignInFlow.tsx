@@ -61,6 +61,7 @@ import {
   MoreVertical,
   ArrowLeft,
   Check,
+  Copy,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -122,6 +123,7 @@ interface KioskDevice {
   deviceType: string | null;
   osVersion: string | null;
   appVersion: string | null;
+  nativeDeviceName: string | null;
 }
 
 interface PrinterRecord {
@@ -1109,6 +1111,12 @@ function DevicesTab() {
                         <span className="text-xs text-muted-foreground w-20 shrink-0">App version</span>
                         <span className="text-xs truncate">{device.appVersion ?? "—"}</span>
                       </div>
+                      {device.nativeDeviceName && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-20 shrink-0">MDM name</span>
+                          <span className="text-xs truncate text-blue-600 dark:text-blue-400 font-medium">{device.nativeDeviceName}</span>
+                        </div>
+                      )}
                       {device.defaultLocation && (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground w-20 shrink-0">Location</span>
@@ -1118,6 +1126,18 @@ function DevicesTab() {
                           </span>
                         </div>
                       )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">Hardware ID</span>
+                        <span className="text-xs font-mono text-muted-foreground truncate">{device.deviceId.slice(-12).toUpperCase()}</span>
+                        <button
+                          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                          title="Copy full hardware ID"
+                          data-testid={`button-copy-hwid-${device.id}`}
+                          onClick={() => { navigator.clipboard.writeText(device.deviceId); }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground w-20 shrink-0">Last seen</span>
                         <span className="text-xs text-muted-foreground truncate">{formatDistanceToNow(new Date(device.lastSeen), { addSuffix: true })}</span>

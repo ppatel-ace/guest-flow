@@ -54,6 +54,8 @@ async function run() {
     console.log("kiosk_devices.location_source OK");
     await client`ALTER TABLE leads ADD COLUMN IF NOT EXISTS location text`;
     console.log("leads.location OK");
+    await client`ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS native_device_name text`;
+    console.log("kiosk_devices.native_device_name OK");
     console.log("All columns verified.");
   } catch (err) {
     console.error("Error:", err);

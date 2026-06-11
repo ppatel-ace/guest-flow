@@ -984,7 +984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register a device (public - called on first kiosk load)
   app.post("/api/kiosk/register", async (req, res) => {
     try {
-      const { deviceId, deviceType, osVersion, appVersion } = req.body;
+      const { deviceId, deviceType, osVersion, appVersion, nativeDeviceName } = req.body;
       if (!deviceId || typeof deviceId !== "string") {
         return res.status(400).json({ error: "deviceId is required" });
       }
@@ -995,6 +995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         typeof deviceType === "string" ? deviceType : undefined,
         typeof osVersion === "string" ? osVersion : undefined,
         typeof appVersion === "string" ? appVersion : undefined,
+        typeof nativeDeviceName === "string" ? nativeDeviceName : undefined,
       );
       // Auto-detect location from IP only on first registration (never overwrite admin-cleared location)
       if (isNew) {
@@ -1016,7 +1017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Heartbeat (public - called every 30s by kiosk)
   app.post("/api/kiosk/heartbeat", async (req, res) => {
     try {
-      const { deviceId, status, appVersion, deviceType, osVersion } = req.body;
+      const { deviceId, status, appVersion, deviceType, osVersion, nativeDeviceName } = req.body;
       if (!deviceId || typeof deviceId !== "string") {
         return res.status(400).json({ error: "deviceId is required" });
       }
@@ -1030,6 +1031,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         typeof appVersion === "string" ? appVersion : undefined,
         typeof deviceType === "string" ? deviceType : undefined,
         typeof osVersion === "string" ? osVersion : undefined,
+        typeof nativeDeviceName === "string" ? nativeDeviceName : undefined,
       );
       if (!device) {
         // Device not found — re-register it
@@ -1040,6 +1042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           typeof deviceType === "string" ? deviceType : undefined,
           typeof osVersion === "string" ? osVersion : undefined,
           typeof appVersion === "string" ? appVersion : undefined,
+          typeof nativeDeviceName === "string" ? nativeDeviceName : undefined,
         );
         return res.json(registered);
       }

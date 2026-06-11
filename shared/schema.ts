@@ -132,6 +132,7 @@ export const kioskDevices = pgTable("kiosk_devices", {
   deviceType: text("device_type"),
   osVersion: text("os_version"),
   appVersion: text("app_version"),
+  nativeDeviceName: text("native_device_name"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

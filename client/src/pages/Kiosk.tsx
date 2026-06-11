@@ -74,11 +74,11 @@ import { getKioskDeviceInfo, getOrCreateDeviceId } from "@/lib/kiosk-device";
 
 async function registerDevice(): Promise<{ location: string | null; resolvedDeviceId: string }> {
   try {
-    const { deviceId, deviceType, osVersion, appVersion } = await getKioskDeviceInfo();
+    const { deviceId, deviceType, osVersion, appVersion, nativeDeviceName } = await getKioskDeviceInfo();
     await fetch("/api/kiosk/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, deviceType, osVersion, appVersion }),
+      body: JSON.stringify({ deviceId, deviceType, osVersion, appVersion, nativeDeviceName }),
     });
     const infoRes = await fetch(`/api/kiosk/device-info?deviceId=${encodeURIComponent(deviceId)}`);
     if (infoRes.ok) {
@@ -94,7 +94,7 @@ async function registerDevice(): Promise<{ location: string | null; resolvedDevi
 
 async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promise<void> {
   try {
-    const { deviceId: resolvedId, deviceType, osVersion, appVersion } = await getKioskDeviceInfo();
+    const { deviceId: resolvedId, deviceType, osVersion, appVersion, nativeDeviceName } = await getKioskDeviceInfo();
     await fetch("/api/kiosk/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,6 +104,7 @@ async function sendHeartbeat(deviceId: string, status: "idle" | "active"): Promi
         appVersion,
         deviceType,
         osVersion,
+        nativeDeviceName,
       }),
     });
   } catch {

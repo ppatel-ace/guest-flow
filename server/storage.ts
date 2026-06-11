@@ -204,8 +204,8 @@ export interface IStorage {
   getKioskSettings(): Promise<KioskCheckinSettings>;
   updateKioskSettings(data: Partial<KioskCheckinSettings>): Promise<KioskCheckinSettings>;
   // Kiosk devices
-  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string): Promise<{ device: KioskDevice; isNew: boolean }>;
-  heartbeatKioskDevice(deviceId: string, status: string, ipAddress?: string, appVersion?: string, deviceType?: string, osVersion?: string): Promise<KioskDevice | undefined>;
+  registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string, nativeDeviceName?: string): Promise<{ device: KioskDevice; isNew: boolean }>;
+  heartbeatKioskDevice(deviceId: string, status: string, ipAddress?: string, appVersion?: string, deviceType?: string, osVersion?: string, nativeDeviceName?: string): Promise<KioskDevice | undefined>;
   getAllKioskDevices(): Promise<KioskDevice[]>;
   updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null; locationSource?: string | null }): Promise<KioskDevice | undefined>;
   deleteKioskDevice(id: string): Promise<boolean>;
@@ -636,7 +636,7 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Kiosk devices ────────────────────────────────────────────────────────────
 
-  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string): Promise<{ device: KioskDevice; isNew: boolean }> {
+  async registerKioskDevice(deviceId: string, userAgent: string | undefined, ipAddress: string | undefined, deviceType?: string, osVersion?: string, appVersion?: string, nativeDeviceName?: string): Promise<{ device: KioskDevice; isNew: boolean }> {
     const [existing] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
     if (existing) {
       const [updated] = await db
@@ -648,6 +648,7 @@ export class DatabaseStorage implements IStorage {
           deviceType: deviceType ?? existing.deviceType,
           osVersion: osVersion ?? existing.osVersion,
           appVersion: appVersion ?? existing.appVersion,
+          nativeDeviceName: nativeDeviceName ?? existing.nativeDeviceName,
         })
         .where(eq(kioskDevices.id, existing.id))
         .returning();
@@ -655,7 +656,7 @@ export class DatabaseStorage implements IStorage {
     }
     const [created] = await db.insert(kioskDevices).values({
       deviceId,
-      name: null,
+      name: nativeDeviceName ?? null,
       status: 'idle',
       lastSeen: new Date(),
       userAgent: userAgent ?? null,
@@ -663,11 +664,12 @@ export class DatabaseStorage implements IStorage {
       deviceType: deviceType ?? null,
       osVersion: osVersion ?? null,
       appVersion: appVersion ?? null,
+      nativeDeviceName: nativeDeviceName ?? null,
     }).returning();
     return { device: created, isNew: true };
   }
 
-  async heartbeatKioskDevice(deviceId: string, status: string, ipAddress?: string, appVersion?: string, deviceType?: string, osVersion?: string): Promise<KioskDevice | undefined> {
+  async heartbeatKioskDevice(deviceId: string, status: string, ipAddress?: string, appVersion?: string, deviceType?: string, osVersion?: string, nativeDeviceName?: string): Promise<KioskDevice | undefined> {
     const [device] = await db.select().from(kioskDevices).where(eq(kioskDevices.deviceId, deviceId));
     if (!device) return undefined;
     const updateData: Record<string, unknown> = { lastSeen: new Date(), status };
@@ -675,6 +677,7 @@ export class DatabaseStorage implements IStorage {
     if (appVersion) updateData.appVersion = appVersion;
     if (deviceType) updateData.deviceType = deviceType;
     if (osVersion) updateData.osVersion = osVersion;
+    if (nativeDeviceName) updateData.nativeDeviceName = nativeDeviceName;
     const [updated] = await db
       .update(kioskDevices)
       .set(updateData)

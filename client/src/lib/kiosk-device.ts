@@ -113,6 +113,7 @@ export interface KioskDeviceInfo {
   osVersion: string;
   appVersion: string;
   isNative: boolean;
+  nativeDeviceName?: string;
 }
 
 /**
@@ -139,6 +140,7 @@ export async function getKioskDeviceInfo(): Promise<KioskDeviceInfo> {
         osVersion: `${osLabel} ${info.osVersion}`,
         appVersion: nativeAppVersion ?? WEB_APP_VERSION,
         isNative: true,
+        nativeDeviceName: info.name || undefined,
       };
     }
   } catch {
