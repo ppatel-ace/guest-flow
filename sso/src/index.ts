@@ -1,8 +1,10 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import postgres from "postgres";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -12,6 +14,14 @@ const APP_DOMAIN = process.env.APP_DOMAIN || "aceelectronics.com";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const JWT_EXPIRY_SECONDS = 8 * 60 * 60; // 8 hours
 const REFRESH_THRESHOLD_SECONDS = 2 * 60 * 60; // refresh when < 2 hours remain
+
+// SMTP config (optional — enables email-based password reset)
+const SMTP_HOST = process.env.SMTP_HOST || "";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
+const SMTP_FROM = process.env.SMTP_FROM || `noreply@${APP_DOMAIN}`;
+const SSO_BASE_URL = process.env.SSO_BASE_URL || `http://localhost:${PORT}`;
 
 if (!JWT_SECRET) {
   console.error("ERROR: SSO_JWT_SECRET environment variable is required");
@@ -51,6 +61,15 @@ async function initDb() {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;
+
+  // Idempotent migrations — safe to run on every start
+  await sql`
+    ALTER TABLE sso_users
+      ADD COLUMN IF NOT EXISTS reset_token        TEXT,
+      ADD COLUMN IF NOT EXISTS reset_token_expiry  TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS is_admin            BOOLEAN NOT NULL DEFAULT FALSE
+  `;
+
   console.log("[db] sso_users table ready");
 
   const adminEmail = process.env.INITIAL_ADMIN_EMAIL;
@@ -62,12 +81,23 @@ async function initDb() {
     if (!existing) {
       const hash = await bcrypt.hash(adminPassword, 12);
       await sql`
-        INSERT INTO sso_users (email, name, password_hash)
-        VALUES (${adminEmail}, ${adminName}, ${hash})
+        INSERT INTO sso_users (email, name, password_hash, is_admin)
+        VALUES (${adminEmail}, ${adminName}, ${hash}, TRUE)
         ON CONFLICT (email) DO NOTHING
       `;
       console.log(`[db] seeded initial admin user: ${adminEmail}`);
     }
+  }
+
+  // Bootstrap: if no admin exists at all, promote the oldest user to admin
+  // so existing deployments don't get locked out after this migration.
+  const [anyAdmin] = await sql`SELECT id FROM sso_users WHERE is_admin = TRUE LIMIT 1`;
+  if (!anyAdmin) {
+    await sql`
+      UPDATE sso_users SET is_admin = TRUE
+      WHERE id = (SELECT id FROM sso_users ORDER BY created_at ASC LIMIT 1)
+    `;
+    console.log("[db] bootstrapped first user as admin (no admin existed)");
   }
 }
 
@@ -111,6 +141,287 @@ function setAuthCookie(res: Response, token: string): void {
     maxAge: JWT_EXPIRY_SECONDS * 1000,
     ...(isLocalDomain ? {} : { domain: `.${APP_DOMAIN}` }),
   });
+}
+
+// ─── Auth middleware ───────────────────────────────────────────────────────────
+
+// requireAdminAuth verifies the ace_sso cookie AND that the user has is_admin=TRUE
+// in the database.  The DB check is intentional: it makes admin revocation take
+// effect immediately without waiting for token expiry.
+async function requireAdminAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const token = req.cookies?.ace_sso;
+  if (!token) {
+    res.redirect(`/?redirect_uri=${encodeURIComponent(req.originalUrl)}`);
+    return;
+  }
+  const payload = verifyToken(token);
+  if (!payload) {
+    res.clearCookie("ace_sso");
+    res.redirect(`/?redirect_uri=${encodeURIComponent(req.originalUrl)}`);
+    return;
+  }
+
+  // Verify admin privilege from the DB (not just the JWT)
+  try {
+    const [user] = await sql<{ is_admin: boolean; active: boolean }[]>`
+      SELECT is_admin, active FROM sso_users WHERE id = ${payload.sub}
+    `;
+    if (!user || !user.active || !user.is_admin) {
+      res.status(403).setHeader("Content-Type", "text/html");
+      res.send(forbiddenPage());
+      return;
+    }
+  } catch (err) {
+    console.error("[requireAdminAuth]", err);
+    res.status(500).send("Internal server error");
+    return;
+  }
+
+  // Transparently refresh near-expiry tokens
+  if (needsRefresh(token)) {
+    const newToken = signToken({ sub: payload.sub, email: payload.email, name: payload.name });
+    setAuthCookie(res, newToken);
+  }
+  (req as any).adminUser = payload;
+  next();
+}
+
+function forbiddenPage(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Access Denied — ACE</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background:#0f172a; color:#e2e8f0;
+           display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .box { background:#1e293b; border:1px solid #334155; border-radius:.75rem;
+           padding:2.5rem; text-align:center; max-width:400px; }
+    h1 { font-size:1.25rem; font-weight:700; color:#f1f5f9; margin-bottom:.5rem; }
+    p  { font-size:.875rem; color:#64748b; }
+    a  { color:#60a5fa; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Access Denied</h1>
+    <p>Your account does not have admin privileges.<br/>
+       Contact an administrator to request access.</p>
+    <p style="margin-top:1.5rem"><a href="/">Back to sign in</a></p>
+  </div>
+</body>
+</html>`;
+}
+
+// ─── SMTP / email helpers ─────────────────────────────────────────────────────
+
+function smtpConfigured(): boolean {
+  return !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+}
+
+async function sendPasswordResetEmail(toEmail: string, toName: string, token: string): Promise<void> {
+  if (!smtpConfigured()) throw new Error("SMTP not configured");
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  const resetUrl = `${SSO_BASE_URL}/reset-password?token=${token}`;
+  await transporter.sendMail({
+    from: SMTP_FROM,
+    to: toEmail,
+    subject: "ACE Electronics — Password Reset",
+    text: `Hi ${toName},\n\nClick the link below to reset your password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you did not request this, you can safely ignore this email.\n\n— ACE Electronics`,
+    html: `<p>Hi ${toName},</p><p>Click the link below to reset your password. This link expires in 1 hour.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can safely ignore this email.</p><p>— ACE Electronics</p>`,
+  });
+}
+
+// ─── HTML helpers ─────────────────────────────────────────────────────────────
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function adminShell(opts: { title: string; adminName: string; body: string; flash?: { type: "success" | "error"; message: string } }): string {
+  const flash = opts.flash
+    ? `<div class="flash flash-${opts.flash.type}">${escHtml(opts.flash.message)}</div>`
+    : "";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escHtml(opts.title)} — ACE Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Top nav ── */
+    .nav {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: 0 1.5rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 1rem; font-weight: 700; color: #f1f5f9;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-logo {
+      width: 32px; height: 32px;
+      background: #1d4ed8;
+      border-radius: 0.4rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 800; color: #fff;
+    }
+    .nav-links { display: flex; gap: 1rem; flex: 1; }
+    .nav-link {
+      font-size: 0.875rem; color: #94a3b8; padding: 0.25rem 0.5rem;
+      border-radius: 0.375rem; transition: color 0.15s, background 0.15s;
+    }
+    .nav-link:hover, .nav-link.active { color: #f1f5f9; background: #334155; text-decoration: none; }
+    .nav-user {
+      font-size: 0.8rem; color: #64748b; margin-left: auto;
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .nav-user a { color: #64748b; font-size: 0.8rem; }
+    .nav-user a:hover { color: #94a3b8; }
+
+    /* ── Main ── */
+    .main { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.25rem; }
+    .page-sub { font-size: 0.875rem; color: #64748b; margin-bottom: 1.75rem; }
+
+    /* ── Flash ── */
+    .flash {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+    .flash-success { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); color: #86efac; }
+    .flash-error   { background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.25);  color: #fca5a5; }
+
+    /* ── Card ── */
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card-title { font-size: 1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 1rem; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    thead th {
+      text-align: left; font-size: 0.75rem; font-weight: 600;
+      color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0 0.75rem 0.75rem;
+      border-bottom: 1px solid #334155;
+    }
+    tbody tr { border-bottom: 1px solid #1e293b; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 0.85rem 0.75rem; color: #cbd5e1; vertical-align: middle; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .badge-active   { background: rgba(34,197,94,0.15);  color: #86efac; }
+    .badge-inactive { background: rgba(100,116,139,0.2); color: #94a3b8; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 0.4rem 0.85rem;
+      border: none; border-radius: 0.4rem;
+      font-size: 0.8rem; font-weight: 500;
+      cursor: pointer; transition: opacity 0.15s;
+      display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary  { background: #1d4ed8; color: #fff; }
+    .btn-danger   { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+    .btn-success  { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+    .btn-ghost    { background: #334155; color: #cbd5e1; }
+    .btn-sm       { padding: 0.3rem 0.65rem; font-size: 0.75rem; }
+
+    /* ── Forms ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    .field-full { grid-column: 1 / -1; }
+    label { font-size: 0.8rem; font-weight: 500; color: #94a3b8; }
+    input[type=text], input[type=email], input[type=password] {
+      padding: 0.55rem 0.75rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 0.4rem;
+      color: #f1f5f9;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: #3b82f6; }
+    .form-actions { margin-top: 1rem; }
+
+    /* ── Modal overlay (CSS-only) ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 50;
+      align-items: center; justify-content: center; padding: 1rem;
+    }
+    .modal-backdrop:target { display: flex; }
+    .modal {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 0.75rem; padding: 1.5rem;
+      width: 100%; max-width: 400px;
+      position: relative;
+    }
+    .modal-title { font-size: 1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 1rem; }
+    .modal-close {
+      position: absolute; top: 1rem; right: 1rem;
+      color: #64748b; text-decoration: none; font-size: 1.2rem; line-height: 1;
+    }
+    .modal-close:hover { color: #94a3b8; text-decoration: none; }
+    .modal-field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/admin/users" class="nav-brand">
+      <div class="nav-logo">AE</div>
+      ACE Admin
+    </a>
+    <div class="nav-links">
+      <a href="/admin/users" class="nav-link active">Users</a>
+    </div>
+    <div class="nav-user">
+      <span>${escHtml(opts.adminName)}</span>
+      <a href="/api/auth/logout?redirect_uri=/admin/users">Sign out</a>
+    </div>
+  </nav>
+  <main class="main">
+    ${flash}
+    ${opts.body}
+  </main>
+</body>
+</html>`;
 }
 
 // ─── Login page HTML ──────────────────────────────────────────────────────────
@@ -239,7 +550,7 @@ function loginPage(opts: { redirectUri: string; error?: string }): string {
   <script>
     document.querySelector('form').addEventListener('submit', function() {
       document.getElementById('btn').disabled = true;
-      document.getElementById('btn').textContent = 'Signing in…';
+      document.getElementById('btn').textContent = 'Signing in\u2026';
     });
   </script>
 </body>
@@ -394,6 +705,474 @@ app.get("/api/auth/validate", (req: Request, res: Response) => {
     user: { id: payload.sub, email: payload.email, name: payload.name },
   });
 });
+
+// ─── Admin: User management ───────────────────────────────────────────────────
+
+interface SsoUser {
+  id: string;
+  email: string;
+  name: string;
+  active: boolean;
+  is_admin: boolean;
+  created_at: Date;
+}
+
+// GET /admin/users — list all users
+app.get("/admin/users", requireAdminAuth, async (req: Request, res: Response) => {
+  const adminUser = (req as any).adminUser as JwtPayload;
+
+  // Flash message from query string (set after redirects)
+  const rawFlashType = req.query.flash as string | undefined;
+  const rawFlashMsg = req.query.msg as string | undefined;
+  const VALID_FLASH_TYPES = ["success", "error"] as const;
+  type FlashType = (typeof VALID_FLASH_TYPES)[number];
+  const flashType: FlashType | undefined = VALID_FLASH_TYPES.includes(rawFlashType as FlashType)
+    ? (rawFlashType as FlashType)
+    : undefined;
+  // Express already URL-decodes req.query values; use rawFlashMsg directly.
+  const flash = flashType && rawFlashMsg
+    ? { type: flashType, message: rawFlashMsg }
+    : undefined;
+
+  try {
+    const users = await sql<SsoUser[]>`
+      SELECT id, email, name, active, is_admin, created_at
+      FROM sso_users
+      ORDER BY created_at ASC
+    `;
+
+    const adminCount = users.filter((u) => u.is_admin).length;
+
+    const rows = users.map((u) => {
+      const statusBadge = u.active
+        ? `<span class="badge badge-active">● Active</span>`
+        : `<span class="badge badge-inactive">○ Inactive</span>`;
+
+      const adminBadge = u.is_admin
+        ? `<span class="badge badge-admin" style="background:rgba(99,102,241,0.15);color:#a5b4fc;margin-left:.35rem">Admin</span>`
+        : "";
+
+      const toggleLabel = u.active ? "Deactivate" : "Activate";
+      const toggleClass = u.active ? "btn btn-sm btn-danger" : "btn btn-sm btn-success";
+
+      const adminToggleLabel = u.is_admin ? "Revoke Admin" : "Make Admin";
+      // Prevent revoking the last admin
+      const canRevokeAdmin = !(u.is_admin && adminCount <= 1);
+      const adminToggle = canRevokeAdmin
+        ? `<form method="POST" action="/admin/users/${u.id}/toggle-admin" style="display:inline">
+             <button type="submit" class="btn btn-sm btn-ghost">${adminToggleLabel}</button>
+           </form>`
+        : `<span class="btn btn-sm btn-ghost" style="opacity:.4;cursor:not-allowed" title="Cannot remove the last admin">Revoke Admin</span>`;
+
+      const emailAction = smtpConfigured()
+        ? `<form method="POST" action="/admin/users/${u.id}/send-reset" style="display:inline">
+             <button type="submit" class="btn btn-sm btn-ghost">Email Reset</button>
+           </form>`
+        : "";
+
+      return `<tr>
+        <td>${escHtml(u.name)}${adminBadge}</td>
+        <td style="color:#94a3b8">${escHtml(u.email)}</td>
+        <td>${statusBadge}</td>
+        <td style="color:#64748b;font-size:0.8rem">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td>
+          <div class="actions">
+            <a href="#reset-modal-${u.id}" class="btn btn-sm btn-ghost">Set Password</a>
+            ${emailAction}
+            ${adminToggle}
+            <form method="POST" action="/admin/users/${u.id}/toggle" style="display:inline">
+              <button type="submit" class="${toggleClass}">${toggleLabel}</button>
+            </form>
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    const modals = users.map((u) => `
+      <div id="reset-modal-${u.id}" class="modal-backdrop">
+        <div class="modal">
+          <a href="#" class="modal-close" aria-label="Close">&times;</a>
+          <div class="modal-title">Set Password — ${escHtml(u.name)}</div>
+          <form method="POST" action="/admin/users/${u.id}/reset-password">
+            <div class="modal-field">
+              <label for="pw-${u.id}">New password</label>
+              <input id="pw-${u.id}" name="password" type="password" placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password" />
+            </div>
+            <div class="modal-field">
+              <label for="pw2-${u.id}">Confirm password</label>
+              <input id="pw2-${u.id}" name="password_confirm" type="password" placeholder="Repeat password" required minlength="8" autocomplete="new-password" />
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%">Update Password</button>
+          </form>
+        </div>
+      </div>`).join("");
+
+    const body = `
+      <h1>User Management</h1>
+      <p class="page-sub">Manage SSO accounts for all ACE Electronics internal tools.</p>
+
+      <div class="card">
+        <div class="card-title">All Users (${users.length})</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:2rem">No users yet.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Add New User</div>
+        <form method="POST" action="/admin/users">
+          <div class="form-grid">
+            <div class="field">
+              <label for="new-name">Full name</label>
+              <input id="new-name" name="name" type="text" placeholder="Jane Smith" required />
+            </div>
+            <div class="field">
+              <label for="new-email">Email address</label>
+              <input id="new-email" name="email" type="email" placeholder="jane@aceelectronics.com" required />
+            </div>
+            <div class="field">
+              <label for="new-password">Password</label>
+              <input id="new-password" name="password" type="password" placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password" />
+            </div>
+            <div class="field">
+              <label for="new-password2">Confirm password</label>
+              <input id="new-password2" name="password_confirm" type="password" placeholder="Repeat password" required minlength="8" autocomplete="new-password" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create User</button>
+          </div>
+        </form>
+      </div>
+      ${modals}
+    `;
+
+    res.setHeader("Content-Type", "text/html");
+    res.send(adminShell({ title: "User Management", adminName: adminUser.name, body, flash }));
+  } catch (err) {
+    console.error("[admin/users]", err);
+    res.status(500).send("Internal server error");
+  }
+});
+
+// POST /admin/users — create new user
+app.post("/admin/users", requireAdminAuth, async (req: Request, res: Response) => {
+  const { name, email, password, password_confirm } = req.body as {
+    name?: string; email?: string; password?: string; password_confirm?: string;
+  };
+
+  const redirect = (type: "success" | "error", msg: string) =>
+    res.redirect(`/admin/users?flash=${type}&msg=${encodeURIComponent(msg)}`);
+
+  if (!name?.trim() || !email?.trim() || !password) {
+    return redirect("error", "Name, email, and password are all required.");
+  }
+  if (password !== password_confirm) {
+    return redirect("error", "Passwords do not match.");
+  }
+  if (password.length < 8) {
+    return redirect("error", "Password must be at least 8 characters.");
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 12);
+    await sql`
+      INSERT INTO sso_users (email, name, password_hash)
+      VALUES (${email.toLowerCase().trim()}, ${name.trim()}, ${hash})
+    `;
+    redirect("success", `User "${name.trim()}" created successfully.`);
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      redirect("error", "A user with that email already exists.");
+    } else {
+      console.error("[admin/users POST]", err);
+      redirect("error", "Failed to create user. Please try again.");
+    }
+  }
+});
+
+// POST /admin/users/:id/toggle — activate / deactivate
+app.post("/admin/users/:id/toggle", requireAdminAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminUser = (req as any).adminUser as JwtPayload;
+
+  const redirect = (type: "success" | "error", msg: string) =>
+    res.redirect(`/admin/users?flash=${type}&msg=${encodeURIComponent(msg)}`);
+
+  try {
+    const [user] = await sql<{ id: string; email: string; active: boolean }[]>`
+      SELECT id, email, active FROM sso_users WHERE id = ${id}
+    `;
+    if (!user) return redirect("error", "User not found.");
+
+    // Prevent an admin from deactivating their own account
+    if (user.id === adminUser.sub && user.active) {
+      return redirect("error", "You cannot deactivate your own account.");
+    }
+
+    const newActive = !user.active;
+    await sql`UPDATE sso_users SET active = ${newActive} WHERE id = ${id}`;
+    redirect("success", `User ${newActive ? "activated" : "deactivated"} successfully.`);
+  } catch (err) {
+    console.error("[admin/users/toggle]", err);
+    redirect("error", "Failed to update user status.");
+  }
+});
+
+// POST /admin/users/:id/toggle-admin — grant or revoke admin privilege
+app.post("/admin/users/:id/toggle-admin", requireAdminAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminUser = (req as any).adminUser as JwtPayload;
+
+  const redirect = (type: "success" | "error", msg: string) =>
+    res.redirect(`/admin/users?flash=${type}&msg=${encodeURIComponent(msg)}`);
+
+  try {
+    const [user] = await sql<{ id: string; name: string; is_admin: boolean }[]>`
+      SELECT id, name, is_admin FROM sso_users WHERE id = ${id}
+    `;
+    if (!user) return redirect("error", "User not found.");
+
+    // Prevent removing admin from yourself
+    if (user.id === adminUser.sub && user.is_admin) {
+      return redirect("error", "You cannot revoke your own admin privileges.");
+    }
+
+    // Guard against removing the last admin
+    if (user.is_admin) {
+      const [{ count }] = await sql<{ count: string }[]>`
+        SELECT COUNT(*) as count FROM sso_users WHERE is_admin = TRUE
+      `;
+      if (parseInt(count, 10) <= 1) {
+        return redirect("error", "Cannot remove the last admin. Promote another user first.");
+      }
+    }
+
+    const newAdmin = !user.is_admin;
+    await sql`UPDATE sso_users SET is_admin = ${newAdmin} WHERE id = ${id}`;
+    redirect("success", `Admin privileges ${newAdmin ? "granted to" : "revoked from"} ${user.name}.`);
+  } catch (err) {
+    console.error("[admin/users/toggle-admin]", err);
+    redirect("error", "Failed to update admin status.");
+  }
+});
+
+// POST /admin/users/:id/reset-password — set a new password directly
+app.post("/admin/users/:id/reset-password", requireAdminAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { password, password_confirm } = req.body as { password?: string; password_confirm?: string };
+
+  const redirect = (type: "success" | "error", msg: string) =>
+    res.redirect(`/admin/users?flash=${type}&msg=${encodeURIComponent(msg)}`);
+
+  if (!password) return redirect("error", "Password is required.");
+  if (password !== password_confirm) return redirect("error", "Passwords do not match.");
+  if (password.length < 8) return redirect("error", "Password must be at least 8 characters.");
+
+  try {
+    const [user] = await sql<{ id: string }[]>`SELECT id FROM sso_users WHERE id = ${id}`;
+    if (!user) return redirect("error", "User not found.");
+
+    const hash = await bcrypt.hash(password, 12);
+    await sql`UPDATE sso_users SET password_hash = ${hash} WHERE id = ${id}`;
+    redirect("success", "Password updated successfully.");
+  } catch (err) {
+    console.error("[admin/users/reset-password]", err);
+    redirect("error", "Failed to update password.");
+  }
+});
+
+// POST /admin/users/:id/send-reset — send password reset email (requires SMTP)
+app.post("/admin/users/:id/send-reset", requireAdminAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const redirect = (type: "success" | "error", msg: string) =>
+    res.redirect(`/admin/users?flash=${type}&msg=${encodeURIComponent(msg)}`);
+
+  if (!smtpConfigured()) {
+    return redirect("error", "SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to enable email resets.");
+  }
+
+  try {
+    const [user] = await sql<{ id: string; email: string; name: string }[]>`
+      SELECT id, email, name FROM sso_users WHERE id = ${id}
+    `;
+    if (!user) return redirect("error", "User not found.");
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await sql`
+      UPDATE sso_users
+      SET reset_token = ${token}, reset_token_expiry = ${expiry}
+      WHERE id = ${id}
+    `;
+
+    await sendPasswordResetEmail(user.email, user.name, token);
+    redirect("success", `Password reset email sent to ${user.email}.`);
+  } catch (err) {
+    console.error("[admin/users/send-reset]", err);
+    redirect("error", "Failed to send reset email. Check SMTP configuration.");
+  }
+});
+
+// GET /reset-password — password reset form (linked from email)
+app.get("/reset-password", async (req: Request, res: Response) => {
+  const token = req.query.token as string | undefined;
+  if (!token) {
+    res.setHeader("Content-Type", "text/html");
+    return res.status(400).send(resetPasswordPage({ error: "Missing reset token." }));
+  }
+
+  try {
+    const [user] = await sql<{ id: string; reset_token_expiry: Date }[]>`
+      SELECT id, reset_token_expiry
+      FROM sso_users
+      WHERE reset_token = ${token}
+        AND reset_token_expiry > now()
+    `;
+    if (!user) {
+      res.setHeader("Content-Type", "text/html");
+      return res.status(400).send(resetPasswordPage({ error: "This reset link is invalid or has expired." }));
+    }
+    res.setHeader("Content-Type", "text/html");
+    res.send(resetPasswordPage({ token }));
+  } catch (err) {
+    console.error("[reset-password GET]", err);
+    res.status(500).setHeader("Content-Type", "text/html");
+    res.send(resetPasswordPage({ error: "An unexpected error occurred." }));
+  }
+});
+
+// POST /reset-password — handle form submission
+app.post("/reset-password", async (req: Request, res: Response) => {
+  const { token, password, password_confirm } = req.body as {
+    token?: string; password?: string; password_confirm?: string;
+  };
+
+  if (!token) {
+    res.setHeader("Content-Type", "text/html");
+    return res.status(400).send(resetPasswordPage({ error: "Missing reset token." }));
+  }
+
+  if (!password || password !== password_confirm) {
+    res.setHeader("Content-Type", "text/html");
+    return res.send(resetPasswordPage({ token, error: "Passwords do not match." }));
+  }
+
+  if (password.length < 8) {
+    res.setHeader("Content-Type", "text/html");
+    return res.send(resetPasswordPage({ token, error: "Password must be at least 8 characters." }));
+  }
+
+  try {
+    const [user] = await sql<{ id: string }[]>`
+      SELECT id FROM sso_users
+      WHERE reset_token = ${token}
+        AND reset_token_expiry > now()
+    `;
+    if (!user) {
+      res.setHeader("Content-Type", "text/html");
+      return res.status(400).send(resetPasswordPage({ error: "This reset link is invalid or has expired." }));
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    await sql`
+      UPDATE sso_users
+      SET password_hash = ${hash}, reset_token = NULL, reset_token_expiry = NULL
+      WHERE id = ${user.id}
+    `;
+
+    res.setHeader("Content-Type", "text/html");
+    res.send(resetPasswordPage({ success: true }));
+  } catch (err) {
+    console.error("[reset-password POST]", err);
+    res.setHeader("Content-Type", "text/html");
+    res.status(500).send(resetPasswordPage({ error: "An unexpected error occurred." }));
+  }
+});
+
+function resetPasswordPage(opts: { token?: string; error?: string; success?: boolean }): string {
+  const tokenField = opts.token
+    ? `<input type="hidden" name="token" value="${escHtml(opts.token)}" />`
+    : "";
+  const feedback = opts.error
+    ? `<div class="msg msg-error">${escHtml(opts.error)}</div>`
+    : opts.success
+    ? `<div class="msg msg-success">Your password has been updated. <a href="/">Sign in</a></div>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset Password — ACE</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 1rem;
+      padding: 2.5rem; width: 100%; max-width: 400px;
+    }
+    .title { font-size: 1.25rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.25rem; }
+    .sub { font-size: 0.8rem; color: #64748b; margin-bottom: 1.75rem; }
+    label { display: block; font-size: 0.82rem; font-weight: 500; color: #94a3b8; margin-bottom: 0.4rem; }
+    input {
+      width: 100%; padding: 0.65rem 0.85rem;
+      background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem;
+      color: #f1f5f9; font-size: 0.95rem; outline: none; margin-bottom: 1rem;
+    }
+    input:focus { border-color: #3b82f6; }
+    button {
+      width: 100%; padding: 0.75rem; background: #1d4ed8; color: #fff;
+      border: none; border-radius: 0.5rem; font-size: 1rem; font-weight: 600;
+      cursor: pointer; margin-top: 0.5rem;
+    }
+    button:hover { background: #1e40af; }
+    .msg { padding: 0.65rem 0.85rem; border-radius: 0.5rem; font-size: 0.875rem; margin-bottom: 1.25rem; }
+    .msg-error   { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+    .msg-success { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); color: #86efac; }
+    a { color: #60a5fa; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">Reset your password</div>
+    <div class="sub">Enter a new password for your account.</div>
+    ${feedback}
+    ${opts.success ? "" : `
+    <form method="POST" action="/reset-password">
+      ${tokenField}
+      <div>
+        <label>New password</label>
+        <input name="password" type="password" placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password" />
+      </div>
+      <div>
+        <label>Confirm password</label>
+        <input name="password_confirm" type="password" placeholder="Repeat password" required minlength="8" autocomplete="new-password" />
+      </div>
+      <button type="submit">Update Password</button>
+    </form>`}
+  </div>
+</body>
+</html>`;
+}
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 

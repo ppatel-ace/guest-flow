@@ -26,6 +26,12 @@ no OAuth2 redirect dance required.
 | `INITIAL_ADMIN_PASSWORD` | optional | Password for the auto-seeded admin user. |
 | `INITIAL_ADMIN_NAME` | optional | Display name for the auto-seeded admin (default: `Admin`). |
 | `PORT` | optional | Port to listen on (default: `3100`). |
+| `SSO_BASE_URL` | optional | Public base URL of this service, e.g. `https://sso.aceelectronics.com`. Used to build password-reset links in emails (default: `http://localhost:PORT`). |
+| `SMTP_HOST` | optional | SMTP server hostname. Required to enable email-based password resets. |
+| `SMTP_PORT` | optional | SMTP server port (default: `587`). Use `465` for SSL. |
+| `SMTP_USER` | optional | SMTP authentication username. |
+| `SMTP_PASS` | optional | SMTP authentication password. |
+| `SMTP_FROM` | optional | From address for reset emails (default: `noreply@APP_DOMAIN`). |
 
 ## Deploying on Portainer
 
@@ -90,18 +96,46 @@ SSO_LOGIN_URL=https://sso.aceelectronics.com
 
 ## API endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/` | Login page (pass `?redirect_uri=...`) |
-| `POST` | `/api/auth/login` | Validate credentials, set cookie, redirect |
-| `GET` | `/api/auth/logout` | Clear cookie, redirect to login page |
-| `GET` | `/api/auth/validate` | Validate JWT from cookie or Bearer header — returns `{ valid, user }` |
-| `GET` | `/health` | Health check |
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| `GET` | `/` | — | Login page (pass `?redirect_uri=...`) |
+| `POST` | `/api/auth/login` | — | Validate credentials, set cookie, redirect |
+| `GET` | `/api/auth/logout` | — | Clear cookie, redirect to login page |
+| `GET` | `/api/auth/validate` | — | Validate JWT from cookie or Bearer header — returns `{ valid, user }` |
+| `GET` | `/health` | — | Health check |
+| `GET` | `/admin/users` | `ace_sso` cookie | Admin UI — list all SSO users |
+| `POST` | `/admin/users` | `ace_sso` cookie | Create a new SSO user |
+| `POST` | `/admin/users/:id/toggle` | `ace_sso` cookie | Activate or deactivate a user |
+| `POST` | `/admin/users/:id/toggle-admin` | `ace_sso` cookie | Grant or revoke admin privilege (last-admin guard enforced) |
+| `POST` | `/admin/users/:id/reset-password` | `ace_sso` cookie | Set a new password for a user directly |
+| `POST` | `/admin/users/:id/send-reset` | `ace_sso` cookie | Email a password-reset link (requires SMTP config) |
+| `GET` | `/reset-password?token=...` | — | Password reset form (linked from email) |
+| `POST` | `/reset-password` | — | Submit new password via reset token |
+
+## Admin UI
+
+Visit `/admin/users` to manage SSO accounts. You must be signed in (valid `ace_sso` cookie).
+
+From the admin UI you can:
+- **View** all users with their status (active / inactive), admin badge, and join date
+- **Create** a new user by providing name, email, and password
+- **Set password** directly — click "Set Password" next to any user
+- **Email a reset link** — click "Email Reset" (only shown when SMTP is configured); the link expires in 1 hour
+- **Grant / Revoke Admin** — make any user an admin or remove their admin privileges; you cannot revoke your own admin status, and the last admin's privileges cannot be removed
+- **Deactivate / Activate** accounts — deactivated users cannot sign in; you cannot deactivate your own account
+
+> **Access control:** Only users with `is_admin = TRUE` in `sso_users` can access the admin panel. Any authenticated SSO user without admin privileges receives a 403 page. On first startup (or after a migration from an older version), the oldest existing user is automatically promoted to admin as a bootstrap measure.
+
+### Self-service password reset (email flow)
+
+When SMTP is configured and an admin clicks "Email Reset":
+1. A one-time token (expires in 1 hour) is stored against the user record
+2. An email is sent to the user's address with a link to `/reset-password?token=…`
+3. The user visits the link, enters a new password, and the token is cleared
 
 ## User management
 
-Users are currently managed via environment variables on first start. A management
-UI is planned for a future release. To add a user manually:
+Users are managed through the `/admin/users` web UI (see above) or, for emergency access, via direct SQL:
 
 ```sql
 INSERT INTO sso_users (email, name, password_hash, active)
