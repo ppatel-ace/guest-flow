@@ -927,6 +927,18 @@ function DevicesTab() {
     onError: () => toast({ title: "Error", description: "Failed to clean up devices.", variant: "destructive" }),
   });
 
+  const removeAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/kiosk/devices/all");
+      return res.json() as Promise<{ deleted: number }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/kiosk/devices"] });
+      toast({ title: `Removed all ${data.deleted} device${data.deleted === 1 ? "" : "s"}` });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to remove all devices.", variant: "destructive" }),
+  });
+
   const addPrinterMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/printers", {
@@ -1002,12 +1014,22 @@ function DevicesTab() {
           <div className="flex gap-2 flex-wrap">
             {unnamedCount > 0 && (
               <Button size="sm" variant="outline" className="text-destructive hover:text-destructive h-8 text-xs"
-                disabled={cleanupMutation.isPending}
+                disabled={cleanupMutation.isPending || removeAllMutation.isPending}
                 onClick={() => cleanupMutation.mutate()}
                 data-testid="button-cleanup-unnamed-devices"
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                 Remove {unnamedCount} unnamed
+              </Button>
+            )}
+            {devices.length > 0 && (
+              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive h-8 text-xs"
+                disabled={removeAllMutation.isPending || cleanupMutation.isPending}
+                onClick={() => removeAllMutation.mutate()}
+                data-testid="button-remove-all-devices"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Remove all
               </Button>
             )}
             <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => refetch()} data-testid="button-refresh-devices">

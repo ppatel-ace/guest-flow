@@ -1156,6 +1156,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete ALL devices (protected)
+  app.delete("/api/kiosk/devices/all", requireAuth, async (req, res) => {
+    try {
+      const count = await storage.deleteAllKioskDevices();
+      res.json({ deleted: count });
+    } catch (error) {
+      console.error("[kiosk/devices/all]", error);
+      res.status(500).json({ error: "Failed to remove all devices" });
+    }
+  });
+
   app.delete("/api/kiosk/devices/:id", requireAuth, async (req, res) => {
     try {
       const deleted = await storage.deleteKioskDevice(req.params.id);

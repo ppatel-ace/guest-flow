@@ -210,6 +210,7 @@ export interface IStorage {
   updateKioskDevice(id: string, data: { name?: string | null; defaultLocation?: string | null; locationSource?: string | null }): Promise<KioskDevice | undefined>;
   deleteKioskDevice(id: string): Promise<boolean>;
   deleteUnnamedKioskDevices(): Promise<number>;
+  deleteAllKioskDevices(): Promise<number>;
   // Printers
   getAllPrinters(): Promise<Printer[]>;
   createPrinter(data: InsertPrinter): Promise<Printer>;
@@ -702,6 +703,11 @@ export class DatabaseStorage implements IStorage {
     const result = await db.delete(kioskDevices).where(
       and(isNull(kioskDevices.name), sql`${kioskDevices.lastSeen} < ${cutoff}`)
     ).returning();
+    return result.length;
+  }
+
+  async deleteAllKioskDevices(): Promise<number> {
+    const result = await db.delete(kioskDevices).returning();
     return result.length;
   }
 
