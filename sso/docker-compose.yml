@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   ace-auth:
     build: .
@@ -15,14 +17,26 @@ services:
       - SSO_JWT_SECRET=${SSO_JWT_SECRET}
       # Parent domain for the shared cookie, e.g. "aceelectronics.com"
       - APP_DOMAIN=${APP_DOMAIN:-aceelectronics.com}
+      # Public base URL of this SSO service (used in password-reset emails)
+      - SSO_BASE_URL=${SSO_BASE_URL:-}
       # Seed an initial admin user on first start (only runs if no users exist).
       - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
       # Name shown for the seeded admin user
       - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Admin}
-    networks:
-      - ace-network
-
-networks:
-  ace-network:
-    external: true
+      # Optional SMTP for password-reset emails
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    # NOTE: if you want this service on a shared Docker network (e.g. to sit
+    # behind a shared nginx reverse proxy), add the lines below and create the
+    # network first with: docker network create ace-network
+    #
+    # networks:
+    #   - ace-network
+    #
+    # networks:
+    #   ace-network:
+    #     external: true
