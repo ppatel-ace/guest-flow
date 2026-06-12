@@ -1211,18 +1211,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setNotificationEmails(emails: string[]): Promise<void> {
-    await db
-      .insert(pageSettings)
-      .values({
-        key: "notification_emails",
-        title: "Notification Emails",
-        description: JSON.stringify(emails),
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: pageSettings.key,
-        set: { description: JSON.stringify(emails), updatedAt: new Date() },
-      });
+    await this.upsertPageSettings("notification_emails", {
+      title: "Notification Emails",
+      description: JSON.stringify(emails),
+      successMessage: null,
+      successTitle: null,
+      eventName: null,
+      eventDate: null,
+      eventLocation: null,
+      captchaBypassStart: null,
+      captchaBypassEnd: null,
+      photoEnabled: false,
+      plusOneEnabled: false,
+      kioskTimeoutSeconds: 30,
+      labelPrinterEnabled: false,
+      wifiCouponEnabled: false,
+    });
   }
 
 }

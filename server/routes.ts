@@ -1713,9 +1713,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (invalid.length > 0) {
         return res.status(400).json({ error: "All emails must end in @aceelectronics.com", invalid });
       }
-      await storage.setNotificationEmails(emails.map((e: string) => e.trim().toLowerCase()));
-      res.json({ emails: emails.map((e: string) => e.trim().toLowerCase()) });
+      const normalised = emails.map((e: string) => e.trim().toLowerCase());
+      await storage.setNotificationEmails(normalised);
+      res.json({ emails: normalised });
     } catch (error) {
+      console.error("[notification-emails] PATCH failed:", error);
       res.status(500).json({ error: "Failed to update notification emails" });
     }
   });
