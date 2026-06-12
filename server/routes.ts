@@ -259,13 +259,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ssoBase = process.env.SSO_LOGIN_URL;
     if (ssoBase) {
       const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-      const redirectUri = `${appUrl}/ace-admin`;
+      const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent("/ace-admin")}`;
       return res.json({
         authenticated: false,
-        ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(redirectUri)}`,
+        ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`,
       });
     }
     res.json({ authenticated: false });
+  });
+
+  // ── SSO callback — receives ace_token from the SSO service redirect ─────────
+  // Works whether SSO is on a domain or an IP:port, because the JWT is passed
+  // as a URL parameter instead of relying on a shared domain cookie.
+  app.get("/api/auth/callback", async (req, res) => {
+    const rawToken = req.query.ace_token as string | undefined;
+    const next = (req.query.next as string) || "/ace-admin";
+    const safeNext = next.startsWith("/") ? next : "/ace-admin";
+
+    if (!rawToken) return res.redirect(safeNext);
+
+    const token = decodeURIComponent(rawToken);
+    const payload = await verifyAceSsoToken(token);
+    if (!payload) return res.redirect("/ace-admin");
+
+    res.cookie("ace_sso", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: SSO_JWT_EXPIRY_SECONDS * 1000,
+    });
+    return res.redirect(safeNext);
   });
 
   // ── Login (local fallback — used when SSO_LOGIN_URL is not set) ─────────────
@@ -276,8 +299,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ssoBase = process.env.SSO_LOGIN_URL;
       if (ssoBase) {
         const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-        const redirectUri = `${appUrl}/ace-admin`;
-        return res.json({ redirect: `${ssoBase}?redirect_uri=${encodeURIComponent(redirectUri)}` });
+        const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent("/ace-admin")}`;
+        return res.json({ redirect: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}` });
       }
 
       const { username, password } = req.body;

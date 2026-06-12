@@ -652,6 +652,13 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
 
     const token = signToken({ sub: user.id, email: user.email, name: user.name });
     setAuthCookie(res, token);
+    // For absolute redirect URIs (cross-origin apps), append the token in the
+    // URL so the receiving app can set its own local cookie.  This works even
+    // when the SSO service is reachable only by IP:port instead of a domain.
+    if (redirectUri.startsWith("http://") || redirectUri.startsWith("https://")) {
+      const sep = redirectUri.includes("?") ? "&" : "?";
+      return res.redirect(`${redirectUri}${sep}ace_token=${encodeURIComponent(token)}`);
+    }
     return res.redirect(redirectUri);
   } catch (err) {
     console.error("[login]", err);
