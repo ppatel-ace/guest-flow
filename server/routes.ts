@@ -282,11 +282,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const payload = await verifyAceSsoToken(token);
     if (!payload) return res.redirect("/ace-admin");
 
+    // Set the cookie with the same domain scope used by the SSO service so that
+    // clearCookie on logout (which also passes the domain) removes it correctly.
+    const domain = process.env.APP_DOMAIN;
+    const isLocalDomain = !domain || domain === "localhost" || domain === "127.0.0.1";
     res.cookie("ace_sso", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: SSO_JWT_EXPIRY_SECONDS * 1000,
+      ...(isLocalDomain ? {} : { domain: `.${domain}` }),
     });
     return res.redirect(safeNext);
   });

@@ -17,8 +17,12 @@ services:
       - SSO_JWT_SECRET=${SSO_JWT_SECRET}
       # Parent domain for the shared cookie, e.g. "aceelectronics.com"
       - APP_DOMAIN=${APP_DOMAIN:-aceelectronics.com}
-      # Public base URL of this SSO service (used in password-reset emails)
-      - SSO_BASE_URL=${SSO_BASE_URL:-}
+      # Public base URL of this SSO service (used in password-reset emails
+      # and to construct the Microsoft redirect URI)
+      - SSO_BASE_URL=${SSO_BASE_URL:-https://sso.aceelectronics.com}
+      # Microsoft Entra ID GCC High — override only if the tenant changes
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-443420ec-3e93-4fe2-b233-ee23866d66b1}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-6ab850db-8359-47f8-9e46-ddb57a3f87bd}
       # Seed an initial admin user on first start (only runs if no users exist).
       - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
@@ -30,13 +34,9 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
-    # NOTE: if you want this service on a shared Docker network (e.g. to sit
-    # behind a shared nginx reverse proxy), add the lines below and create the
-    # network first with: docker network create ace-network
-    #
-    # networks:
-    #   - ace-network
-    #
-    # networks:
-    #   ace-network:
-    #     external: true
+    networks:
+      - ace-network
+
+networks:
+  ace-network:
+    external: true
