@@ -1,2 +1,3 @@
 - [pg Pool SSL + connectionString conflict](pg-pool-ssl-conflict.md) — pg ignores explicit ssl:{} when connectionString also has ?sslmode=...; strip sslmode from URL first.
 - [drizzle.config.ts vs server/db.ts DB mismatch](drizzle-config-db-mismatch.md) — db:push hits Replit local DB; app uses Supabase. Use scripts/add-missing-columns.ts pattern for direct Supabase schema changes.
+- [Microsoft PKCE SSO GCC High](ms-pkce-sso.md) — PKCE public-client flow for Entra ID GCC High; no client_secret; id_token decoded without sig verification (server-side exchange over HTTPS).

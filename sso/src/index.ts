@@ -23,6 +23,16 @@ const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || `noreply@${APP_DOMAIN}`;
 const SSO_BASE_URL = process.env.SSO_BASE_URL || `http://localhost:${PORT}`;
 
+// ─── Microsoft Entra ID — GCC High ────────────────────────────────────────────
+const AZURE_CLIENT_ID = process.env.AZURE_CLIENT_ID || "443420ec-3e93-4fe2-b233-ee23866d66b1";
+const AZURE_TENANT_ID = process.env.AZURE_TENANT_ID || "6ab850db-8359-47f8-9e46-ddb57a3f87bd";
+// Redirect URI that is registered in portal.azure.us
+const AZURE_REDIRECT_URI =
+  process.env.AZURE_REDIRECT_URI || `${SSO_BASE_URL}/auth/microsoft/callback`;
+const MS_AUTHORITY = `https://login.microsoftonline.us/${AZURE_TENANT_ID}`;
+const MS_AUTHORIZE_URL = `${MS_AUTHORITY}/oauth2/v2.0/authorize`;
+const MS_TOKEN_URL = `${MS_AUTHORITY}/oauth2/v2.0/token`;
+
 if (!JWT_SECRET) {
   console.error("ERROR: SSO_JWT_SECRET environment variable is required");
   process.exit(1);
@@ -53,12 +63,12 @@ const sql = postgres(parsed.toString(), {
 async function initDb() {
   await sql`
     CREATE TABLE IF NOT EXISTS sso_users (
-      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      email       TEXT NOT NULL UNIQUE,
-      name        TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      active      BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email         TEXT NOT NULL UNIQUE,
+      name          TEXT NOT NULL,
+      password_hash TEXT,
+      active        BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;
 
@@ -67,8 +77,14 @@ async function initDb() {
     ALTER TABLE sso_users
       ADD COLUMN IF NOT EXISTS reset_token        TEXT,
       ADD COLUMN IF NOT EXISTS reset_token_expiry  TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS is_admin            BOOLEAN NOT NULL DEFAULT FALSE
+      ADD COLUMN IF NOT EXISTS is_admin            BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS auth_provider       TEXT NOT NULL DEFAULT 'local'
   `;
+
+  // Allow password_hash to be NULL for Microsoft-only users
+  await sql`
+    ALTER TABLE sso_users ALTER COLUMN password_hash DROP NOT NULL
+  `.catch(() => { /* already nullable */ });
 
   console.log("[db] sso_users table ready");
 
@@ -130,6 +146,16 @@ function needsRefresh(token: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ─── Microsoft PKCE helpers ───────────────────────────────────────────────────
+
+function generateCodeVerifier(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function generateCodeChallenge(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
 
 function setAuthCookie(res: Response, token: string): void {
@@ -428,6 +454,7 @@ function adminShell(opts: { title: string; adminName: string; body: string; flas
 
 function loginPage(opts: { redirectUri: string; error?: string }): string {
   const escaped = opts.redirectUri.replace(/"/g, "&quot;");
+  const msHref = `/auth/microsoft?redirect_uri=${encodeURIComponent(opts.redirectUri)}`;
   const error = opts.error
     ? `<div class="error">${opts.error}</div>`
     : "";
@@ -493,7 +520,8 @@ function loginPage(opts: { redirectUri: string; error?: string }): string {
       margin-bottom: 1rem;
     }
     input:focus { border-color: #3b82f6; }
-    button {
+    .btn-primary {
+      display: block;
       width: 100%;
       padding: 0.75rem;
       background: #1d4ed8;
@@ -505,9 +533,44 @@ function loginPage(opts: { redirectUri: string; error?: string }): string {
       cursor: pointer;
       transition: background 0.15s;
       margin-top: 0.5rem;
+      text-align: center;
+      text-decoration: none;
     }
-    button:hover { background: #1e40af; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-microsoft {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      width: 100%;
+      padding: 0.75rem;
+      background: #2f2f2f;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+      margin-bottom: 1.25rem;
+    }
+    .btn-microsoft:hover { background: #3d3d3d; }
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: #475569;
+      font-size: 0.8rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #334155;
+    }
     .error {
       background: rgba(239,68,68,0.15);
       border: 1px solid rgba(239,68,68,0.3);
@@ -533,6 +596,16 @@ function loginPage(opts: { redirectUri: string; error?: string }): string {
       <div class="logo-sub">Sign in to continue</div>
     </div>
     ${error}
+    <a href="${msHref}" class="btn-microsoft">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </a>
+    <div class="divider">or sign in with email</div>
     <form method="POST" action="/api/auth/login">
       <input type="hidden" name="redirect_uri" value="${escaped}" />
       <div>
@@ -543,7 +616,7 @@ function loginPage(opts: { redirectUri: string; error?: string }): string {
         <label for="password">Password</label>
         <input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
       </div>
-      <button type="submit" id="btn">Sign In</button>
+      <button type="submit" id="btn" class="btn-primary">Sign In</button>
     </form>
     <div class="footer">ACE Electronics &mdash; Internal use only</div>
   </div>
@@ -589,6 +662,137 @@ app.use(cookieParser());
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+// ── Microsoft login — start PKCE flow ─────────────────────────────────────────
+app.get("/auth/microsoft", (req: Request, res: Response) => {
+  const redirectUri = (req.query.redirect_uri as string) || "/";
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = crypto.randomBytes(16).toString("hex");
+
+  // Store verifier + state + original redirect_uri in a short-lived cookie
+  res.cookie("ms_pkce", JSON.stringify({ codeVerifier, state, redirectUri }), {
+    httpOnly: true,
+    maxAge: 10 * 60 * 1000, // 10 minutes
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  const params = new URLSearchParams({
+    client_id: AZURE_CLIENT_ID,
+    response_type: "code",
+    redirect_uri: AZURE_REDIRECT_URI,
+    scope: "openid profile email",
+    response_mode: "query",
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+  });
+
+  res.redirect(`${MS_AUTHORIZE_URL}?${params.toString()}`);
+});
+
+// ── Microsoft login — callback ─────────────────────────────────────────────────
+app.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
+  const { code, state, error, error_description } = req.query as Record<string, string>;
+
+  const pkceRaw = req.cookies?.ms_pkce;
+  res.clearCookie("ms_pkce");
+
+  if (error || !code) {
+    console.error("[microsoft] auth error:", error, error_description);
+    const msg = encodeURIComponent(error_description || "Microsoft login failed. Please try again.");
+    return res.redirect(`/?error=${msg}`);
+  }
+
+  let pkce: { codeVerifier: string; state: string; redirectUri: string } | null = null;
+  try {
+    pkce = JSON.parse(pkceRaw || "");
+  } catch {
+    return res.redirect("/?error=Session+expired.+Please+try+again.");
+  }
+
+  if (!pkce || pkce.state !== state) {
+    return res.redirect("/?error=Invalid+state.+Please+try+again.");
+  }
+
+  // Exchange auth code for tokens (no client_secret — PKCE public client)
+  let idToken: string;
+  try {
+    const tokenRes = await fetch(MS_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: AZURE_CLIENT_ID,
+        code,
+        redirect_uri: AZURE_REDIRECT_URI,
+        code_verifier: pkce.codeVerifier,
+      }).toString(),
+    });
+    const tokenData = await tokenRes.json() as any;
+    if (!tokenData.id_token) {
+      console.error("[microsoft] token exchange failed:", tokenData);
+      return res.redirect("/?error=Microsoft+authentication+failed.");
+    }
+    idToken = tokenData.id_token;
+  } catch (err) {
+    console.error("[microsoft] token exchange network error:", err);
+    return res.redirect("/?error=Could+not+reach+Microsoft.+Please+try+again.");
+  }
+
+  // Decode ID token claims — token arrived from Microsoft directly over HTTPS
+  let claims: Record<string, any>;
+  try {
+    const payload = idToken.split(".")[1];
+    claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
+  } catch {
+    return res.redirect("/?error=Invalid+token+received+from+Microsoft.");
+  }
+
+  const email = (claims.email || claims.preferred_username || "").toLowerCase().trim();
+  const name =
+    claims.name ||
+    [claims.given_name, claims.family_name].filter(Boolean).join(" ") ||
+    email;
+
+  if (!email) {
+    return res.redirect("/?error=No+email+returned+from+Microsoft.");
+  }
+
+  // Find or auto-create user
+  try {
+    let [user] = await sql<{ id: string; email: string; name: string; active: boolean }[]>`
+      SELECT id, email, name, active FROM sso_users WHERE email = ${email}
+    `;
+
+    if (!user) {
+      [user] = await sql<{ id: string; email: string; name: string; active: boolean }[]>`
+        INSERT INTO sso_users (email, name, auth_provider)
+        VALUES (${email}, ${name}, 'microsoft')
+        RETURNING id, email, name, active
+      `;
+      console.log(`[microsoft] auto-created user: ${email}`);
+    } else if (!user.active) {
+      return res.redirect("/?error=Your+account+has+been+deactivated.");
+    }
+
+    const token = signToken({ sub: user.id, email: user.email, name: user.name });
+    setAuthCookie(res, token);
+    console.log(`[microsoft] signed in: ${email}`);
+
+    // For absolute redirect URIs (cross-origin apps) use token-in-URL flow
+    const dest = pkce.redirectUri;
+    if (dest.startsWith("http://") || dest.startsWith("https://")) {
+      const sep = dest.includes("?") ? "&" : "?";
+      return res.redirect(`${dest}${sep}ace_token=${encodeURIComponent(token)}`);
+    }
+    return res.redirect(dest || "/");
+  } catch (err) {
+    console.error("[microsoft] user upsert error:", err);
+    return res.redirect("/?error=Login+failed.+Please+try+again.");
+  }
 });
 
 // ── Login page ────────────────────────────────────────────────────────────────
