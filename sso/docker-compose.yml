@@ -28,9 +28,15 @@ services:
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
       # Name shown for the seeded admin user
       - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Admin}
-      # Optional SMTP for password-reset emails
-      - SMTP_HOST=${SMTP_HOST:-}
+      # SMTP — sender address and server
+      - SMTP_HOST=${SMTP_HOST:-smtp.office365.us}
       - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_FROM=${SMTP_FROM:-no-reply@aceelectronics.com}
+      # OAuth 2.0 / XOAUTH2 (GCC High — preferred)
+      - SMTP_OAUTH_CLIENT_ID=${SMTP_OAUTH_CLIENT_ID:-}
+      - SMTP_OAUTH_CLIENT_SECRET=${SMTP_OAUTH_CLIENT_SECRET:-}
+      - SMTP_OAUTH_TENANT_ID=${SMTP_OAUTH_TENANT_ID:-}
+      - SMTP_OAUTH_SCOPE=${SMTP_OAUTH_SCOPE:-https://outlook.office365.us/.default}
+      # Basic-auth fallback (only used if OAuth vars above are not set)
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
-      - SMTP_FROM=${SMTP_FROM:-}

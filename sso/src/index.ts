@@ -18,10 +18,18 @@ const REFRESH_THRESHOLD_SECONDS = 2 * 60 * 60; // refresh when < 2 hours remain
 // SMTP config (optional — enables email-based password reset)
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || `noreply@${APP_DOMAIN}`;
 const SSO_BASE_URL = process.env.SSO_BASE_URL || `http://localhost:${PORT}`;
+
+// SMTP OAuth 2.0 / XOAUTH2 (GCC High — client credentials flow)
+// When these are set they take priority over SMTP_USER / SMTP_PASS.
+const SMTP_OAUTH_CLIENT_ID     = process.env.SMTP_OAUTH_CLIENT_ID     || "";
+const SMTP_OAUTH_CLIENT_SECRET = process.env.SMTP_OAUTH_CLIENT_SECRET || "";
+const SMTP_OAUTH_TENANT_ID     = process.env.SMTP_OAUTH_TENANT_ID     || "";
+const SMTP_OAUTH_SCOPE         = process.env.SMTP_OAUTH_SCOPE         || "https://outlook.office365.us/.default";
+// Basic-auth fallback (used only when OAuth vars are not set)
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
 
 // ─── Microsoft Entra ID — GCC High ────────────────────────────────────────────
 const AZURE_CLIENT_ID = process.env.AZURE_CLIENT_ID || "443420ec-3e93-4fe2-b233-ee23866d66b1";
@@ -242,17 +250,61 @@ function forbiddenPage(): string {
 // ─── SMTP / email helpers ─────────────────────────────────────────────────────
 
 function smtpConfigured(): boolean {
-  return !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+  const hasOAuth = !!(SMTP_HOST && SMTP_FROM && SMTP_OAUTH_CLIENT_ID && SMTP_OAUTH_CLIENT_SECRET && SMTP_OAUTH_TENANT_ID);
+  const hasBasic = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+  return hasOAuth || hasBasic;
+}
+
+// Fetch a short-lived access token from Entra ID using client credentials.
+// The token is valid for ~1 hour; we fetch a fresh one per email send so we
+// never have to manage token expiry ourselves.
+async function fetchSmtpAccessToken(): Promise<string> {
+  const tokenUrl = `https://login.microsoftonline.us/${SMTP_OAUTH_TENANT_ID}/oauth2/v2.0/token`;
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type:    "client_credentials",
+      client_id:     SMTP_OAUTH_CLIENT_ID,
+      client_secret: SMTP_OAUTH_CLIENT_SECRET,
+      scope:         SMTP_OAUTH_SCOPE,
+    }).toString(),
+  });
+  const data = await res.json() as { access_token?: string; error?: string; error_description?: string };
+  if (!data.access_token) {
+    throw new Error(`SMTP OAuth token fetch failed: ${data.error} — ${data.error_description}`);
+  }
+  return data.access_token;
 }
 
 async function sendPasswordResetEmail(toEmail: string, toName: string, token: string): Promise<void> {
   if (!smtpConfigured()) throw new Error("SMTP not configured");
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
+
+  let transporter: ReturnType<typeof nodemailer.createTransport>;
+
+  if (SMTP_OAUTH_CLIENT_ID && SMTP_OAUTH_CLIENT_SECRET && SMTP_OAUTH_TENANT_ID) {
+    // OAuth 2.0 / XOAUTH2 path (GCC High — client credentials)
+    const accessToken = await fetchSmtpAccessToken();
+    transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: false, // STARTTLS
+      auth: {
+        type: "OAuth2",
+        user: SMTP_FROM,
+        accessToken,
+      },
+    });
+  } else {
+    // Basic-auth fallback
+    transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+  }
+
   const resetUrl = `${SSO_BASE_URL}/reset-password?token=${token}`;
   await transporter.sendMail({
     from: SMTP_FROM,
