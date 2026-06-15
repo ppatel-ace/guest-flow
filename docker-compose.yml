@@ -3,7 +3,6 @@ version: '3.8'
 services:
   app:
     image: guestflow-guestflow:latest
-    build: .
     container_name: guestflow-app
     restart: always
     ports:
