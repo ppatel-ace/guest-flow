@@ -24,6 +24,13 @@ services:
       # Parent domain used when setting / clearing the shared ace_sso cookie.
       # Set to "aceelectronics.com" in production; leave unset for localhost.
       APP_DOMAIN: ${APP_DOMAIN:-}
+      # Microsoft Graph API — check-in email notifications (GCC High)
+      # Uses graph.microsoft.us — no SMTP config needed.
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@aceelectronics.com}
+      EMAIL_TENANT_ID: ${EMAIL_TENANT_ID:-}
+      EMAIL_CLIENT_ID: ${EMAIL_CLIENT_ID:-}
+      EMAIL_CLIENT_SECRET: ${EMAIL_CLIENT_SECRET:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-ACE Guest Check-In}
     networks:
       guestflow_net:
         ipv4_address: 172.28.11.2
