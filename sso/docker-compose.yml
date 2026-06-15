@@ -40,3 +40,14 @@ services:
       # Basic-auth fallback (only used if OAuth vars above are not set)
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
+    networks:
+      sso_net:
+        ipv4_address: 172.25.0.2
+
+networks:
+  sso_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24
+          gateway: 172.25.0.1
