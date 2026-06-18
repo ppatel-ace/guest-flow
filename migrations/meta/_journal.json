@@ -85,6 +85,13 @@
       "when": 1749657600000,
       "tag": "0010_printers_and_device_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1750262400000,
+      "tag": "20260618_add_printer_fields_and_print_jobs",
+      "breakpoints": true
     }
   ]
 }
