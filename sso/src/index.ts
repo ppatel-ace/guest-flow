@@ -131,6 +131,7 @@ interface JwtPayload {
   sub: string;
   email: string;
   name: string;
+  groups?: string[];
 }
 
 function signToken(payload: JwtPayload): string {
