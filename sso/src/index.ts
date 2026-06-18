@@ -502,6 +502,59 @@ function adminShell(opts: { title: string; adminName: string; body: string; flas
 </html>`;
 }
 
+// ─── Already signed-in page ───────────────────────────────────────────────────
+
+function alreadySignedInPage(name: string, email: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Signed In — ACE</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 1rem;
+      padding: 2.5rem; width: 100%; max-width: 400px; text-align: center;
+    }
+    .icon {
+      width: 52px; height: 52px; background: #166534; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; margin: 0 auto 1.25rem;
+    }
+    h1 { font-size: 1.25rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.35rem; }
+    .sub { font-size: 0.85rem; color: #64748b; margin-bottom: 1.75rem; }
+    .email { color: #94a3b8; }
+    .btn {
+      display: inline-block; padding: 0.7rem 1.5rem;
+      background: #1d4ed8; color: #fff; border-radius: 0.5rem;
+      font-size: 0.9rem; font-weight: 600; text-decoration: none;
+      transition: background 0.15s; margin: 0.35rem;
+    }
+    .btn:hover { background: #1e40af; }
+    .btn-ghost {
+      background: #334155; color: #94a3b8;
+    }
+    .btn-ghost:hover { background: #475569; color: #f1f5f9; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✓</div>
+    <h1>You're signed in, ${escHtml(name)}</h1>
+    <p class="sub email">${escHtml(email)}</p>
+    <a href="https://guestflow.aceelectronics.com" class="btn">Open GuestFlow</a>
+    <a href="/api/auth/logout?redirect_uri=/" class="btn btn-ghost">Sign out</a>
+  </div>
+</body>
+</html>`;
+}
+
 // ─── Login page HTML ──────────────────────────────────────────────────────────
 
 function loginPage(opts: { redirectUri: string; error?: string }): string {
@@ -849,22 +902,29 @@ app.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
 
 // ── Login page ────────────────────────────────────────────────────────────────
 app.get("/", (req: Request, res: Response) => {
-  const raw = (req.query.redirect_uri as string) || "/";
-  const redirectUri = isTrustedRedirectUri(raw) ? raw : "/";
-  // If already authenticated, send directly to redirect_uri (refresh if near expiry)
+  const raw = (req.query.redirect_uri as string) || "";
+  const redirectUri = isTrustedRedirectUri(raw) ? raw : "";
+  // If already authenticated and a destination was provided, send there.
+  // If no destination, show a "you're signed in" page instead of redirecting
+  // back to "/" which would create an infinite redirect loop.
   const token = req.cookies?.ace_sso;
   if (token) {
     const payload = verifyToken(token);
     if (payload) {
       if (needsRefresh(token)) {
-        const newToken = signToken({ sub: payload.sub, email: payload.email, name: payload.name });
+        const newToken = signToken({ sub: payload.sub, email: payload.email, name: payload.name, groups: payload.groups });
         setAuthCookie(res, newToken);
       }
-      return res.redirect(redirectUri);
+      if (redirectUri && redirectUri !== "/") {
+        return res.redirect(redirectUri);
+      }
+      // No destination — show signed-in landing page to avoid redirect loop
+      res.setHeader("Content-Type", "text/html");
+      return res.send(alreadySignedInPage(payload.name, payload.email));
     }
   }
   res.setHeader("Content-Type", "text/html");
-  res.send(loginPage({ redirectUri }));
+  res.send(loginPage({ redirectUri: redirectUri || "/" }));
 });
 
 // ── Login submit ──────────────────────────────────────────────────────────────
