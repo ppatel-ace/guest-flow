@@ -9,18 +9,18 @@ const TIMEOUT_MS   = 3_000;
 const AUTO_NAME  = "Brother QL (Auto)";
 const AUTO_MODEL = "Brother QL-820NWB";
 
-function ping(ip: string, port: number): Promise<boolean> {
+function ping(ip: string, port: number): Promise<{ online: boolean; reason?: string }> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     let done = false;
-    const finish = (ok: boolean) => {
+    const finish = (online: boolean, reason?: string) => {
       if (done) return;
       done = true;
       try { sock.destroy(); } catch {}
-      resolve(ok);
+      resolve({ online, reason });
     };
-    sock.setTimeout(TIMEOUT_MS, () => finish(false));
-    sock.once("error", () => finish(false));
+    sock.setTimeout(TIMEOUT_MS, () => finish(false, `timeout after ${TIMEOUT_MS}ms`));
+    sock.once("error", (err) => finish(false, err.message));
     sock.connect(port, ip, () => finish(true));
   });
 }
@@ -43,10 +43,14 @@ async function findOrCreate(): Promise<string> {
 }
 
 async function tick(printerId: string) {
-  const online = await ping(PRINTER_IP, PRINTER_PORT);
+  const { online, reason } = await ping(PRINTER_IP, PRINTER_PORT);
   const status = online ? "online" : "offline";
   await storage.updatePrinter(printerId, { status });
-  console.log(`[printer-sync] ${PRINTER_IP}:${PRINTER_PORT} → ${status}`);
+  if (online) {
+    console.log(`[printer-sync] ${PRINTER_IP}:${PRINTER_PORT} → online`);
+  } else {
+    console.log(`[printer-sync] ${PRINTER_IP}:${PRINTER_PORT} → offline (${reason})`);
+  }
 
   if (online) {
     const settings = await storage.getKioskSettings();
