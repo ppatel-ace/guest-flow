@@ -216,6 +216,9 @@ export interface IStorage {
   createPrinter(data: InsertPrinter): Promise<Printer>;
   updatePrinter(id: string, data: Partial<InsertPrinter> & { status?: string | null }): Promise<Printer | undefined>;
   deletePrinter(id: string): Promise<boolean>;
+  createPrintJob(data: InsertPrintJob): Promise<PrintJob>;
+  getPendingPrintJobs(limit?: number): Promise<PrintJob[]>;
+  markPrintJobStatus(id: string, status: string, attempts?: number, lastError?: string | null): Promise<PrintJob | undefined>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
   upsertCompanyByName(name: string): Promise<Company>;
@@ -737,6 +740,20 @@ export class DatabaseStorage implements IStorage {
   async deletePrinter(id: string): Promise<boolean> {
     const result = await db.delete(printers).where(eq(printers.id, id)).returning();
     return result.length > 0;
+  }
+
+  async createPrintJob(data: InsertPrintJob): Promise<PrintJob> {
+    const [job] = await db.insert(printJobs).values(data).returning();
+    return job;
+  }
+
+  async getPendingPrintJobs(limit = 10): Promise<PrintJob[]> {
+    return await db.select().from(printJobs).where(eq(printJobs.status, 'pending')).orderBy(asc(printJobs.createdAt)).limit(limit);
+  }
+
+  async markPrintJobStatus(id: string, status: string, attempts = 0, lastError: string | null = null): Promise<PrintJob | undefined> {
+    const [job] = await db.update(printJobs).set({ status, attempts, lastError, updatedAt: new Date() }).where(eq(printJobs.id, id)).returning();
+    return job || undefined;
   }
 
   // ─── CRM ────────────────────────────────────────────────────────────────────

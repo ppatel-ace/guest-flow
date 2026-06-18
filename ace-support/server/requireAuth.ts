@@ -60,6 +60,10 @@ export const requireAuth = (req: Request & { user?: any }, res: Response, next: 
   const ssoToken = (req as any).cookies?.ace_sso;
   if (ssoToken) {
     const payload = verifyAceSsoToken(ssoToken);
+      // If Microsoft groups claim present, attach to payload
+      if (payload && payload.groups && Array.isArray(payload.groups)) {
+        payload.groupIds = payload.groups;
+      }
     if (payload) {
       (req as any).user = { id: payload.sub, email: payload.email, name: payload.name };
       refreshSsoTokenIfNeeded(ssoToken, payload, res);

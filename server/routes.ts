@@ -1284,6 +1284,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create a print job (protected)
+  app.post('/api/printers/:id/print', requireAuth, async (req, res) => {
+    try {
+      const printerId = req.params.id;
+      const { labelText } = req.body;
+      if (!labelText || typeof labelText !== 'string') return res.status(400).json({ error: 'labelText is required' });
+      const job = await storage.createPrintJob({ printerId, labelText, status: 'pending', attempts: 0 });
+      res.status(201).json(job);
+    } catch (err) {
+      console.error('[printers/:id/print] error', err);
+      res.status(500).json({ error: 'Failed to create print job' });
+    }
+  });
+
+  // Admin: list print jobs
+  app.get('/api/print-jobs', requireAuth, async (req, res) => {
+    try {
+      const jobs = await storage.getPendingPrintJobs(50);
+      res.json(jobs);
+    } catch (err) {
+      console.error('[print-jobs GET]', err);
+      res.status(500).json({ error: 'Failed to fetch print jobs' });
+    }
+  });
+
   // List devices (protected)
   app.get("/api/kiosk/devices", requireAuth, async (req, res) => {
     try {

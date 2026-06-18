@@ -165,6 +165,22 @@ export const insertPrinterSchema = createInsertSchema(printers).omit({
 export type InsertPrinter = z.infer<typeof insertPrinterSchema>;
 export type Printer = typeof printers.$inferSelect;
 
+export const printJobs = pgTable("print_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  printerId: varchar("printer_id").notNull(),
+  labelText: text("label_text").notNull(),
+  status: text("status").notNull().default('pending'),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const insertPrintJobSchema = createInsertSchema(printJobs).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertPrintJob = z.infer<typeof insertPrintJobSchema>;
+export type PrintJob = typeof printJobs.$inferSelect;
+
 // ─── CRM tables ───────────────────────────────────────────────────────────────
 
 export const companies = pgTable("companies", {
