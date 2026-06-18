@@ -40,6 +40,33 @@ function resolveMigrateSsl(
   return { rejectUnauthorized: false };
 }
 
+// Applies any schema changes that may have been missed by the Drizzle migrator
+// (e.g. when a migration file was added to the journal after the DB was already
+// marked up-to-date).  Every statement uses IF NOT EXISTS so it is fully idempotent.
+async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<void> {
+  const patches = [
+    // Printer columns added after the initial printers table creation
+    `ALTER TABLE printers ADD COLUMN IF NOT EXISTS ip_address text`,
+    `ALTER TABLE printers ADD COLUMN IF NOT EXISTS port integer`,
+    // Print jobs queue table
+    `CREATE TABLE IF NOT EXISTS print_jobs (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      printer_id varchar NOT NULL REFERENCES printers(id) ON DELETE CASCADE,
+      label_text text NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      attempts integer NOT NULL DEFAULT 0,
+      last_error text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_print_jobs_status ON print_jobs(status)`,
+  ];
+  for (const sql of patches) {
+    await pool.query(sql);
+  }
+  console.log("[migrate] Schema patches applied.");
+}
+
 export async function runMigrations(): Promise<void> {
   const databaseUrl = buildDatabaseUrl();
   const hostname = new URL(databaseUrl).hostname;
@@ -66,6 +93,9 @@ export async function runMigrations(): Promise<void> {
       const pool = new PgPool({ connectionString: urlForPg.toString(), ssl });
       const migDb = pgDrizzle(pool);
       await pgMigrate(migDb, { migrationsFolder });
+      // Run idempotent safety patches after migrations so any columns that were
+      // missed due to journal desync are always present.
+      await applySchemaPatches(pool);
       await pool.end();
     }
 
