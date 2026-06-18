@@ -34,6 +34,8 @@ const SMTP_PASS = process.env.SMTP_PASS || "";
 // ─── Microsoft Entra ID — GCC High ────────────────────────────────────────────
 const AZURE_CLIENT_ID = process.env.AZURE_CLIENT_ID || "443420ec-3e93-4fe2-b233-ee23866d66b1";
 const AZURE_TENANT_ID = process.env.AZURE_TENANT_ID || "6ab850db-8359-47f8-9e46-ddb57a3f87bd";
+// Required for Web-platform app registrations (confidential client). Set in Portainer.
+const AZURE_CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET || "";
 // Redirect URI that is registered in portal.azure.us
 const AZURE_REDIRECT_URI =
   process.env.AZURE_REDIRECT_URI || `${SSO_BASE_URL}/auth/microsoft/callback`;
@@ -823,19 +825,23 @@ app.get("/auth/microsoft/callback", async (req: Request, res: Response) => {
     return res.redirect("/?error=Invalid+state.+Please+try+again.");
   }
 
-  // Exchange auth code for tokens (no client_secret — PKCE public client)
+  // Exchange auth code for tokens.
+  // Web-platform (confidential) clients must send client_secret.
+  // PKCE code_verifier is kept for extra security but the secret is required.
   let idToken: string;
   try {
+    const tokenParams: Record<string, string> = {
+      grant_type: "authorization_code",
+      client_id: AZURE_CLIENT_ID,
+      code,
+      redirect_uri: AZURE_REDIRECT_URI,
+      code_verifier: pkce.codeVerifier,
+    };
+    if (AZURE_CLIENT_SECRET) tokenParams.client_secret = AZURE_CLIENT_SECRET;
     const tokenRes = await fetch(MS_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: AZURE_CLIENT_ID,
-        code,
-        redirect_uri: AZURE_REDIRECT_URI,
-        code_verifier: pkce.codeVerifier,
-      }).toString(),
+      body: new URLSearchParams(tokenParams).toString(),
     });
     const tokenData = await tokenRes.json() as any;
     if (!tokenData.id_token) {
