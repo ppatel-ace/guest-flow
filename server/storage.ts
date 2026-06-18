@@ -1,6 +1,6 @@
 import {
   customers, pageSettings, formFields, leads, companies, contacts, visits,
-  documents, kioskDevices, printers, visitors, visitorNotes, visitorMergeEvents, acePocs,
+  documents, kioskDevices, printers, printJobs, visitors, visitorNotes, visitorMergeEvents, acePocs,
   type Customer, type InsertCustomer,
   type PageSettings, type InsertPageSettings,
   type FormField, type InsertFormField,
@@ -11,6 +11,7 @@ import {
   type Document, type InsertDocument,
   type KioskDevice, type InsertKioskDevice,
   type Printer, type InsertPrinter,
+  type PrintJob, type InsertPrintJob,
   type Visitor, type InsertVisitor,
   type VisitorNote,
   type VisitorMergeEvent,

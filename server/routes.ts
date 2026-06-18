@@ -923,7 +923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!target) return;
           const dateStr = new Date().toLocaleDateString();
           try {
-            await printLabel(target as any, [fullName, visitor.company ?? '', dateStr]);
+            await printLabel(target as any, [fullName, body.company ?? '', dateStr]);
             console.log('[kiosk/checkin] printed label for', fullName);
           } catch (err) {
             console.error('[kiosk/checkin] print error:', err);

@@ -8,6 +8,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
 import { checkConnection } from "./db";
+import { startPrinterSync } from "./printer-sync";
 
 // Extend Express session
 declare module "express-session" {
@@ -169,6 +170,9 @@ app.use((req, res, next) => {
   await runMigrations();
 
   const server = await registerRoutes(app);
+
+  // Auto-register LABEL_PRINTER_IP env var as a DB printer and poll its status
+  startPrinterSync().catch((err) => console.error("[printer-sync] startup error:", err));
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
