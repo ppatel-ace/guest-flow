@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema, insertPrinterSchema } from "@shared/schema";
+import { printLabel } from "./printer-helper";
 import { z } from "zod";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
@@ -912,6 +913,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       })();
 
+      // Fire-and-forget label printing (if enabled and a printer is configured)
+      (async () => {
+        try {
+          const settings = await storage.getKioskSettings();
+          if (!settings.labelPrinterEnabled) return;
+          const printers = await storage.getAllPrinters();
+          const target = printers.find((p) => p.status === 'online' && (p as any).ipAddress);
+          if (!target) return;
+          const dateStr = new Date().toLocaleDateString();
+          try {
+            await printLabel(target as any, [fullName, visitor.company ?? '', dateStr]);
+            console.log('[kiosk/checkin] printed label for', fullName);
+          } catch (err) {
+            console.error('[kiosk/checkin] print error:', err);
+          }
+        } catch (err) {
+          console.error('[kiosk/checkin] printer dispatch error:', err);
+        }
+      })();
+
       res.status(201).json(customer ?? { name: fullName });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1231,6 +1252,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("[printers POST]", error);
       res.status(500).json({ error: "Failed to create printer" });
+    }
+  });
+
+  app.patch("/api/printers/:id", requireAuth, async (req, res) => {
+    try {
+      const allowed = ["name", "ipAddress", "port", "status", "model", "connectionType"];
+      const update: Record<string, any> = {};
+      for (const k of allowed) {
+        if (Object.prototype.hasOwnProperty.call(req.body, k)) update[k] = req.body[k];
+      }
+      const printer = await storage.updatePrinter(req.params.id, update as any);
+      if (!printer) return res.status(404).json({ error: "Printer not found" });
+      res.json(printer);
+    } catch (error) {
+      console.error("[printers PATCH]", error);
+      res.status(500).json({ error: "Failed to update printer" });
     }
   });
 

@@ -151,6 +151,8 @@ export const printers = pgTable("printers", {
   name: text("name").notNull(),
   model: text("model").notNull(),
   connectionType: text("connection_type").notNull().default('wifi'),
+  ipAddress: text("ip_address"),
+  port: integer("port"),
   status: text("status").notNull().default('offline'),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

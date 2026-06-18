@@ -214,6 +214,7 @@ export interface IStorage {
   // Printers
   getAllPrinters(): Promise<Printer[]>;
   createPrinter(data: InsertPrinter): Promise<Printer>;
+  updatePrinter(id: string, data: Partial<InsertPrinter> & { status?: string | null }): Promise<Printer | undefined>;
   deletePrinter(id: string): Promise<boolean>;
   // CRM
   findContactByEmail(email: string): Promise<Contact | undefined>;
@@ -723,6 +724,14 @@ export class DatabaseStorage implements IStorage {
   async createPrinter(data: InsertPrinter): Promise<Printer> {
     const [printer] = await db.insert(printers).values(data).returning();
     return printer;
+  }
+
+  async updatePrinter(id: string, data: Partial<InsertPrinter> & { status?: string | null }): Promise<Printer | undefined> {
+    const updateData: any = { ...data };
+    // allow nullable status updates
+    if (typeof data.status === 'undefined') delete updateData.status;
+    const [printer] = await db.update(printers).set(updateData).where(eq(printers.id, id)).returning();
+    return printer || undefined;
   }
 
   async deletePrinter(id: string): Promise<boolean> {
