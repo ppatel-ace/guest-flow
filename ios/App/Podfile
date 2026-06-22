@@ -17,8 +17,8 @@ end
 
 target 'App' do
   capacitor_pods
-  # Brother label printer SDK (Bluetooth MFi + WiFi for QL-820NWB)
-  pod 'BRLMPrinterKit', '~> 4.3'
+  # Brother label printer SDK (BLE + WiFi for QL-820NWB)
+  pod 'BRLMPrinterKit'
 end
 
 post_install do |installer|
