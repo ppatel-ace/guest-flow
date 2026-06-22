@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import type { FormField, AcePoc } from "@shared/schema";
 
 // ─── Template variable substitution ──────────────────────────────────────────
@@ -134,6 +135,7 @@ const welcomeBadgeVariants = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Kiosk() {
+  const { toast } = useToast();
   const deviceId = useRef<string>(getOrCreateDeviceId());
   const deviceDefaultLocation = useRef<string | null>(null);
   const [step, setStep] = useState<KioskStep>("idle");
@@ -526,14 +528,24 @@ export default function Kiosk() {
     setStep("thanks");
     sendHeartbeat(deviceId.current, "active");
 
-    // Fire-and-forget label print — errors are silently swallowed so the
-    // kiosk flow is never blocked by printer issues.
+    // Print visitor badge label — shows a brief toast for success or failure.
     const printDate = new Date().toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
-    printVisitorLabel(fullName.trim(), company.trim(), printDate).catch(() => {});
+    printVisitorLabel(fullName.trim(), company.trim(), printDate)
+      .then(() => {
+        toast({ title: "Label printed", description: fullName.trim() });
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        toast({
+          title: "Print failed",
+          description: msg || "Could not reach printer.",
+          variant: "destructive",
+        });
+      });
 
     setTimeout(() => resetToIdle(), 5000);
   };
