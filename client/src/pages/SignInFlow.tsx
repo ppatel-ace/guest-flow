@@ -81,6 +81,7 @@ import {
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { FormField, Customer, Lead, Visitor, AcePoc } from "@shared/schema";
+import { printVisitorLabel } from "@/lib/brotherPrint";
 import {
   Select,
   SelectContent,
@@ -970,6 +971,22 @@ function DevicesTab() {
     onError: () => toast({ title: "Error", description: "Failed to remove printer.", variant: "destructive" }),
   });
 
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  async function handleTestPrint() {
+    setIsPrinting(true);
+    try {
+      const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      await printVisitorLabel("Test Visitor", "Ace Electronics", today);
+      toast({ title: "Test print sent!", description: "Check the printer for your label." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Print failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsPrinting(false);
+    }
+  }
+
   const resetPrinterDialog = () => {
     setPrinterStep(1);
     setPrinterModel("");
@@ -1160,10 +1177,16 @@ function DevicesTab() {
               Label printers connected to the kiosk for printing visitor badges.
             </p>
           </div>
-          <Button size="sm" className="h-8 text-xs" onClick={() => { resetPrinterDialog(); setShowAddPrinter(true); }} data-testid="button-add-printer">
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Add Printer
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleTestPrint} disabled={isPrinting} data-testid="button-test-print">
+              <Printer className="h-3.5 w-3.5 mr-1.5" />
+              {isPrinting ? "Printing…" : "Test Print"}
+            </Button>
+            <Button size="sm" className="h-8 text-xs" onClick={() => { resetPrinterDialog(); setShowAddPrinter(true); }} data-testid="button-add-printer">
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Add Printer
+            </Button>
+          </div>
         </div>
 
         <div className="mt-3">
