@@ -1,0 +1,142 @@
+Some info on how it works.  I will need the Reply URL for after the SSO authentication to pass the token back.  I don’t think we need the Token or Certificate for access, because the Login with Microsoft will return a valid token with their information.  (Speculating a little on this part, as typical SSO’s do not need or require a separate API call.  Token or certificates are only required for unattended logins and admin tasks and background processes that go back to azure.)
+
+I provide some sample code and the URL’s you need as well as the Tenant and ClientID’s.  The .zip file contains the sample coding for different licenses and a readme.md file you can open in notepad that describes it.  I also included that at the bottom of the email.
+
+
+###MsGraph##
+Graph API calls must go to:  https://graph.microsoft.us/v1.0/users
+
+###How it works###
+User opens app on Intune-enrolled device
+          ↓
+App redirects to:
+login.microsoftonline.us/6ab850db-8359-47f8-9e46-ddb57a3f87bd/ oauth2/v2.0/authorize
+          ↓
+User enters M365 GCC High credentials
+          ↓
+Conditional Access evaluates:
+  - MFA satisfied? ✅
+  - Device enrolled in Intune? ✅
+  - Device marked compliant? ✅
+  (No IP check — device posture is the trust anchor)
+          ↓
+Token issued with claims:
+  given_name, family_name, upn, email
+          ↓
+Token returned to your Redirect URI
+          ↓  (I will need the Reply URL back to the application to pass the token.)
+Your app validates token signature against
+  https://login.microsoftonline.us/6ab850db-8359-47f8-9e46-ddb57a3f87bd/.well-known/openid-configuration
+          ↓
+User is authenticated ✅ — session valid for 8 hours
+
+
+Here are some sample codes and the required URL.  Your app will need to have an SSL certificate for compliance.  You can use the Let’s Encrypt option if you want for that.
+
+User Validation App — SSO Sample Code
+GCC High | Microsoft Entra ID | CMMC Level 2
+________________________________________
+App Registration Details
+Field	Value
+App Name	User Validation App - SSO
+Client ID	443420ec-3e93-4fe2-b233-ee23866d66b1
+Tenant ID	6ab850db-8359-47f8-9e46-ddb57a3f87bd
+Object ID	c5cba879-9f13-4faf-8392-7ad864cb556c
+Cloud	GCC High
+Authority	https://login.microsoftonline.us/
+Graph Endpoint	https://graph.microsoft.us/v1.0/
+Portal	https://portal.azure.us
+________________________________________
+Architecture
+All samples use the OAuth2 Authorization Code + PKCE flow.
+No client secret or certificate is required for SSO-only use.
+User info (name, UPN, email) is read directly from the ID token claims — no Graph API call needed.
+User → App → login.microsoftonline.us → MFA + Intune Compliance Check
+           ← ID Token (name, UPN, email claims) ←
+________________________________________
+What Each Sample Provides
+File	Stack	Port
+python/app.py	Python + Flask	5000
+nodejs/app.js	Node.js + Express	3000
+dotnet/Program.cs	ASP.NET Core (C#)	5001
+dotnet/HomeController.cs	ASP.NET Core (C#)	—
+dotnet/appsettings.json	ASP.NET Core config	—
+react-node/server.js	Node.js backend	3001
+react-node/App.jsx	React frontend	3000
+________________________________________
+Redirect URIs to Register in portal.azure.us
+Add these under App Registration → Authentication → Redirect URIs:
+Stack	Redirect URI
+Python	https://localhost:5000/auth/callback
+Node.js	https://localhost:3000/auth/callback
+ASP.NET Core	https://localhost:5001/auth/callback
+React + Node	https://localhost:3001/auth/callback
+Update to your production domain before deploying.
+________________________________________
+Permissions Required (Delegated Only)
+Permission	Type	Purpose
+openid	Delegated	Required for SSO login
+profile	Delegated	Returns name and UPN
+email	Delegated	Returns email address
+User.Read	Delegated	Read signed-in user's profile
+No Application permissions are needed for SSO-only flows.
+Grant admin consent in portal.azure.us after adding permissions.
+________________________________________
+Token Claims Used
+All user info is read from the ID token — no Graph API call is made:
+Claim	Value
+name	Display Name
+given_name	First Name
+family_name	Last Name
+preferred_username	UPN
+email	Email Address
+Configure these under App Registration → Token Configuration → Optional Claims → ID Token.
+________________________________________
+GCC High Endpoints (Critical)
+Purpose	URL
+Login authority	https://login.microsoftonline.us/{tenant-id}
+Token endpoint	https://login.microsoftonline.us/{tenant-id}/oauth2/v2.0/token
+Logout endpoint	https://login.microsoftonline.us/{tenant-id}/oauth2/v2.0/logout
+Graph API	https://graph.microsoft.us/v1.0/
+OpenID config	https://login.microsoftonline.us/{tenant-id}/.well-known/openid-configuration
+Using commercial (.com) endpoints against a GCC High tenant will fail.
+________________________________________
+CMMC Level 2 Controls Met by This Setup
+Practice	Control	How Met
+IA.3.083	MFA for all users	Conditional Access MFA policy
+AC.1.001	Limit to authorized users	App Role + Assignment Required = Yes
+AC.1.002	Least privilege	Delegated User.Read only
+AC.2.006	Authorized devices only	Require Intune compliant device
+AU.2.041	Audit user activity	Entra ID sign-in logs
+SC.3.177	Encrypt in transit	TLS 1.2+ enforced by Entra ID
+IA.1.076	Identify all users	UPN + email in token claims
+IA.1.077	Authenticate before access	OAuth2 Authorization Code + PKCE
+________________________________________
+Quick Start
+Python:
+cd python
+pip install -r requirements.txt
+python app.py
+Node.js:
+cd nodejs
+npm install
+node app.js
+ASP.NET Core:
+cd dotnet
+dotnet add package Microsoft.Identity.Web
+dotnet add package Microsoft.Identity.Web.UI
+dotnet run
+React + Node:
+cd react-node
+npm install
+node server.js
+# In a separate terminal, run your React app with proxy set to https://localhost:3001
+
+
+From: Frederick W. Murphy Jr. 
+Sent: Wednesday, June 10, 2026 1:44 PM
+To: 'Parth Patel' <ppatel@aceelectronics.com>
+Cc: Shivam Patel <spatel@aceelectronics.com>
+Subject: RE: Question on API calls for user information
+
+What Address should the redirect URL point to?  

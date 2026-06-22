@@ -1,0 +1,96 @@
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed: Error: The server does not support SSL connections
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PgDialect.migrate (/app/node_modules/drizzle-orm/pg-core/dialect.cjs:56:5)
+    at async migrate (/app/node_modules/drizzle-orm/node-postgres/migrator.cjs:27:3)
+    at async runMigrations (/app/dist/index.cjs:2224:7)
+    at async /app/dist/index.cjs:2324:3

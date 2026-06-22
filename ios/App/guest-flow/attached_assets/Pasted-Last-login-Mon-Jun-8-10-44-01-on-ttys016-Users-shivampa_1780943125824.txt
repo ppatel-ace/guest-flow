@@ -1,0 +1,45 @@
+Last login: Mon Jun  8 10:44:01 on ttys016
+/Users/shivampatel/.zshrc:export:10: not valid in this context: /Users/shivampatel/.zshrc
+shivampatel@Shivams-MacBook-Air ~ % cd ~/Desktop/guest-flow-main
+cd: no such file or directory: /Users/shivampatel/Desktop/guest-flow-main
+shivampatel@Shivams-MacBook-Air ~ % cd ~/Desktop/Work-Projects/guest-flow-main
+cd: no such file or directory: /Users/shivampatel/Desktop/Work-Projects/guest-flow-main
+shivampatel@Shivams-MacBook-Air ~ % cd Dektop
+cd: no such file or directory: Dektop
+shivampatel@Shivams-MacBook-Air ~ % cd Desktop
+shivampatel@Shivams-MacBook-Air Desktop % cd Work-Projcts
+cd: no such file or directory: Work-Projcts
+shivampatel@Shivams-MacBook-Air Desktop % ls
+~$ference List of Sources.docx
+~$ngo DB.docx
+ace md files
+Contracting - AI Script.docx
+contracts
+JobTrack-21-main
+Open Order All Qty Only_27 May 2026.xlsx
+Picture1.png
+POHist3Yr_02 June 2026.xlsx
+POHist3Yr_27 May 2026.xlsx
+Work Projects
+workflows
+shivampatel@Shivams-MacBook-Air Desktop % cd Work Projects
+cd: string not in pwd: Work
+shivampatel@Shivams-MacBook-Air Desktop % cd Work_Projects
+cd: no such file or directory: Work_Projects
+shivampatel@Shivams-MacBook-Air Desktop % cd Ace
+shivampatel@Shivams-MacBook-Air Ace % cd guest-flow-main
+shivampatel@Shivams-MacBook-Air guest-flow-main % npm run build && npx cap sync ios
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/index.cjs --define:import.meta.dirname=__dirname --external:../vite.config
+
+failed to load config from /Users/shivampatel/Desktop/Ace/guest-flow-main/vite.config.ts
+error during build:
+Error: The service was stopped
+    at /Users/shivampatel/Desktop/Ace/guest-flow-main/node_modules/vite/node_modules/esbuild/lib/main.js:968:34
+    at responseCallbacks.<computed> (/Users/shivampatel/Desktop/Ace/guest-flow-main/node_modules/vite/node_modules/esbuild/lib/main.js:622:9)
+    at Socket.afterClose (/Users/shivampatel/Desktop/Ace/guest-flow-main/node_modules/vite/node_modules/esbuild/lib/main.js:613:28)
+    at Socket.emit (node:events:519:35)
+    at endReadableNT (node:internal/streams/readable:1701:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+shivampatel@Shivams-MacBook-Air guest-flow-main % 
