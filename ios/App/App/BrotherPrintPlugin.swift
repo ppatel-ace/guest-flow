@@ -13,53 +13,58 @@ public class BrotherPrintPlugin: CAPPlugin {
         let date    = call.getString("date")    ?? ""
 
         DispatchQueue.global(qos: .userInitiated).async {
-            BLESearchHelper.findChannel { channel in
-                guard let channel = channel else {
-                    call.reject("No Brother printer found via Bluetooth. Make sure the QL-820NWB is powered on and in range.")
-                    return
-                }
 
-                guard let image = self.renderLabel(name: name, company: company, date: date) else {
-                    call.reject("Failed to render label image.")
-                    return
-                }
+            // 1. Blocking BLE search — returns when a printer is found or times out
+            let option = BRLMBLESearchOption()
+            let searchResult = BRLMPrinterSearcher.startBLESearch(option)
+            guard let channel = searchResult.channels?.first else {
+                call.reject("No Brother printer found via Bluetooth. Make sure the QL-820NWB is powered on and in range.")
+                return
+            }
 
-                // BRLMPrinterKit requires a file URL — save UIImage to a temp PNG
-                let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
-                    .appendingPathComponent("brother_label.png")
-                guard let pngData = image.pngData() else {
-                    call.reject("Failed to encode label image.")
-                    return
-                }
-                do {
-                    try pngData.write(to: tmpURL)
-                } catch {
-                    call.reject("Failed to write temp image: \(error.localizedDescription)")
-                    return
-                }
+            // 2. Render label to UIImage
+            guard let image = self.renderLabel(name: name, company: company, date: date) else {
+                call.reject("Failed to render label image.")
+                return
+            }
 
-                let openResult = BRLMPrinterDriverGenerator.open(channel)
-                guard openResult.error.code == .noError, let driver = openResult.driver else {
-                    call.reject("Could not open printer channel: \(openResult.error.code.rawValue)")
-                    return
-                }
-                defer { driver.closeChannel() }
+            // 3. Save UIImage to a temp PNG — BRLMPrinterKit needs a file URL
+            let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("brother_label.png")
+            guard let pngData = image.pngData() else {
+                call.reject("Failed to encode label image.")
+                return
+            }
+            do {
+                try pngData.write(to: tmpURL)
+            } catch {
+                call.reject("Failed to write temp image: \(error.localizedDescription)")
+                return
+            }
 
-                let settings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB)
-                settings?.autoCut   = true
-                settings?.labelSize = .rollW62
+            // 4. Open the printer channel
+            let openResult = BRLMPrinterDriverGenerator.open(channel)
+            guard openResult.error.code == .noError, let driver = openResult.driver else {
+                call.reject("Could not open printer channel: \(openResult.error.code.rawValue)")
+                return
+            }
+            defer { driver.closeChannel() }
 
-                guard let s = settings else {
-                    call.reject("Failed to create print settings.")
-                    return
-                }
+            // 5. Print settings for QL-820NWB, 62 mm roll
+            let settings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB)
+            settings?.autoCut   = true
+            settings?.labelSize = .rollW62
+            guard let s = settings else {
+                call.reject("Failed to create print settings.")
+                return
+            }
 
-                let printErr = driver.printImage(from: tmpURL, settings: s)
-                if printErr.code == .noError {
-                    call.resolve()
-                } else {
-                    call.reject("Print failed, error code: \(printErr.code.rawValue)")
-                }
+            // 6. Print
+            let printErr = driver.printImage(with: tmpURL, settings: s)
+            if printErr.code == .noError {
+                call.resolve()
+            } else {
+                call.reject("Print failed, error code: \(printErr.code.rawValue)")
             }
         }
     }
@@ -68,10 +73,10 @@ public class BrotherPrintPlugin: CAPPlugin {
 
     @objc func getPairedPrinters(_ call: CAPPluginCall) {
         DispatchQueue.global(qos: .userInitiated).async {
-            BLESearchHelper.findChannel { channel in
-                let found = channel != nil
-                call.resolve(["count": found ? 1 : 0, "found": found])
-            }
+            let option = BRLMBLESearchOption()
+            let result = BRLMPrinterSearcher.startBLESearch(option)
+            let count  = result.channels?.count ?? 0
+            call.resolve(["count": count, "found": count > 0])
         }
     }
 
@@ -79,7 +84,7 @@ public class BrotherPrintPlugin: CAPPlugin {
 
     /// 62 mm continuous label at 300 dpi ≈ 696 × 200 px
     private func renderLabel(name: String, company: String, date: String) -> UIImage? {
-        let size = CGSize(width: 696, height: 200)
+        let size     = CGSize(width: 696, height: 200)
         let renderer = UIGraphicsImageRenderer(size: size)
 
         return renderer.image { _ in
@@ -135,49 +140,5 @@ public class BrotherPrintPlugin: CAPPlugin {
         let p = NSMutableParagraphStyle()
         p.alignment = alignment
         return p
-    }
-}
-
-// MARK: - BLE search helper (delegate-based, isolated to avoid retain cycles)
-
-private class BLESearchHelper: NSObject, BRLMPrinterSearcherDelegate {
-
-    private var completion: (BRLMChannel?) -> Void
-    private var resolved = false
-    private var searcher: BRLMPrinterSearcher?
-
-    private init(completion: @escaping (BRLMChannel?) -> Void) {
-        self.completion = completion
-    }
-
-    static func findChannel(completion: @escaping (BRLMChannel?) -> Void) {
-        let helper = BLESearchHelper(completion: completion)
-        DispatchQueue.main.async {
-            let option = BRLMBLESearchOption()
-            helper.searcher = BRLMPrinterSearcher.startBLESearch(option, delegate: helper)
-            // Keep helper alive until search resolves
-            objc_setAssociatedObject(helper.searcher as Any,
-                                     "helperKey",
-                                     helper,
-                                     .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
-        // Hard safety timeout
-        DispatchQueue.global().asyncAfter(deadline: .now() + 15) {
-            helper.resolve(nil)
-        }
-    }
-
-    func didFindPrinter(_ channel: BRLMChannel!) {
-        resolve(channel)
-    }
-
-    func didFinishSearch(_ error: Error!) {
-        resolve(nil)
-    }
-
-    private func resolve(_ channel: BRLMChannel?) {
-        guard !resolved else { return }
-        resolved = true
-        completion(channel)
     }
 }
