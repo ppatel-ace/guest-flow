@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["remote-exec"]
+packages = ["remote-exec", "rubyPackages.cocoapods"]
 
 [deployment]
 deploymentTarget = "autoscale"
