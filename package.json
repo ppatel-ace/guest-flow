@@ -95,8 +95,10 @@
   },
   "devDependencies": {
     "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/device": "^8.0.2",
+    "@capacitor/ios": "^8.0.0",
     "@replit/vite-plugin-cartographer": "^0.3.1",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
