@@ -17,7 +17,7 @@ public class BrotherPrintPlugin: CAPPlugin {
             // 1. Blocking BLE search — returns when a printer is found or times out
             let option = BRLMBLESearchOption()
             let searchResult = BRLMPrinterSearcher.startBLESearch(option)
-            guard let channel = searchResult.channels?.first else {
+            guard let channel = searchResult.channels.first else {
                 call.reject("No Brother printer found via Bluetooth. Make sure the QL-820NWB is powered on and in range.")
                 return
             }
@@ -75,7 +75,7 @@ public class BrotherPrintPlugin: CAPPlugin {
         DispatchQueue.global(qos: .userInitiated).async {
             let option = BRLMBLESearchOption()
             let result = BRLMPrinterSearcher.startBLESearch(option)
-            let count  = result.channels?.count ?? 0
+            let count  = result.channels.count
             call.resolve(["count": count, "found": count > 0])
         }
     }
