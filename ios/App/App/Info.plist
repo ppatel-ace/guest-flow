@@ -49,9 +49,5 @@
         <string>GuestFlow uses Bluetooth to print visitor badge labels on the Brother QL-820NWB label printer.</string>
         <key>NSBluetoothPeripheralUsageDescription</key>
         <string>GuestFlow uses Bluetooth to print visitor badge labels on the Brother QL-820NWB label printer.</string>
-        <key>UISupportedExternalAccessoryProtocols</key>
-        <array>
-                <string>com.brother.ptcbp</string>
-        </array>
 </dict>
 </plist>

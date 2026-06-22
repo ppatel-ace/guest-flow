@@ -13,40 +13,39 @@ public class BrotherPrintPlugin: CAPPlugin {
         let date    = call.getString("date")    ?? ""
 
         DispatchQueue.global(qos: .userInitiated).async {
-            // 1. Find the first paired MFi (Classic Bluetooth) Brother printer
-            guard let channel = self.findChannel() else {
-                call.reject("No paired Brother printer found. Please pair the QL-820NWB in iOS Settings → Bluetooth first.")
-                return
-            }
+            self.findBLEChannel { channel in
+                guard let channel = channel else {
+                    call.reject("No Brother printer found via Bluetooth. Make sure the QL-820NWB is powered on and in range.")
+                    return
+                }
 
-            // 2. Render the label as a bitmap image
-            guard let image = self.renderLabel(name: name, company: company, date: date) else {
-                call.reject("Failed to render label image.")
-                return
-            }
+                guard let image = self.renderLabel(name: name, company: company, date: date) else {
+                    call.reject("Failed to render label image.")
+                    return
+                }
 
-            // 3. Open the channel and print
-            let openResult = BRLMPrinterDriverGenerator.open(channel)
-            guard openResult.error.code == .noError, let driver = openResult.driver else {
-                call.reject("Could not open printer channel: \(openResult.error.code.rawValue)")
-                return
-            }
-            defer { driver.closeChannel() }
+                let openResult = BRLMPrinterDriverGenerator.open(channel)
+                guard openResult.error.code == .noError, let driver = openResult.driver else {
+                    call.reject("Could not open printer channel: \(openResult.error.code.rawValue)")
+                    return
+                }
+                defer { driver.closeChannel() }
 
-            let settings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB)
-            settings?.autoCut    = true
-            settings?.labelSize  = .rollW62
+                let settings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB)
+                settings?.autoCut   = true
+                settings?.labelSize = .rollW62
 
-            guard let s = settings else {
-                call.reject("Failed to create print settings.")
-                return
-            }
+                guard let s = settings else {
+                    call.reject("Failed to create print settings.")
+                    return
+                }
 
-            let printErr = driver.printImage(with: image, settings: s)
-            if printErr.code == .noError {
-                call.resolve()
-            } else {
-                call.reject("Print error code: \(printErr.code.rawValue)")
+                let printErr = driver.printImage(with: image, settings: s)
+                if printErr.code == .noError {
+                    call.resolve()
+                } else {
+                    call.reject("Print failed, error code: \(printErr.code.rawValue)")
+                }
             }
         }
     }
@@ -54,32 +53,63 @@ public class BrotherPrintPlugin: CAPPlugin {
     // MARK: - getPairedPrinters
 
     @objc func getPairedPrinters(_ call: CAPPluginCall) {
-        let channels = BRLMChannel.availableChannels(with: .bluetoothMFi) ?? []
-        let names = channels.compactMap { ($0 as? BRLMChannel)?.channelInfo }
-        call.resolve(["printers": names])
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Quick 5-second scan for BLE Brother printers
+            let channels = BRLMChannel.availableChannels(with: .bluetoothLowEnergy) ?? []
+            let count = channels.count
+            call.resolve(["count": count, "found": count > 0])
+        }
     }
 
-    // MARK: - Private helpers
+    // MARK: - BLE channel discovery
 
-    private func findChannel() -> BRLMChannel? {
-        let channels = BRLMChannel.availableChannels(with: .bluetoothMFi) ?? []
-        return channels.first as? BRLMChannel
+    /// Tries immediate BLE channel list first (fast); falls back to a 10-second
+    /// active BLE scan if nothing is cached yet.
+    private func findBLEChannel(completion: @escaping (BRLMChannel?) -> Void) {
+        // 1. Try already-cached BLE channels (works when printer stays connected)
+        let cached = BRLMChannel.availableChannels(with: .bluetoothLowEnergy) ?? []
+        if let ch = cached.first as? BRLMChannel {
+            completion(ch)
+            return
+        }
+
+        // 2. Active scan with 10-second timeout
+        var resolved = false
+        let lock = NSLock()
+
+        func resolve(_ ch: BRLMChannel?) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !resolved else { return }
+            resolved = true
+            completion(ch)
+        }
+
+        BRLMPrinterSearcher.startBLESearch({ channel, _ in
+            if let ch = channel {
+                resolve(ch)
+            }
+        }, timeout: 10)
+
+        // Safety timeout — ensure completion is always called
+        DispatchQueue.global().asyncAfter(deadline: .now() + 12) {
+            resolve(nil)
+        }
     }
 
-    /// Renders a 62 mm label (696 × 200 px at 300 dpi) with name / company / date.
+    // MARK: - Label rendering
+
+    /// 62 mm continuous label at 300 dpi ≈ 696 × 200 px
     private func renderLabel(name: String, company: String, date: String) -> UIImage? {
         let size = CGSize(width: 696, height: 200)
         let renderer = UIGraphicsImageRenderer(size: size)
+
         return renderer.image { _ in
-            // White background
             UIColor.white.setFill()
             UIRectFill(CGRect(origin: .zero, size: size))
 
-            let left = NSMutableParagraphStyle()
-            left.alignment = .left
-
-            let right = NSMutableParagraphStyle()
-            right.alignment = .right
+            let left  = paragraphStyle(.left)
+            let right = paragraphStyle(.right)
 
             // Visitor name — large bold
             name.draw(
@@ -103,7 +133,7 @@ public class BrotherPrintPlugin: CAPPlugin {
                 )
             }
 
-            // Date — small, right-aligned, bottom
+            // Date — small, right-aligned
             date.draw(
                 in: CGRect(x: 20, y: 158, width: 656, height: 30),
                 withAttributes: [
@@ -113,7 +143,7 @@ public class BrotherPrintPlugin: CAPPlugin {
                 ]
             )
 
-            // Thin top border for visual separation
+            // Top border line
             UIColor.black.setStroke()
             let path = UIBezierPath()
             path.move(to: CGPoint(x: 0, y: 0))
@@ -121,5 +151,11 @@ public class BrotherPrintPlugin: CAPPlugin {
             path.lineWidth = 3
             path.stroke()
         }
+    }
+
+    private func paragraphStyle(_ alignment: NSTextAlignment) -> NSMutableParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.alignment = alignment
+        return p
     }
 }

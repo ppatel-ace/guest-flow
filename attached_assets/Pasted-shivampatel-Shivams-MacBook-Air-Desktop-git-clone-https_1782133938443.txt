@@ -1,0 +1,54 @@
+shivampatel@Shivams-MacBook-Air Desktop % git clone https://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@github.com/ppatel-ace/guest-flow.git
+Cloning into 'guest-flow'...
+remote: Enumerating objects: 2528, done.
+remote: Counting objects: 100% (387/387), done.
+remote: Compressing objects: 100% (242/242), done.
+remote: Total 2528 (delta 239), reused 264 (delta 127), pack-reused 2141 (from 1)
+Receiving objects: 100% (2528/2528), 38.16 MiB | 1.09 MiB/s, done.
+Resolving deltas: 100% (1684/1684), done.
+shivampatel@Shivams-MacBook-Air Desktop % git status
+fatal: not a git repository (or any of the parent directories): .git
+shivampatel@Shivams-MacBook-Air Desktop % cd guest-flow
+shivampatel@Shivams-MacBook-Air guest-flow % git status
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+shivampatel@Shivams-MacBook-Air guest-flow % npm install
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+added 704 packages, and audited 705 packages in 2m
+
+77 packages are looking for funding
+  run `npm fund` for details
+
+26 vulnerabilities (3 low, 11 moderate, 12 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
+shivampatel@Shivams-MacBook-Air guest-flow % cd ios/App
+shivampatel@Shivams-MacBook-Air App % pod install
+Ignoring ffi-1.17.0 because its extensions are not built. Try: gem pristine ffi --version 1.17.0
+Ignoring ffi-1.17.0 because its extensions are not built. Try: gem pristine ffi --version 1.17.0
+Ignoring ffi-1.17.0 because its extensions are not built. Try: gem pristine ffi --version 1.17.0
+
+[!] Invalid `Podfile` file: cannot load such file -- /Users/shivampatel/Desktop/guest-flow/node_modules/@capacitor/ios/scripts/pods_helpers.
+
+ #  from /Users/shivampatel/Desktop/guest-flow/ios/App/Podfile:1
+ #  -------------------------------------------
+ >  require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+ #  
+ #  -------------------------------------------
+shivampatel@Shivams-MacBook-Air App % 
