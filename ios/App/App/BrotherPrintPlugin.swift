@@ -13,7 +13,7 @@ public class BrotherPrintPlugin: CAPPlugin {
         let date    = call.getString("date")    ?? ""
 
         DispatchQueue.global(qos: .userInitiated).async {
-            self.findBLEChannel { channel in
+            BLESearchHelper.findChannel { channel in
                 guard let channel = channel else {
                     call.reject("No Brother printer found via Bluetooth. Make sure the QL-820NWB is powered on and in range.")
                     return
@@ -21,6 +21,20 @@ public class BrotherPrintPlugin: CAPPlugin {
 
                 guard let image = self.renderLabel(name: name, company: company, date: date) else {
                     call.reject("Failed to render label image.")
+                    return
+                }
+
+                // BRLMPrinterKit requires a file URL — save UIImage to a temp PNG
+                let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent("brother_label.png")
+                guard let pngData = image.pngData() else {
+                    call.reject("Failed to encode label image.")
+                    return
+                }
+                do {
+                    try pngData.write(to: tmpURL)
+                } catch {
+                    call.reject("Failed to write temp image: \(error.localizedDescription)")
                     return
                 }
 
@@ -40,7 +54,7 @@ public class BrotherPrintPlugin: CAPPlugin {
                     return
                 }
 
-                let printErr = driver.printImage(with: image, settings: s)
+                let printErr = driver.printImage(from: tmpURL, settings: s)
                 if printErr.code == .noError {
                     call.resolve()
                 } else {
@@ -54,46 +68,10 @@ public class BrotherPrintPlugin: CAPPlugin {
 
     @objc func getPairedPrinters(_ call: CAPPluginCall) {
         DispatchQueue.global(qos: .userInitiated).async {
-            // Quick 5-second scan for BLE Brother printers
-            let channels = BRLMChannel.availableChannels(with: .bluetoothLowEnergy) ?? []
-            let count = channels.count
-            call.resolve(["count": count, "found": count > 0])
-        }
-    }
-
-    // MARK: - BLE channel discovery
-
-    /// Tries immediate BLE channel list first (fast); falls back to a 10-second
-    /// active BLE scan if nothing is cached yet.
-    private func findBLEChannel(completion: @escaping (BRLMChannel?) -> Void) {
-        // 1. Try already-cached BLE channels (works when printer stays connected)
-        let cached = BRLMChannel.availableChannels(with: .bluetoothLowEnergy) ?? []
-        if let ch = cached.first as? BRLMChannel {
-            completion(ch)
-            return
-        }
-
-        // 2. Active scan with 10-second timeout
-        var resolved = false
-        let lock = NSLock()
-
-        func resolve(_ ch: BRLMChannel?) {
-            lock.lock()
-            defer { lock.unlock() }
-            guard !resolved else { return }
-            resolved = true
-            completion(ch)
-        }
-
-        BRLMPrinterSearcher.startBLESearch({ channel, _ in
-            if let ch = channel {
-                resolve(ch)
+            BLESearchHelper.findChannel { channel in
+                let found = channel != nil
+                call.resolve(["count": found ? 1 : 0, "found": found])
             }
-        }, timeout: 10)
-
-        // Safety timeout — ensure completion is always called
-        DispatchQueue.global().asyncAfter(deadline: .now() + 12) {
-            resolve(nil)
         }
     }
 
@@ -157,5 +135,49 @@ public class BrotherPrintPlugin: CAPPlugin {
         let p = NSMutableParagraphStyle()
         p.alignment = alignment
         return p
+    }
+}
+
+// MARK: - BLE search helper (delegate-based, isolated to avoid retain cycles)
+
+private class BLESearchHelper: NSObject, BRLMPrinterSearcherDelegate {
+
+    private var completion: (BRLMChannel?) -> Void
+    private var resolved = false
+    private var searcher: BRLMPrinterSearcher?
+
+    private init(completion: @escaping (BRLMChannel?) -> Void) {
+        self.completion = completion
+    }
+
+    static func findChannel(completion: @escaping (BRLMChannel?) -> Void) {
+        let helper = BLESearchHelper(completion: completion)
+        DispatchQueue.main.async {
+            let option = BRLMBLESearchOption()
+            helper.searcher = BRLMPrinterSearcher.startBLESearch(option, delegate: helper)
+            // Keep helper alive until search resolves
+            objc_setAssociatedObject(helper.searcher as Any,
+                                     "helperKey",
+                                     helper,
+                                     .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+        // Hard safety timeout
+        DispatchQueue.global().asyncAfter(deadline: .now() + 15) {
+            helper.resolve(nil)
+        }
+    }
+
+    func didFindPrinter(_ channel: BRLMChannel!) {
+        resolve(channel)
+    }
+
+    func didFinishSearch(_ error: Error!) {
+        resolve(nil)
+    }
+
+    private func resolve(_ channel: BRLMChannel?) {
+        guard !resolved else { return }
+        resolved = true
+        completion(channel)
     }
 }
