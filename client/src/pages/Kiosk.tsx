@@ -69,6 +69,7 @@ type FormStage = "email" | "fields";
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
 import { getKioskDeviceInfo, getOrCreateDeviceId } from "@/lib/kiosk-device";
+import { printVisitorLabel } from "@/lib/brotherPrint";
 
 // ─── Device heartbeat helpers ─────────────────────────────────────────────────
 
@@ -524,6 +525,16 @@ export default function Kiosk() {
     setVisitorName(fullName);
     setStep("thanks");
     sendHeartbeat(deviceId.current, "active");
+
+    // Fire-and-forget label print — errors are silently swallowed so the
+    // kiosk flow is never blocked by printer issues.
+    const printDate = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    printVisitorLabel(fullName.trim(), company.trim(), printDate).catch(() => {});
+
     setTimeout(() => resetToIdle(), 5000);
   };
 
