@@ -1,0 +1,100 @@
+#10 6.107 npm error Missing: env-paths@2.2.1 from lock file
+#10 6.107 npm error Missing: fs-extra@11.3.5 from lock file
+#10 6.107 npm error Missing: kleur@4.1.5 from lock file
+#10 6.107 npm error Missing: native-run@2.0.3 from lock file
+#10 6.107 npm error Missing: open@8.4.2 from lock file
+#10 6.107 npm error Missing: plist@3.1.1 from lock file
+#10 6.107 npm error Missing: prompts@2.4.2 from lock file
+#10 6.107 npm error Missing: rimraf@6.1.3 from lock file
+#10 6.107 npm error Missing: semver@7.8.5 from lock file
+#10 6.107 npm error Missing: tar@7.5.16 from lock file
+#10 6.107 npm error Missing: xml2js@0.6.2 from lock file
+#10 6.107 npm error Missing: @ionic/utils-array@2.1.6 from lock file
+#10 6.107 npm error Missing: @ionic/utils-fs@3.1.7 from lock file
+#10 6.107 npm error Missing: @ionic/utils-process@2.1.12 from lock file
+#10 6.107 npm error Missing: @ionic/utils-stream@3.1.7 from lock file
+#10 6.107 npm error Missing: @types/fs-extra@8.1.5 from lock file
+#10 6.107 npm error Missing: fs-extra@9.1.0 from lock file
+#10 6.107 npm error Missing: @ionic/utils-object@2.1.6 from lock file
+#10 6.107 npm error Missing: signal-exit@3.0.7 from lock file
+#10 6.107 npm error Missing: tree-kill@1.2.2 from lock file
+#10 6.107 npm error Missing: @types/slice-ansi@4.0.0 from lock file
+#10 6.107 npm error Missing: signal-exit@3.0.7 from lock file
+#10 6.107 npm error Missing: slice-ansi@4.0.0 from lock file
+#10 6.107 npm error Missing: string-width@4.2.3 from lock file
+#10 6.107 npm error Missing: strip-ansi@6.0.1 from lock file
+#10 6.107 npm error Missing: untildify@4.0.0 from lock file
+#10 6.107 npm error Missing: wrap-ansi@7.0.0 from lock file
+#10 6.107 npm error Missing: jsonfile@6.2.1 from lock file
+#10 6.107 npm error Missing: universalify@2.0.1 from lock file
+#10 6.107 npm error Missing: bplist-parser@0.3.2 from lock file
+#10 6.107 npm error Missing: elementtree@0.1.7 from lock file
+#10 6.107 npm error Missing: ini@4.1.3 from lock file
+#10 6.107 npm error Missing: through2@4.0.2 from lock file
+#10 6.107 npm error Missing: big-integer@1.6.52 from lock file
+#10 6.107 npm error Missing: sax@1.1.4 from lock file
+#10 6.107 npm error Missing: define-lazy-prop@2.0.0 from lock file
+#10 6.107 npm error Missing: is-docker@2.2.1 from lock file
+#10 6.107 npm error Missing: is-wsl@2.2.0 from lock file
+#10 6.107 npm error Missing: @xmldom/xmldom@0.9.10 from lock file
+#10 6.107 npm error Missing: base64-js@1.5.1 from lock file
+#10 6.107 npm error Missing: xmlbuilder@15.1.1 from lock file
+#10 6.107 npm error Missing: kleur@3.0.3 from lock file
+#10 6.107 npm error Missing: sisteransi@1.0.5 from lock file
+#10 6.107 npm error Missing: ansi-styles@4.3.0 from lock file
+#10 6.107 npm error Missing: astral-regex@2.0.0 from lock file
+#10 6.107 npm error Missing: @isaacs/fs-minipass@4.0.1 from lock file
+#10 6.107 npm error Missing: chownr@3.0.0 from lock file
+#10 6.107 npm error Missing: minizlib@3.1.0 from lock file
+#10 6.107 npm error Missing: yallist@5.0.0 from lock file
+#10 6.107 npm error Missing: readable-stream@3.6.2 from lock file
+#10 6.107 npm error Missing: string_decoder@1.3.0 from lock file
+#10 6.107 npm error Missing: xmlbuilder@11.0.1 from lock file
+#10 6.107 npm error Missing: glob@13.0.6 from lock file
+#10 6.107 npm error Missing: minimatch@10.2.5 from lock file
+#10 6.107 npm error Missing: path-scurry@2.0.2 from lock file
+#10 6.107 npm error Missing: brace-expansion@5.0.6 from lock file
+#10 6.107 npm error Missing: balanced-match@4.0.4 from lock file
+#10 6.107 npm error Missing: lru-cache@11.5.1 from lock file
+#10 6.107 npm error Missing: at-least-node@1.0.0 from lock file
+#10 6.107 npm error Missing: emoji-regex@8.0.0 from lock file
+#10 6.107 npm error Missing: ansi-regex@5.0.1 from lock file
+#10 6.107 npm error Missing: ansi-styles@4.3.0 from lock file
+#10 6.107 npm error
+#10 6.107 npm error Clean install a project
+#10 6.107 npm error
+#10 6.107 npm error Usage:
+#10 6.107 npm error npm ci
+#10 6.107 npm error
+#10 6.107 npm error Options:
+#10 6.107 npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+#10 6.107 npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+#10 6.107 npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+#10 6.107 npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+#10 6.107 npm error [--no-bin-links] [--no-fund] [--dry-run]
+#10 6.107 npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+#10 6.107 npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+#10 6.107 npm error
+#10 6.107 npm error aliases: clean-install, ic, install-clean, isntall-clean
+#10 6.107 npm error
+#10 6.107 npm error Run "npm help ci" for more info
+#10 6.108 npm notice
+#10 6.108 npm notice New major version of npm available! 10.8.2 -> 11.17.0
+#10 6.108 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+#10 6.108 npm notice To update run: npm install -g npm@11.17.0
+#10 6.108 npm notice
+#10 6.108 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-06-24T13_50_38_407Z-debug-0.log
+#10 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+------
+ > [app builder 4/7] RUN npm ci:
+6.107 npm error
+6.107 npm error aliases: clean-install, ic, install-clean, isntall-clean
+6.107 npm error
+6.107 npm error Run "npm help ci" for more info
+6.108 npm notice
+6.108 npm notice New major version of npm available! 10.8.2 -> 11.17.0
+6.108 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+6.108 npm notice To update run: npm install -g npm@11.17.0
+6.108 npm notice
+6.108 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-06-24T13_50_38_407Z-debug-0.log
+------
