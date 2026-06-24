@@ -13,8 +13,6 @@ import {
   hasAppAccess,
   registerAceSsoRoutes,
   tryAceSsoFromRequest,
-  verifyAceSsoToken,
-  SSO_JWT_EXPIRY_SECONDS,
   type AceAuthRequest,
 } from "./aceSso";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
@@ -190,8 +188,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Authentication routes
   // ── Session check ───────────────────────────────────────────────────────────
-  // Returns the current auth state. When SSO is configured and the user is not
-  // authenticated, also returns the ssoLoginUrl so the frontend can redirect.
   app.get("/api/session", async (req, res) => {
     const payload = tryAceSsoFromRequest(req as AceAuthRequest, res);
     if (payload) {
@@ -215,34 +211,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
     res.json({ authenticated: false });
-  });
-
-  // ── SSO callback — receives ace_token from the SSO service redirect ─────────
-  // Works whether SSO is on a domain or an IP:port, because the JWT is passed
-  // as a URL parameter instead of relying on a shared domain cookie.
-  app.get("/api/auth/callback", async (req, res) => {
-    const rawToken = req.query.ace_token as string | undefined;
-    const next = (req.query.next as string) || "/ace-admin";
-    const safeNext = next.startsWith("/") ? next : "/ace-admin";
-
-    if (!rawToken) return res.redirect(safeNext);
-
-    const token = decodeURIComponent(rawToken);
-    const payload = verifyAceSsoToken(token);
-    if (!payload) return res.redirect("/ace-admin");
-
-    // Set the cookie with the same domain scope used by the SSO service so that
-    // clearCookie on logout (which also passes the domain) removes it correctly.
-    const domain = process.env.APP_DOMAIN;
-    const isLocalDomain = !domain || domain === "localhost" || domain === "127.0.0.1";
-    res.cookie("ace_sso", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SSO_JWT_EXPIRY_SECONDS * 1000,
-      ...(isLocalDomain ? {} : { domain: `.${domain}` }),
-    });
-    return res.redirect(safeNext);
   });
 
   // ── Login (local fallback — used when SSO_LOGIN_URL is not set) ─────────────
