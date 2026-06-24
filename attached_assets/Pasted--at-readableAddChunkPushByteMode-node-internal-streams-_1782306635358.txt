@@ -1,0 +1,100 @@
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '13',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+1:08:03 PM [express] POST /api/kiosk/checkin 500 in 58ms :: {"error":"Failed to check in"}
+[printer-sync] poll error: PostgresError: relation "printers" does not exist
+    at ErrorResponse (/app/node_modules/postgres/cjs/src/connection.js:815:30)
+    at handle (/app/node_modules/postgres/cjs/src/connection.js:489:6)
+    at TLSSocket.data (/app/node_modules/postgres/cjs/src/connection.js:324:9)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '100',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[kiosk/heartbeat] PostgresError: relation "kiosk_devices" does not exist
+    at ErrorResponse (/app/node_modules/postgres/cjs/src/connection.js:815:30)
+    at handle (/app/node_modules/postgres/cjs/src/connection.js:489:6)
+    at TLSSocket.data (/app/node_modules/postgres/cjs/src/connection.js:324:9)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '209',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+1:08:05 PM [express] POST /api/kiosk/heartbeat 500 in 57ms :: {"error":"Failed to send heartbeat"}
+[printer-sync] poll error: PostgresError: relation "printers" does not exist
+    at ErrorResponse (/app/node_modules/postgres/cjs/src/connection.js:815:30)
+    at handle (/app/node_modules/postgres/cjs/src/connection.js:489:6)
+    at TLSSocket.data (/app/node_modules/postgres/cjs/src/connection.js:324:9)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '100',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[kiosk/heartbeat] PostgresError: relation "kiosk_devices" does not exist
+    at ErrorResponse (/app/node_modules/postgres/cjs/src/connection.js:815:30)
+    at handle (/app/node_modules/postgres/cjs/src/connection.js:489:6)
+    at TLSSocket.data (/app/node_modules/postgres/cjs/src/connection.js:324:9)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '209',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+1:08:35 PM [express] POST /api/kiosk/heartbeat 500 in 57ms :: {"error":"Failed to send heartbeat"}
+[kiosk/settings GET] PostgresError: relation "page_settings" does not exist
+    at ErrorResponse (/app/node_modules/postgres/cjs/src/connection.js:815:30)
+    at handle (/app/node_modules/postgres/cjs/src/connection.js:489:6)
+    at TLSSocket.data (/app/node_modules/postgres/cjs/src/connection.js:324:9)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '42P01',
+  position: '295',
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+1:08:35 PM [express] GET /api/kiosk/settings 500 in 51ms :: {"error":"Failed to fetch kiosk settings…

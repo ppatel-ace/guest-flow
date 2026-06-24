@@ -11,3 +11,6 @@ customers_backup.csv
 production_import.sql
 design_guidelines.md
 README.md
+
+# iOS native code — not needed in the Node.js Docker image
+ios/
