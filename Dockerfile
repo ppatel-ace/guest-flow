@@ -2,8 +2,12 @@ FROM node:22 AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm install -g npm@11 && npm ci --ignore-scripts
+COPY package.json package-lock.json .npmrc ./
+
+# Replit rewrites lockfile tarball URLs to an internal host that does not resolve in Docker.
+RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
+    && npm install -g npm@11 \
+    && npm ci --ignore-scripts
 
 COPY . .
 
