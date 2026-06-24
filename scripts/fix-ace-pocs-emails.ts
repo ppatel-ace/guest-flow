@@ -33,11 +33,11 @@ function resolvePgSsl(
   return { rejectUnauthorized: false };
 }
 
-const ALTER_SQL = `ALTER TABLE "ace_pocs" ADD COLUMN IF NOT EXISTS "emails" text[] DEFAULT '{}'::text[]`;
+const ALTER_SQL = `ALTER TABLE "gf_ace_pocs" ADD COLUMN IF NOT EXISTS "emails" text[] DEFAULT '{}'::text[]`;
 const VERIFY_SQL = `
   SELECT column_name, data_type
   FROM information_schema.columns
-  WHERE table_name = 'ace_pocs'
+  WHERE table_name = 'gf_ace_pocs'
   ORDER BY ordinal_position
 `;
 

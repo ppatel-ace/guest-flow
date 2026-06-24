@@ -9,7 +9,7 @@ import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const companies = pgTable("companies", {
+export const companies = pgTable("gf_companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -23,7 +23,7 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type Company = typeof companies.$inferSelect;
 
-export const contacts = pgTable("contacts", {
+export const contacts = pgTable("gf_contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").references(() => companies.id),
   title: text("title"),
@@ -43,7 +43,7 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
 
-export const visits = pgTable("visits", {
+export const visits = pgTable("gf_visits", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   contactId: varchar("contact_id").notNull().references(() => contacts.id),
   companyId: varchar("company_id").references(() => companies.id),

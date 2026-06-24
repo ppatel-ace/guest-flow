@@ -18,6 +18,7 @@ import {
   type AcePoc,
 } from "@shared/schema";
 import { db } from "./db";
+import { syncCompanyToAceCrm, syncContactToAceCrm, syncVisitToAceCrm } from "./aceCrmSync";
 import { eq, or, ilike, sql, asc, desc, and, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -773,6 +774,7 @@ export class DatabaseStorage implements IStorage {
       .where(sql`LOWER(${companies.name}) = LOWER(${normalized})`);
     if (existing) return existing;
     const [created] = await db.insert(companies).values({ name: normalized }).returning();
+    void syncCompanyToAceCrm(normalized, created.id);
     return created;
   }
 
@@ -806,11 +808,36 @@ export class DatabaseStorage implements IStorage {
       .insert(contacts)
       .values({ ...data, email: normalizedEmail })
       .returning();
+    void syncContactToAceCrm({
+      sourceId: created.id,
+      companyName: data.companyId ? undefined : null,
+      firstName: created.firstName,
+      lastName: created.lastName,
+      email: created.email,
+      phone: created.phone,
+      title: created.title,
+      acePoc: created.acePoc,
+    });
     return created;
   }
 
   async createVisit(data: InsertVisit): Promise<Visit> {
     const [visit] = await db.insert(visits).values(data).returning();
+    if (visit.contactId) {
+      const [contact] = await db.select().from(contacts).where(eq(contacts.id, visit.contactId));
+      if (contact?.email) {
+        void syncVisitToAceCrm({
+          sourceId: visit.id,
+          contactEmail: contact.email,
+          eventName: visit.eventName,
+          eventDate: visit.eventDate,
+          eventLocation: visit.eventLocation,
+          acePoc: visit.acePoc,
+          customFields: visit.customFields,
+          visitedAt: visit.visitedAt ?? new Date(),
+        });
+      }
+    }
     return visit;
   }
 
@@ -823,7 +850,7 @@ export class DatabaseStorage implements IStorage {
         contactCount: sql<number>`COUNT(DISTINCT ${contacts.id})::int`,
         visitCount: sql<number>`COUNT(DISTINCT ${visits.id})::int`,
         lastEventName: sql<string | null>`(
-          SELECT event_name FROM visits WHERE company_id = ${companies.id}
+          SELECT event_name FROM gf_visits WHERE company_id = ${companies.id}
           ORDER BY visited_at DESC LIMIT 1
         )`,
         lastVisitedAt: sql<Date | null>`MAX(${visits.visitedAt})`,
@@ -910,7 +937,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: contacts.createdAt,
         visitCount: sql<number>`COUNT(DISTINCT ${visits.id})::int`,
         lastEventName: sql<string | null>`(
-          SELECT event_name FROM visits WHERE contact_id = ${contacts.id}
+          SELECT event_name FROM gf_visits WHERE contact_id = ${contacts.id}
           ORDER BY visited_at DESC LIMIT 1
         )`,
         lastVisitedAt: sql<Date | null>`MAX(${visits.visitedAt})`,

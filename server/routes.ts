@@ -9,6 +9,15 @@ import rateLimit from "express-rate-limit";
 import { createHmac } from "crypto";
 import { sendCheckInNotification, logEmailConfigStatus } from "./email";
 import geoip from "geoip-lite";
+import {
+  hasAppAccess,
+  registerAceSsoRoutes,
+  tryAceSsoFromRequest,
+  verifyAceSsoToken,
+  SSO_JWT_EXPIRY_SECONDS,
+  type AceAuthRequest,
+} from "./aceSso";
+import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
 
 // ─── IP → location helper ─────────────────────────────────────────────────────
 
@@ -153,78 +162,20 @@ const guestCheckinLimiter = rateLimit({
   },
 });
 
-// ─── JWT / SSO helper ─────────────────────────────────────────────────────────
+// ─── Auth (ACE SSO + legacy session fallback) ─────────────────────────────────
 
-const SSO_JWT_EXPIRY_SECONDS = 8 * 60 * 60; // must match sso/src/index.ts
-const SSO_REFRESH_THRESHOLD_SECONDS = 2 * 60 * 60; // refresh when < 2 hours remain
-
-let _jwtLib: typeof import("jsonwebtoken") | null = null;
-async function getJwt() {
-  if (!_jwtLib) _jwtLib = (await import("jsonwebtoken")).default as any;
-  return _jwtLib!;
-}
-
-async function verifyAceSsoToken(token: string): Promise<{ sub: string; email: string; name: string } | null> {
-  const secret = process.env.SSO_JWT_SECRET;
-  if (!secret || !token) return null;
-  try {
-    const jwt = await getJwt();
-    return jwt.verify(token, secret) as { sub: string; email: string; name: string };
-  } catch {
-    return null;
-  }
-}
-
-// Transparently re-issues the ace_sso cookie when the token is within the last
-// 2 hours of its 8-hour window. Runs on every authenticated request so sessions
-// stay alive indefinitely for active users without any user-visible interruption.
-async function refreshSsoTokenIfNeeded(
-  token: string,
-  payload: { sub: string; email: string; name: string },
-  res: any
-): Promise<void> {
-  try {
-    const secret = process.env.SSO_JWT_SECRET;
-    if (!secret) return;
-    const jwt = await getJwt();
-    const decoded = jwt.decode(token) as { exp?: number } | null;
-    if (!decoded?.exp) return;
-    const secondsRemaining = decoded.exp - Math.floor(Date.now() / 1000);
-    if (secondsRemaining >= SSO_REFRESH_THRESHOLD_SECONDS) return;
-
-    const newToken = jwt.sign(
-      { sub: payload.sub, email: payload.email, name: payload.name },
-      secret,
-      { expiresIn: SSO_JWT_EXPIRY_SECONDS }
-    );
-
-    const domain = process.env.APP_DOMAIN;
-    const isLocalDomain = !domain || domain === "localhost" || domain === "127.0.0.1";
-    res.cookie("ace_sso", newToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SSO_JWT_EXPIRY_SECONDS * 1000,
-      ...(isLocalDomain ? {} : { domain: `.${domain}` }),
-    });
-  } catch {
-    // Non-critical — session continues with the existing token if refresh fails
-  }
-}
-
-// Authentication middleware — checks the ace_sso JWT cookie first (SSO path),
-// then falls back to the legacy express-session flag for local dev/backward compat.
-const requireAuth = async (req: any, res: any, next: any) => {
-  const ssoToken = req.cookies?.ace_sso;
-  if (ssoToken) {
-    const payload = await verifyAceSsoToken(ssoToken);
-    if (payload) {
-      req.user = { id: payload.sub, email: payload.email, name: payload.name };
-      await refreshSsoTokenIfNeeded(ssoToken, payload, res);
-      return next();
+const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
+  const payload = tryAceSsoFromRequest(req, res);
+  if (payload) {
+    if (process.env.SSO_JWT_SECRET && !hasAppAccess(payload, "guestflow")) {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "You do not have access to GuestFlow. Join sg_Guestflow in Azure AD.",
+      });
     }
+    req.user = { id: payload.sub, email: payload.email, name: payload.name };
+    return next();
   }
-  // Fallback: legacy session auth
   if (req.session?.authenticated) {
     req.user = { email: "admin", name: "Admin" };
     return next();
@@ -233,6 +184,8 @@ const requireAuth = async (req: any, res: any, next: any) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerAceSsoRoutes(app, "guestflow");
+  registerAceCrmSyncOnStartup(app);
   logEmailConfigStatus();
 
   // Authentication routes
@@ -240,17 +193,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Returns the current auth state. When SSO is configured and the user is not
   // authenticated, also returns the ssoLoginUrl so the frontend can redirect.
   app.get("/api/session", async (req, res) => {
-    // 1. SSO JWT cookie
-    const ssoToken = req.cookies?.ace_sso;
-    if (ssoToken) {
-      const payload = await verifyAceSsoToken(ssoToken);
-      if (payload) {
-        await refreshSsoTokenIfNeeded(ssoToken, payload, res);
-        return res.json({
-          authenticated: true,
-          user: { email: payload.email, name: payload.name },
-        });
-      }
+    const payload = tryAceSsoFromRequest(req as AceAuthRequest, res);
+    if (payload) {
+      return res.json({
+        authenticated: true,
+        user: { email: payload.email, name: payload.name, groups: payload.groups ?? [] },
+      });
     }
     // 2. Legacy session
     if (req.session?.authenticated) {
@@ -280,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!rawToken) return res.redirect(safeNext);
 
     const token = decodeURIComponent(rawToken);
-    const payload = await verifyAceSsoToken(token);
+    const payload = verifyAceSsoToken(token);
     if (!payload) return res.redirect("/ace-admin");
 
     // Set the cookie with the same domain scope used by the SSO service so that

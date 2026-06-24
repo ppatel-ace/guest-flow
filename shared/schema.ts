@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const customerStatusEnum = pgEnum('customer_status', ['pending', 'confirmed', 'checked-in']);
 
-export const customers = pgTable("customers", {
+export const customers = pgTable("gf_customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
@@ -27,7 +27,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 
-export const pageSettings = pgTable("page_settings", {
+export const pageSettings = pgTable("gf_page_settings", {
   key: varchar("key").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
@@ -53,7 +53,7 @@ export const insertPageSettingsSchema = createInsertSchema(pageSettings).omit({
 export type InsertPageSettings = z.infer<typeof insertPageSettingsSchema>;
 export type PageSettings = typeof pageSettings.$inferSelect;
 
-export const formFields = pgTable("form_fields", {
+export const formFields = pgTable("gf_form_fields", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   label: text("label").notNull(),
   fieldType: text("field_type").notNull().default('text'),
@@ -72,7 +72,7 @@ export const insertFormFieldSchema = createInsertSchema(formFields).omit({
 export type InsertFormField = z.infer<typeof insertFormFieldSchema>;
 export type FormField = typeof formFields.$inferSelect;
 
-export const leads = pgTable("leads", {
+export const leads = pgTable("gf_leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title"),
   firstName: text("first_name").notNull(),
@@ -100,7 +100,7 @@ export type Lead = typeof leads.$inferSelect;
 
 // ─── Documents table ──────────────────────────────────────────────────────────
 
-export const documents = pgTable("documents", {
+export const documents = pgTable("gf_documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   content: text("content").notNull(),
@@ -119,7 +119,7 @@ export type Document = typeof documents.$inferSelect;
 
 // ─── Kiosk devices table ──────────────────────────────────────────────────────
 
-export const kioskDevices = pgTable("kiosk_devices", {
+export const kioskDevices = pgTable("gf_kiosk_devices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   deviceId: text("device_id").notNull().unique(),
   name: text("name"),
@@ -146,7 +146,7 @@ export type KioskDevice = typeof kioskDevices.$inferSelect;
 
 // ─── Printers table ───────────────────────────────────────────────────────────
 
-export const printers = pgTable("printers", {
+export const printers = pgTable("gf_printers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   model: text("model").notNull(),
@@ -165,7 +165,7 @@ export const insertPrinterSchema = createInsertSchema(printers).omit({
 export type InsertPrinter = z.infer<typeof insertPrinterSchema>;
 export type Printer = typeof printers.$inferSelect;
 
-export const printJobs = pgTable("print_jobs", {
+export const printJobs = pgTable("gf_print_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   printerId: varchar("printer_id").notNull(),
   labelText: text("label_text").notNull(),
@@ -183,7 +183,7 @@ export type PrintJob = typeof printJobs.$inferSelect;
 
 // ─── CRM tables ───────────────────────────────────────────────────────────────
 
-export const companies = pgTable("companies", {
+export const companies = pgTable("gf_companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -197,7 +197,7 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type Company = typeof companies.$inferSelect;
 
-export const contacts = pgTable("contacts", {
+export const contacts = pgTable("gf_contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").references(() => companies.id),
   title: text("title"),
@@ -217,7 +217,7 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
 
-export const visits = pgTable("visits", {
+export const visits = pgTable("gf_visits", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   contactId: varchar("contact_id").notNull().references(() => contacts.id),
   companyId: varchar("company_id").references(() => companies.id),
@@ -239,7 +239,7 @@ export type Visit = typeof visits.$inferSelect;
 
 // ─── Visitors table (kiosk / Envoy walk-ins) ──────────────────────────────────
 
-export const visitors = pgTable("visitors", {
+export const visitors = pgTable("gf_visitors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fullName: text("full_name").notNull(),
   email: text("email"),
@@ -268,7 +268,7 @@ export type Visitor = typeof visitors.$inferSelect;
 
 // ─── Visitor notes (internal staff notes per visitor profile) ─────────────────
 
-export const visitorNotes = pgTable("visitor_notes", {
+export const visitorNotes = pgTable("gf_visitor_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   lookupKey: text("lookup_key").notNull().unique(),
   notes: text("notes").notNull().default(""),
@@ -279,7 +279,7 @@ export type VisitorNote = typeof visitorNotes.$inferSelect;
 
 // ─── Visitor merge events (audit trail) ───────────────────────────────────────
 
-export const visitorMergeEvents = pgTable("visitor_merge_events", {
+export const visitorMergeEvents = pgTable("gf_visitor_merge_events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   primaryKey: text("primary_key").notNull(),
   secondaryName: text("secondary_name").notNull(),
@@ -292,7 +292,7 @@ export type VisitorMergeEvent = typeof visitorMergeEvents.$inferSelect;
 
 // ─── ACE POC roster ───────────────────────────────────────────────────────────
 
-export const acePocs = pgTable("ace_pocs", {
+export const acePocs = pgTable("gf_ace_pocs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   emails: text("emails").array().default(sql`'{}'::text[]`),

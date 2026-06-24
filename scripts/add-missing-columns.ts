@@ -48,13 +48,13 @@ const client = postgres(url, {
 
 async function run() {
   try {
-    await client`ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS default_location text`;
+    await client`ALTER TABLE gf_kiosk_devices ADD COLUMN IF NOT EXISTS default_location text`;
     console.log("kiosk_devices.default_location OK");
-    await client`ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS location_source text`;
+    await client`ALTER TABLE gf_kiosk_devices ADD COLUMN IF NOT EXISTS location_source text`;
     console.log("kiosk_devices.location_source OK");
-    await client`ALTER TABLE leads ADD COLUMN IF NOT EXISTS location text`;
+    await client`ALTER TABLE gf_leads ADD COLUMN IF NOT EXISTS location text`;
     console.log("leads.location OK");
-    await client`ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS native_device_name text`;
+    await client`ALTER TABLE gf_kiosk_devices ADD COLUMN IF NOT EXISTS native_device_name text`;
     console.log("kiosk_devices.native_device_name OK");
     console.log("All columns verified.");
   } catch (err) {

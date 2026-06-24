@@ -46,12 +46,12 @@ function resolveMigrateSsl(
 async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<void> {
   const patches = [
     // Printer columns added after the initial printers table creation
-    `ALTER TABLE printers ADD COLUMN IF NOT EXISTS ip_address text`,
-    `ALTER TABLE printers ADD COLUMN IF NOT EXISTS port integer`,
+    `ALTER TABLE gf_printers ADD COLUMN IF NOT EXISTS ip_address text`,
+    `ALTER TABLE gf_printers ADD COLUMN IF NOT EXISTS port integer`,
     // Print jobs queue table
-    `CREATE TABLE IF NOT EXISTS print_jobs (
+    `CREATE TABLE IF NOT EXISTS gf_print_jobs (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-      printer_id varchar NOT NULL REFERENCES printers(id) ON DELETE CASCADE,
+      printer_id varchar NOT NULL REFERENCES gf_printers(id) ON DELETE CASCADE,
       label_text text NOT NULL,
       status text NOT NULL DEFAULT 'pending',
       attempts integer NOT NULL DEFAULT 0,
@@ -59,7 +59,7 @@ async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<vo
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )`,
-    `CREATE INDEX IF NOT EXISTS idx_print_jobs_status ON print_jobs(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_print_jobs_status ON gf_print_jobs(status)`,
   ];
   for (const sql of patches) {
     await pool.query(sql);

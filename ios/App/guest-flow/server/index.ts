@@ -63,7 +63,7 @@ const sessionPool = buildSessionPool();
 // sessions survive server restarts; fall back to MemoryStore in dev without a DB.
 app.use(session({
   store: sessionPool
-    ? new PgSession({ pool: sessionPool, tableName: "session", createTableIfMissing: true })
+    ? new PgSession({ pool: sessionPool, tableName: "gf_sessions", createTableIfMissing: true })
     : undefined,
   secret: process.env.SESSION_SECRET,
   resave: false,
