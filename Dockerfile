@@ -1,18 +1,18 @@
-FROM node:20 AS builder
+FROM node:22 AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
 
 RUN npm run build
 
 # Prune dev/optional deps in-place — no install scripts run, just directory removal
-RUN npm prune --omit=dev --omit=optional
+RUN npm prune --omit=dev --omit=optional --ignore-scripts
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 

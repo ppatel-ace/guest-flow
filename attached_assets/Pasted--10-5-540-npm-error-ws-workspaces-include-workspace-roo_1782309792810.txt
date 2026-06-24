@@ -1,0 +1,97 @@
+#10 5.540 npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+#10 5.540 npm error
+#10 5.540 npm error aliases: clean-install, ic, install-clean, isntall-clean
+#10 5.540 npm error
+#10 5.540 npm error Run "npm help ci" for more info
+#10 5.541 npm notice
+#10 5.541 npm notice New major version of npm available! 10.8.2 -> 11.17.0
+#10 5.541 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+#10 5.541 npm notice To update run: npm install -g npm@11.17.0
+#10 5.541 npm notice
+#10 5.541 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-06-24T14_00_37_977Z-debug-0.log
+#10 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+------
+ > [app builder 4/7] RUN npm ci:
+5.540 npm error
+5.540 npm error aliases: clean-install, ic, install-clean, isntall-clean
+5.540 npm error
+5.540 npm error Run "npm help ci" for more info
+5.541 npm notice
+5.541 npm notice New major version of npm available! 10.8.2 -> 11.17.0
+5.541 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+5.541 npm notice To update run: npm install -g npm@11.17.0
+5.541 npm notice
+5.541 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-06-24T14_00_37_977Z-debug-0.log
+------
+2026/06/24 02:01PM INF github.com/portainer/portainer/pkg/libstack/compose/logwriter.go:55 > level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed" |
+#0 building with "default" instance using docker driver
+#1 [app internal] load build definition from Dockerfile
+#1 transferring dockerfile: 647B done
+
+#1 DONE 0.0s
+#2 [app internal] load metadata for docker.io/library/node:20
+
+#2 DONE 0.1s
+#3 [app internal] load metadata for docker.io/library/node:20-alpine
+
+#3 DONE 0.1s
+#4 [app internal] load .dockerignore
+#4 transferring context: 263B done
+
+#4 DONE 0.0s
+#5 [app builder 1/7] FROM docker.io/library/node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5
+#5 resolve docker.io/library/node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5 0.1s done
+
+#5 DONE 0.1s
+#6 [app internal] load build context
+#6 transferring context: 10.14MB 0.1s done
+
+#6 DONE 0.1s
+#7 [app runner 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+#7 resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 0.1s done
+
+#7 DONE 0.1s
+#8 [app builder 2/7] WORKDIR /app
+
+D
+#9 [app builder 3/7] COPY package.json package-lock.json ./
+
+#9 DONE 0.1s
+#10 [app builder 4/7] RUN npm ci
+#10 1.152 npm warn EBADENGINE Unsupported engine {
+#10 1.152 npm warn EBADENGINE   package: '@capacitor/cli@8.4.1',
+#10 1.152 npm warn EBADENGINE   required: { node: '>=22.0.0' },
+#10 1.152 npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+#10 1.152 npm warn EBADENGINE }
+#10 4.928 npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+#10 6.176 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+#10 8.373 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+#10 8.478 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+#10 8.809 npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+#10 73.39 npm notice
+#10 73.39 npm notice New major version of npm available! 10.8.2 -> 11.17.0
+#10 73.39 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+#10 73.39 npm notice To update run: npm install -g npm@11.17.0
+#10 73.39 npm notice
+#10 73.39 npm error Exit handler never called!
+#10 73.39 npm error This is an error with npm itself. Please report this error at:
+#10 73.39 npm error   <https://github.com/npm/cli/issues>
+#10 73.39 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-06-24T14_01_32_988Z-debug-0.log
+#10 DONE 73.6s
+#11 [app builder 5/7] COPY . .
+#11 DONE 0.3s
+#12 [app builder 6/7] RUN npm run build
+#12 0.409 
+#12 0.409 > rest-express@1.0.0 build
+#12 0.409 > vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/index.cjs --define:import.meta.dirname=__dirname --external:../vite.config
+#12 0.409 
+#12 0.418 sh: 1: vite: not found
+#12 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 127
+------
+ > [app builder 6/7] RUN npm run build:
+0.409 
+0.409 > rest-express@1.0.0 build
+0.409 > vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/index.cjs --define:import.meta.dirname=__dirname --external:../vite.config
+0.409 
+0.418 sh: 1: vite: not found
+------
