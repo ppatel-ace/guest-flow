@@ -3,7 +3,7 @@ FROM node:22 AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm install -g npm@11 && npm ci --ignore-scripts
 
 COPY . .
 
