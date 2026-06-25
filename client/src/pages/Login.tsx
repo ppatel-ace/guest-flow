@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl, accessDenied, accessDeniedMessage } = useAuth();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +25,7 @@ export default function Login() {
   // Redirect once we know the user is already authenticated
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      setLocation("/");
+      setLocation("/dashboard");
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
@@ -72,7 +72,7 @@ export default function Login() {
       });
 
       await new Promise(resolve => setTimeout(resolve, 100));
-      setLocation("/");
+      setLocation("/dashboard");
     } catch (error) {
       toast({
         title: "Login Failed",
@@ -83,6 +83,20 @@ export default function Login() {
       setIsLoading(false);
     }
   };
+
+  // Show access denied when Azure group membership blocks GuestFlow
+  if (!authLoading && accessDenied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Access Denied</CardTitle>
+            <CardDescription>{accessDeniedMessage}</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   // Show a brief loading state while redirecting to SSO
   if (!authLoading && !isAuthenticated && ssoLoginUrl) {

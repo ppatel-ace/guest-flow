@@ -12,6 +12,8 @@ interface SessionResponse {
   authenticated: boolean;
   user?: AuthUser;
   ssoLoginUrl?: string;
+  accessDenied?: boolean;
+  message?: string;
 }
 
 export function useAuth() {
@@ -19,6 +21,21 @@ export function useAuth() {
 
   const { data: session, isLoading } = useQuery<SessionResponse>({
     queryKey: ["/api/session"],
+    queryFn: async () => {
+      const res = await fetch("/api/session", { credentials: "include" });
+      const data = (await res.json()) as SessionResponse;
+      if (res.status === 403) {
+        return {
+          authenticated: false,
+          accessDenied: true,
+          message: data.message || "Access denied",
+        };
+      }
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${data.message || res.statusText}`);
+      }
+      return data;
+    },
   });
 
   const logoutMutation = useMutation({
@@ -41,6 +58,8 @@ export function useAuth() {
     isAuthenticated: session?.authenticated ?? false,
     user: session?.user,
     ssoLoginUrl: session?.ssoLoginUrl,
+    accessDenied: session?.accessDenied ?? false,
+    accessDeniedMessage: session?.message,
     isLoading,
     logout: logoutMutation.mutate,
   };

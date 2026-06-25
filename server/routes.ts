@@ -191,6 +191,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/session", async (req, res) => {
     const payload = tryAceSsoFromRequest(req as AceAuthRequest, res);
     if (payload) {
+      if (process.env.SSO_JWT_SECRET && !hasAppAccess(payload, "guestflow")) {
+        return res.status(403).json({
+          authenticated: false,
+          accessDenied: true,
+          message: "You do not have access to GuestFlow. Join sg_Guestflow in Azure AD.",
+        });
+      }
       return res.json({
         authenticated: true,
         user: { email: payload.email, name: payload.name, groups: payload.groups ?? [] },

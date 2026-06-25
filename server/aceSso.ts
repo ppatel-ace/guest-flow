@@ -141,8 +141,14 @@ export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
     const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.ace_sso;
 
     if (queryToken) {
-      if (!verifyAceSsoToken(queryToken)) {
+      const payload = verifyAceSsoToken(queryToken);
+      if (!payload) {
         return res.redirect(`${defaultNext}?error=sso_invalid`);
+      }
+      if (process.env.SSO_ENFORCE_GROUPS === "true" && !hasAppAccess(payload, appSlug)) {
+        return res.redirect(
+          `${defaultNext}?error=${encodeURIComponent("You do not have access to GuestFlow. Join sg_Guestflow in Azure AD.")}`,
+        );
       }
       setAceSsoCookie(res, queryToken);
       return res.redirect(safeNext);

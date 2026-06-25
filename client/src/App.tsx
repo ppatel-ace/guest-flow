@@ -57,6 +57,7 @@ function AdminLayout() {
             <main className="flex-1 overflow-auto p-6">
               <Switch>
                 <Route path="/" component={Dashboard} />
+                <Route path="/dashboard" component={Dashboard} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/check-in" component={CheckIn} />
                 <Route path="/invitations" component={Invitations} />
@@ -103,7 +104,6 @@ function App() {
       <TooltipProvider>
         <Switch>
           <Route path="/ace-admin" component={Login} />
-          <Route path="/dashboard" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
           <Route path="/kiosk" component={Kiosk} />
