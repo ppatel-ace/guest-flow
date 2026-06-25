@@ -4,13 +4,14 @@
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
-export const AZURE_APP_GROUPS = {
-  guestflow: "88897cdd-bc61-4051-b67e-6daf5f7fc7e8",
-  jobtrack: "bc5af5fb-4e3d-4e6c-be07-c7bcff91e2ed",
-  estimatepro: "e8309095-39bf-4354-ae42-5808685b0c94",
-} as const;
-
-export type AceAppSlug = keyof typeof AZURE_APP_GROUPS | "hub" | "inventory" | "support" | "crm";
+export type AceAppSlug =
+  | "hub"
+  | "guestflow"
+  | "jobtrack"
+  | "estimatepro"
+  | "inventory"
+  | "support"
+  | "crm";
 
 export interface AceSsoJwtPayload {
   sub: string;
@@ -41,24 +42,9 @@ export function verifyAceSsoToken(token: string): AceSsoJwtPayload | null {
 
 export function hasAppAccess(
   payload: Pick<AceSsoJwtPayload, "groups" | "apps"> | null | undefined,
-  app: AceAppSlug,
+  _app: AceAppSlug,
 ): boolean {
-  if (!payload) return false;
-  if (app === "hub") return true;
-  if (process.env.SSO_ENFORCE_GROUPS !== "true") return true;
-  if (payload.apps?.includes(app)) return true;
-  const groups = (payload.groups ?? []).map((g) => g.toLowerCase());
-  if (app === "guestflow") return groups.includes(AZURE_APP_GROUPS.guestflow);
-  if (app === "jobtrack") return groups.includes(AZURE_APP_GROUPS.jobtrack);
-  if (app === "estimatepro") return groups.includes(AZURE_APP_GROUPS.estimatepro);
-  if (app === "inventory") {
-    return (
-      groups.includes(AZURE_APP_GROUPS.jobtrack) ||
-      groups.includes(AZURE_APP_GROUPS.estimatepro)
-    );
-  }
-  if (app === "support") return groups.length > 0;
-  return false;
+  return payload != null;
 }
 
 function cookieDomainOptions(): { domain?: string } {
@@ -129,8 +115,8 @@ export function buildGuestFlowCallbackUrl(appUrl: string, next = "/ace-admin"): 
   return `${appUrl.replace(/\/$/, "")}/api/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
-export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
-  const defaultNext = appSlug === "guestflow" ? "/ace-admin" : "/";
+export function registerAceSsoRoutes(app: Express, _appSlug: AceAppSlug): void {
+  const defaultNext = "/ace-admin";
 
   app.get("/api/auth/callback", (req, res) => {
     const rawToken = req.query.ace_token as string | undefined;
@@ -144,11 +130,6 @@ export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
       const payload = verifyAceSsoToken(queryToken);
       if (!payload) {
         return res.redirect(`${defaultNext}?error=sso_invalid`);
-      }
-      if (process.env.SSO_ENFORCE_GROUPS === "true" && !hasAppAccess(payload, appSlug)) {
-        return res.redirect(
-          `${defaultNext}?error=${encodeURIComponent("You do not have access to GuestFlow. Join sg_Guestflow in Azure AD.")}`,
-        );
       }
       setAceSsoCookie(res, queryToken);
       return res.redirect(safeNext);

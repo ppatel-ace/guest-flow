@@ -10,7 +10,6 @@ import { createHmac } from "crypto";
 import { sendCheckInNotification, logEmailConfigStatus } from "./email";
 import geoip from "geoip-lite";
 import {
-  hasAppAccess,
   registerAceSsoRoutes,
   tryAceSsoFromRequest,
   type AceAuthRequest,
@@ -165,12 +164,6 @@ const guestCheckinLimiter = rateLimit({
 const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
   const payload = tryAceSsoFromRequest(req, res);
   if (payload) {
-    if (process.env.SSO_JWT_SECRET && !hasAppAccess(payload, "guestflow")) {
-      return res.status(403).json({
-        error: "Forbidden",
-        message: "You do not have access to GuestFlow. Join sg_Guestflow in Azure AD.",
-      });
-    }
     req.user = { id: payload.sub, email: payload.email, name: payload.name };
     return next();
   }
@@ -191,13 +184,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/session", async (req, res) => {
     const payload = tryAceSsoFromRequest(req as AceAuthRequest, res);
     if (payload) {
-      if (process.env.SSO_JWT_SECRET && !hasAppAccess(payload, "guestflow")) {
-        return res.status(403).json({
-          authenticated: false,
-          accessDenied: true,
-          message: "You do not have access to GuestFlow. Join sg_Guestflow in Azure AD.",
-        });
-      }
       return res.json({
         authenticated: true,
         user: { email: payload.email, name: payload.name, groups: payload.groups ?? [] },
