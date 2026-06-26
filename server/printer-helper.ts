@@ -10,7 +10,9 @@
 
 import net from "net";
 import { Printer } from "@shared/schema";
-import { blitCentered, loadAceLogoGrid, type MonoGrid } from "./aceLogo";
+
+/** Monochrome row-major pixels — true = print (black). */
+type MonoGrid = boolean[][];
 
 // ── Label media profile ───────────────────────────────────────────────────────
 
@@ -76,9 +78,6 @@ const FONT_SCALE      = 2;
 const LINE_SPACING    = 6;
 const MARGIN_TOP      = 24;
 const MARGIN_BOTTOM   = 24;
-const LOGO_MAX_W      = 280;
-const LOGO_MAX_H      = 72;
-const LOGO_GAP        = 16;
 const TEXT_GAP        = 8;
 
 // ── 8×16 bitmap font (ASCII 32–126) ─────────────────────────────────────────
@@ -262,7 +261,7 @@ function renderTextBlock(
   return y;
 }
 
-/** Visitor badge: Ace logo + name + company on 29×90 mm die-cut media. */
+/** Visitor badge: name + company on 29×90 mm die-cut media. */
 function renderVisitorBadgeGrid(name: string, company: string): boolean[][] {
   const printPxWidth = LABEL.printPxWidth;
   const targetHeight = LABEL.dieCut ? LABEL.rasterLines : 400;
@@ -271,10 +270,6 @@ function renderVisitorBadgeGrid(name: string, company: string): boolean[][] {
   );
 
   let y = MARGIN_TOP;
-  const logo = loadAceLogoGrid(LOGO_MAX_W, LOGO_MAX_H);
-  y = blitCentered(canvas, logo, y);
-  if (logo.length) y += LOGO_GAP;
-
   const nameScale = name.length > 22 ? 1 : 2;
   const companyScale = 1;
   const nameMaxChars = Math.max(8, Math.floor(printPxWidth / (FONT_W * nameScale)) - 1);
