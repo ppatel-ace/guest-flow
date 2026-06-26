@@ -132,6 +132,8 @@ interface PrinterRecord {
   name: string;
   model: string;
   connectionType: string;
+  ipAddress?: string | null;
+  port?: number | null;
   status: string;
   createdAt: string;
 }
@@ -999,7 +1001,7 @@ function DevicesTab() {
   const kioskUrl = `${window.location.origin}/kiosk`;
 
   const statusBadge = (status: string) => {
-    if (status === "active") return (
+    if (status === "active" || status === "online") return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400">
         <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
         Online
@@ -1213,10 +1215,7 @@ function DevicesTab() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium text-sm truncate">{p.name}</div>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 shrink-0" />
-                          Offline
-                        </span>
+                        {statusBadge(p.status)}
                       </div>
                       <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
                         onClick={() => setDeletePrinterId(p.id)}
@@ -1234,6 +1233,12 @@ function DevicesTab() {
                         <span className="text-xs text-muted-foreground w-20 shrink-0">Connection</span>
                         <span className="text-xs truncate">{connectionLabel(p.connectionType)}</span>
                       </div>
+                      {p.ipAddress && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-20 shrink-0">Address</span>
+                          <span className="text-xs truncate">{p.ipAddress}{p.port ? `:${p.port}` : ""}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

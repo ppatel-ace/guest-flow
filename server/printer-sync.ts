@@ -54,9 +54,8 @@ async function pollAllPrinters() {
     const { online, reason } = await ping(ip, port);
     const newStatus = online ? "online" : "offline";
 
-    if (printer.status !== newStatus) {
-      await storage.updatePrinter(printer.id, { status: newStatus });
-    }
+    await storage.updatePrinter(printer.id, { status: newStatus });
+    printer.status = newStatus;
 
     if (online) {
       console.log(`[printer-sync] ${ip}:${port} (${printer.name}) → online`);
