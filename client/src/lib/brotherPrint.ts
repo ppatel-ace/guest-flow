@@ -1,46 +1,35 @@
-import { registerPlugin } from "@capacitor/core";
-
-interface BrotherPrintPlugin {
-  printLabel(options: { name: string; company: string; date: string }): Promise<void>;
-  getPairedPrinters(): Promise<{ printers: string[] }>;
-}
-
-const BrotherPrint = registerPlugin<BrotherPrintPlugin>("BrotherPrint");
-
-function isNative(): boolean {
-  return !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
-    .Capacitor?.isNativePlatform?.();
-}
-
-/**
- * Print a visitor badge label to the paired Brother QL-820NWB via Bluetooth.
- * Silently no-ops on web/browser — native iOS only.
- */
-export async function printVisitorLabel(
-  name: string,
-  company: string,
-  date: string
-): Promise<void> {
-  if (!isNative()) return;
-  try {
-    await BrotherPrint.printLabel({ name, company, date });
-  } catch (err) {
-    console.warn("[brother-print] printLabel failed:", err);
-    throw err;
-  }
-}
-
-/**
- * Returns the list of paired Brother printers found over Bluetooth.
- * Returns [] on web/browser.
- */
-export async function getPairedBrotherPrinters(): Promise<string[]> {
-  if (!isNative()) return [];
-  try {
-    const { printers } = await BrotherPrint.getPairedPrinters();
-    return printers;
-  } catch (err) {
-    console.warn("[brother-print] getPairedPrinters failed:", err);
-    return [];
-  }
-}
+/**
+ * Visitor badge printing — always via GuestFlow server → LAN Brother QL (TCP).
+ * Works in Safari, iOS Capacitor shell, and kiosk browsers (no native Bluetooth plugin required).
+ */
+export async function printVisitorLabel(
+  name: string,
+  company: string,
+): Promise<{ printerName: string }> {
+  const res = await fetch("/api/kiosk/print-label", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ name, company }),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    printed?: boolean;
+    printerName?: string;
+    error?: string;
+    message?: string;
+  };
+
+  if (!res.ok || !data.success || !data.printed) {
+    throw new Error(data.message || data.error || `Print failed (${res.status})`);
+  }
+
+  return { printerName: data.printerName ?? "Brother QL" };
+}
+
+/** @deprecated Network printing is server-side; returns empty list. */
+export async function getPairedBrotherPrinters(): Promise<string[]> {
+  return [];
+}
+

@@ -10,6 +10,7 @@
 
 import net from "net";
 import { Printer } from "@shared/schema";
+import { blitCentered, loadAceLogoGrid, type MonoGrid } from "./aceLogo";
 
 // ── Label media profile ───────────────────────────────────────────────────────
 
@@ -75,6 +76,10 @@ const FONT_SCALE      = 2;
 const LINE_SPACING    = 6;
 const MARGIN_TOP      = 24;
 const MARGIN_BOTTOM   = 24;
+const LOGO_MAX_W      = 280;
+const LOGO_MAX_H      = 72;
+const LOGO_GAP        = 16;
+const TEXT_GAP        = 8;
 
 // ── 8×16 bitmap font (ASCII 32–126) ─────────────────────────────────────────
 // Each character is 8 bits wide × 16 rows tall.
@@ -192,6 +197,97 @@ function glyphRow(char: string, row: number): boolean[] {
     pixels.push(((byte >> bit) & 1) === 1);
   }
   return pixels;
+}
+
+function wrapText(text: string, maxChars: number): string[] {
+  const cleaned = text.replace(/[^\x20-\x7E]/g, "?").trim();
+  if (!cleaned) return [];
+  if (cleaned.length <= maxChars) return [cleaned];
+
+  const words = cleaned.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxChars) {
+      current = next;
+    } else {
+      if (current) lines.push(current);
+      current = word.length > maxChars ? word.slice(0, maxChars) : word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 3);
+}
+
+function renderTextBlock(
+  lines: string[],
+  scale: number,
+  canvas: MonoGrid,
+  startY: number,
+): number {
+  const printPxWidth = canvas[0].length;
+  const charW = FONT_W * scale;
+  const glyphH = FONT_H * scale;
+  const gapH = TEXT_GAP * scale;
+  let y = startY;
+
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    const textPx = line.length * charW;
+    const xOff = Math.max(0, Math.floor((printPxWidth - textPx) / 2));
+
+    for (let gr = 0; gr < FONT_H; gr++) {
+      for (let sr = 0; sr < scale; sr++) {
+        if (y >= canvas.length) return y;
+        let x = xOff;
+        for (let ci = 0; ci < line.length && x < printPxWidth; ci++) {
+          const pixels = glyphRow(line[ci], gr);
+          for (let px = 0; px < FONT_W && x < printPxWidth; px++) {
+            for (let sc = 0; sc < scale && x < printPxWidth; sc++) {
+              if (pixels[px]) canvas[y][x] = true;
+              x++;
+            }
+          }
+        }
+        y++;
+      }
+    }
+
+    if (li < lines.length - 1) {
+      for (let i = 0; i < gapH && y < canvas.length; i++) y++;
+    }
+  }
+
+  return y;
+}
+
+/** Visitor badge: Ace logo + name + company on 29×90 mm die-cut media. */
+function renderVisitorBadgeGrid(name: string, company: string): boolean[][] {
+  const printPxWidth = LABEL.printPxWidth;
+  const targetHeight = LABEL.dieCut ? LABEL.rasterLines : 400;
+  const canvas: MonoGrid = Array.from({ length: targetHeight }, () =>
+    new Array(printPxWidth).fill(false),
+  );
+
+  let y = MARGIN_TOP;
+  const logo = loadAceLogoGrid(LOGO_MAX_W, LOGO_MAX_H);
+  y = blitCentered(canvas, logo, y);
+  if (logo.length) y += LOGO_GAP;
+
+  const nameScale = name.length > 22 ? 1 : 2;
+  const companyScale = 1;
+  const nameMaxChars = Math.max(8, Math.floor(printPxWidth / (FONT_W * nameScale)) - 1);
+  const companyMaxChars = Math.max(8, Math.floor(printPxWidth / (FONT_W * companyScale)) - 1);
+
+  y = renderTextBlock(wrapText(name, nameMaxChars), nameScale, canvas, y);
+  const companyLines = wrapText(company, companyMaxChars);
+  if (companyLines.length) {
+    y += TEXT_GAP;
+    renderTextBlock(companyLines, companyScale, canvas, y);
+  }
+
+  return padGridToRasterHeight(canvas);
 }
 
 function renderPixelGrid(lines: string[]): boolean[][] {
@@ -342,9 +438,31 @@ function sendOverTcp(ip: string, port: number, data: Buffer): Promise<void> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Print a visitor badge (logo + name + company) on the given Brother QL printer.
+ */
+export async function printVisitorBadge(
+  printer: Printer,
+  name: string,
+  company: string,
+): Promise<void> {
+  const ip   = (printer as any).ipAddress as string | undefined;
+  const port = ((printer as any).port as number | undefined) ?? DEFAULT_PORT;
+
+  if (!ip) throw new Error("Printer has no ipAddress configured");
+
+  const pixelGrid = renderVisitorBadgeGrid(name, company);
+  const packet    = buildRasterPacket(pixelGrid);
+  console.log(
+    `[printer] visitor badge ${LABEL.mediaWidthMm}x${LABEL.mediaLengthMm}mm → ${ip}:${port} ("${name}")`,
+  );
+
+  await sendOverTcp(ip, port, packet);
+}
+
+/**
  * Print a label on the given Brother QL printer.
  * @param printer  Printer record from the database (must have ipAddress set)
- * @param lines    Text lines to render, centred on the 62mm label
+ * @param lines    Text lines to render, centred on the label
  */
 export async function printLabel(printer: Printer, lines: string[]): Promise<void> {
   const ip   = (printer as any).ipAddress as string | undefined;
@@ -361,4 +479,4 @@ export async function printLabel(printer: Printer, lines: string[]): Promise<voi
   await sendOverTcp(ip, port, packet);
 }
 
-export default { printLabel };
+export default { printLabel, printVisitorBadge };

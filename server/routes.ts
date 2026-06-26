@@ -2,7 +2,6 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema, insertPrinterSchema } from "@shared/schema";
-import { printLabel } from "./printer-helper";
 import { z } from "zod";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
@@ -19,7 +18,7 @@ import {
 } from "./aceSso";
 import { buildGuestFlowSsoLoginUrl } from "./guestAuth";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
-import { resolveReachablePrinter } from "./printer-sync";
+import { printVisitorBadgeLabel, tryPrintVisitorBadgeLabel } from "./labelDispatch";
 
 // ─── IP → location helper ─────────────────────────────────────────────────────
 
@@ -833,22 +832,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       })();
 
-      // Fire-and-forget label printing (if enabled and a printer is configured)
+      // Fire-and-forget label printing (server → LAN Brother QL)
       (async () => {
         try {
-          const settings = await storage.getKioskSettings();
-          if (!settings.labelPrinterEnabled) return;
-          const target = await resolveReachablePrinter();
-          if (!target) return;
-          const dateStr = new Date().toLocaleDateString();
-          try {
-            await printLabel(target as any, [fullName, body.company ?? '', dateStr]);
-            console.log('[kiosk/checkin] printed label for', fullName);
-          } catch (err) {
-            console.error('[kiosk/checkin] print error:', err);
-          }
+          await printVisitorBadgeLabel(fullName, body.company ?? "");
         } catch (err) {
-          console.error('[kiosk/checkin] printer dispatch error:', err);
+          console.error("[guest-checkin] print error:", err);
         }
       })();
 
@@ -1206,28 +1195,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test print to first online network printer (admin dashboard — browser cannot use Bluetooth)
   app.post("/api/printers/test-print", requireAuth, async (_req, res) => {
     try {
-      const target = await resolveReachablePrinter();
-      if (!target) {
-        return res.status(503).json({
-          error: "NO_ONLINE_PRINTER",
-          message: "No reachable printer with an IP address was found. Check LABEL_PRINTER_IP and network access.",
-        });
-      }
-      const today = new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-      await printLabel(target, ["Test Visitor", "Ace Electronics", today]);
-      console.log(
-        `[printers/test-print] sent to ${target.ipAddress}:${target.port ?? 9100} (${target.name})`,
-      );
-      res.json({ success: true, printerId: target.id, printerName: target.name });
+      const { printerName } = await printVisitorBadgeLabel("Test Visitor", "Ace Electronics");
+      res.json({ success: true, printed: true, printerName });
     } catch (err) {
       console.error("[printers/test-print]", err);
-      res.status(500).json({
-        error: "PRINT_FAILED",
-        message: err instanceof Error ? err.message : "Print failed",
+      const message = err instanceof Error ? err.message : "Print failed";
+      const status = message.includes("No reachable") ? 503 : 500;
+      res.status(status).json({
+        error: status === 503 ? "NO_ONLINE_PRINTER" : "PRINT_FAILED",
+        message,
       });
     }
   });
@@ -1361,6 +1337,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
+  // Kiosk / iOS app label print — server sends raster data to LAN Brother QL (no native plugin)
+  app.post("/api/kiosk/print-label", kioskCheckinLimiter, async (req, res) => {
+    try {
+      const name = String(req.body?.name ?? "").trim();
+      const company = String(req.body?.company ?? "").trim();
+      if (!name) {
+        return res.status(400).json({ error: "name is required" });
+      }
+      const { printerName } = await printVisitorBadgeLabel(name, company);
+      res.json({ success: true, printed: true, printerName });
+    } catch (err) {
+      console.error("[kiosk/print-label]", err);
+      const message = err instanceof Error ? err.message : "Print failed";
+      const status = message.includes("No reachable") ? 503 : 500;
+      res.status(status).json({ error: "PRINT_FAILED", message });
+    }
+  });
+
   // Visitor lookup by email (public - used by kiosk for returning-visitor autofill)
   // Rate-limited to reduce PII enumeration risk
   const visitorLookupLimiter = rateLimit({
@@ -1461,7 +1455,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       })();
 
-      res.status(201).json(visitor);
+      const labelPrint = await tryPrintVisitorBadgeLabel(
+        fullName,
+        body.company?.trim() ?? "",
+      );
+
+      res.status(201).json({ ...visitor, labelPrint });
     } catch (error) {
       console.error("[kiosk/checkin]", error);
       if (error instanceof z.ZodError) {

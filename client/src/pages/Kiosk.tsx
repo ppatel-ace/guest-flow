@@ -70,8 +70,6 @@ type FormStage = "email" | "fields";
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
 import { getKioskDeviceInfo, getOrCreateDeviceId } from "@/lib/kiosk-device";
-import { printVisitorLabel } from "@/lib/brotherPrint";
-
 // ─── Device heartbeat helpers ─────────────────────────────────────────────────
 
 async function registerDevice(): Promise<{ location: string | null; resolvedDeviceId: string }> {
@@ -511,43 +509,44 @@ export default function Kiosk() {
         }),
       });
 
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        labelPrint?: { success: boolean; printerName?: string; error?: string };
+      };
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSubmitError(err?.error ?? "Check-in failed. Please try again.");
+        setSubmitError(data?.error ?? "Check-in failed. Please try again.");
         setIsSubmitting(false);
         return;
       }
+
+      setIsSubmitting(false);
+      setVisitorName(fullName);
+      setStep("thanks");
+      sendHeartbeat(deviceId.current, "active");
+
+      if (data.labelPrint?.success) {
+        toast({
+          title: "Label printed",
+          description: data.labelPrint.printerName
+            ? `${fullName.trim()} → ${data.labelPrint.printerName}`
+            : fullName.trim(),
+        });
+      } else if (data.labelPrint && !data.labelPrint.success) {
+        toast({
+          title: "Print failed",
+          description: data.labelPrint.error || "Could not reach printer.",
+          variant: "destructive",
+        });
+      }
+
+      setTimeout(() => resetToIdle(), 5000);
+      return;
     } catch {
       setSubmitError("Network error. Please try again.");
       setIsSubmitting(false);
       return;
     }
-
-    setIsSubmitting(false);
-    setVisitorName(fullName);
-    setStep("thanks");
-    sendHeartbeat(deviceId.current, "active");
-
-    // Print visitor badge label — shows a brief toast for success or failure.
-    const printDate = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    printVisitorLabel(fullName.trim(), company.trim(), printDate)
-      .then(() => {
-        toast({ title: "Label printed", description: fullName.trim() });
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        toast({
-          title: "Print failed",
-          description: msg || "Could not reach printer.",
-          variant: "destructive",
-        });
-      });
-
-    setTimeout(() => resetToIdle(), 5000);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
