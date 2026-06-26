@@ -835,7 +835,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fire-and-forget label printing (server → LAN Brother QL)
       (async () => {
         try {
-          await printVisitorBadgeLabel(fullName, body.company ?? "");
+          await printVisitorBadgeLabel({
+            name: fullName,
+            company: body.company ?? "",
+            email: body.email ?? "",
+          });
         } catch (err) {
           console.error("[guest-checkin] print error:", err);
         }
@@ -1195,7 +1199,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test print to first online network printer (admin dashboard — browser cannot use Bluetooth)
   app.post("/api/printers/test-print", requireAuth, async (_req, res) => {
     try {
-      const { printerName } = await printVisitorBadgeLabel("Test Visitor", "Ace Electronics");
+      const { printerName } = await printVisitorBadgeLabel({
+        name: "Test Visitor",
+        company: "Ace Electronics",
+        email: "test@aceelectronics.com",
+      });
       res.json({ success: true, printed: true, printerName });
     } catch (err) {
       console.error("[printers/test-print]", err);
@@ -1342,10 +1350,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const name = String(req.body?.name ?? "").trim();
       const company = String(req.body?.company ?? "").trim();
+      const email = String(req.body?.email ?? "").trim();
       if (!name) {
         return res.status(400).json({ error: "name is required" });
       }
-      const { printerName } = await printVisitorBadgeLabel(name, company);
+      const { printerName } = await printVisitorBadgeLabel({ name, company, email });
       res.json({ success: true, printed: true, printerName });
     } catch (err) {
       console.error("[kiosk/print-label]", err);
@@ -1455,10 +1464,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       })();
 
-      const labelPrint = await tryPrintVisitorBadgeLabel(
-        fullName,
-        body.company?.trim() ?? "",
-      );
+      const labelPrint = await tryPrintVisitorBadgeLabel({
+        name: fullName,
+        company: body.company?.trim() ?? "",
+        email: body.email?.trim() ?? "",
+      });
 
       res.status(201).json({ ...visitor, labelPrint });
     } catch (error) {

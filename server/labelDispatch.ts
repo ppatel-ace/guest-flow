@@ -1,4 +1,5 @@
-import { printVisitorBadge } from "./printer-helper";
+import { formatVisitDate } from "./badgeAssets";
+import { printVisitorBadge, type VisitorBadgeFields } from "./printer-helper";
 import { resolveReachablePrinter } from "./printer-sync";
 import { storage } from "./storage";
 
@@ -6,10 +7,30 @@ export type LabelPrintResult =
   | { success: true; printerName: string }
   | { success: false; error: string };
 
+export type VisitorBadgeInput = {
+  name: string;
+  company?: string;
+  email?: string;
+  visitDate?: string | Date;
+};
+
+function normalizeBadgeFields(input: VisitorBadgeInput): VisitorBadgeFields {
+  const visitDate =
+    input.visitDate instanceof Date
+      ? formatVisitDate(input.visitDate)
+      : input.visitDate?.trim() || formatVisitDate();
+
+  return {
+    name: input.name.trim(),
+    company: input.company?.trim() || "—",
+    email: input.email?.trim() || "—",
+    visitDate,
+  };
+}
+
 /** Print a visitor badge on the LAN Brother QL (server-side TCP). */
 export async function printVisitorBadgeLabel(
-  name: string,
-  company: string,
+  input: VisitorBadgeInput,
 ): Promise<{ printerName: string }> {
   const settings = await storage.getKioskSettings();
   if (!settings.labelPrinterEnabled) {
@@ -21,18 +42,18 @@ export async function printVisitorBadgeLabel(
     throw new Error("No reachable label printer on the network");
   }
 
-  await printVisitorBadge(target, name, company);
-  console.log(`[label-print] badge for "${name}" → ${target.ipAddress} (${target.name})`);
+  const fields = normalizeBadgeFields(input);
+  await printVisitorBadge(target, fields);
+  console.log(`[label-print] badge for "${fields.name}" → ${target.ipAddress} (${target.name})`);
   return { printerName: target.name };
 }
 
 /** Same as printVisitorBadgeLabel but never throws — for API responses. */
 export async function tryPrintVisitorBadgeLabel(
-  name: string,
-  company: string,
+  input: VisitorBadgeInput,
 ): Promise<LabelPrintResult> {
   try {
-    const { printerName } = await printVisitorBadgeLabel(name, company);
+    const { printerName } = await printVisitorBadgeLabel(input);
     return { success: true, printerName };
   } catch (err) {
     const error = err instanceof Error ? err.message : "Print failed";

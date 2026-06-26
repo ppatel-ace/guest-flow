@@ -24,6 +24,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/server/assets ./server/assets
 COPY package.json ./
 
 ENV NODE_ENV=production

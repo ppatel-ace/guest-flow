@@ -10,9 +10,11 @@
 
 import net from "net";
 import { Printer } from "@shared/schema";
-
-/** Monochrome row-major pixels — true = print (black). */
-type MonoGrid = boolean[][];
+import {
+  BADGE_LAYOUT,
+  loadVisitorLogoGrid,
+  type MonoGrid,
+} from "./badgeAssets";
 
 // ── Label media profile ───────────────────────────────────────────────────────
 
@@ -78,7 +80,13 @@ const FONT_SCALE      = 2;
 const LINE_SPACING    = 6;
 const MARGIN_TOP      = 24;
 const MARGIN_BOTTOM   = 24;
-const TEXT_GAP        = 8;
+
+export interface VisitorBadgeFields {
+  name: string;
+  company: string;
+  email: string;
+  visitDate: string;
+}
 
 // ── 8×16 bitmap font (ASCII 32–126) ─────────────────────────────────────────
 // Each character is 8 bits wide × 16 rows tall.
@@ -198,91 +206,108 @@ function glyphRow(char: string, row: number): boolean[] {
   return pixels;
 }
 
-function wrapText(text: string, maxChars: number): string[] {
-  const cleaned = text.replace(/[^\x20-\x7E]/g, "?").trim();
-  if (!cleaned) return [];
-  if (cleaned.length <= maxChars) return [cleaned];
-
-  const words = cleaned.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxChars) {
-      current = next;
-    } else {
-      if (current) lines.push(current);
-      current = word.length > maxChars ? word.slice(0, maxChars) : word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, 3);
-}
-
-function renderTextBlock(
-  lines: string[],
-  scale: number,
+/** Text runs along the label feed axis (90 mm horizontal on 29×90 die-cut landscape). */
+function renderTextAlongRows(
   canvas: MonoGrid,
-  startY: number,
+  startRow: number,
+  startCol: number,
+  text: string,
+  scale: number,
 ): number {
-  const printPxWidth = canvas[0].length;
-  const charW = FONT_W * scale;
-  const glyphH = FONT_H * scale;
-  const gapH = TEXT_GAP * scale;
-  let y = startY;
+  const cleaned = text.replace(/[^\x20-\x7E]/g, "?");
+  let row = startRow;
 
-  for (let li = 0; li < lines.length; li++) {
-    const line = lines[li];
-    const textPx = line.length * charW;
-    const xOff = Math.max(0, Math.floor((printPxWidth - textPx) / 2));
-
+  for (let ci = 0; ci < cleaned.length; ci++) {
     for (let gr = 0; gr < FONT_H; gr++) {
+      const pixels = glyphRow(cleaned[ci], gr);
       for (let sr = 0; sr < scale; sr++) {
-        if (y >= canvas.length) return y;
-        let x = xOff;
-        for (let ci = 0; ci < line.length && x < printPxWidth; ci++) {
-          const pixels = glyphRow(line[ci], gr);
-          for (let px = 0; px < FONT_W && x < printPxWidth; px++) {
-            for (let sc = 0; sc < scale && x < printPxWidth; sc++) {
-              if (pixels[px]) canvas[y][x] = true;
-              x++;
-            }
+        const r = row + gr * scale + sr;
+        if (r >= canvas.length) return row;
+        for (let px = 0; px < FONT_W; px++) {
+          for (let sc = 0; sc < scale; sc++) {
+            const c = startCol + px * scale + sc;
+            if (c < canvas[0].length && pixels[px]) canvas[r][c] = true;
           }
         }
-        y++;
       }
     }
-
-    if (li < lines.length - 1) {
-      for (let i = 0; i < gapH && y < canvas.length; i++) y++;
-    }
+    row += FONT_W * scale;
   }
 
-  return y;
+  return row;
 }
 
-/** Visitor badge: name + company on 29×90 mm die-cut media. */
-function renderVisitorBadgeGrid(name: string, company: string): boolean[][] {
-  const printPxWidth = LABEL.printPxWidth;
-  const targetHeight = LABEL.dieCut ? LABEL.rasterLines : 400;
-  const canvas: MonoGrid = Array.from({ length: targetHeight }, () =>
-    new Array(printPxWidth).fill(false),
-  );
+function truncateForRow(text: string, startRow: number, scale: number, maxRows: number): string {
+  const charW = FONT_W * scale;
+  const budget = maxRows - startRow - 8;
+  const maxChars = Math.max(4, Math.floor(budget / charW));
+  const cleaned = text.replace(/[^\x20-\x7E]/g, "?").trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  return `${cleaned.slice(0, Math.max(1, maxChars - 1))}…`;
+}
 
-  let y = MARGIN_TOP;
-  const nameScale = name.length > 22 ? 1 : 2;
-  const companyScale = 1;
-  const nameMaxChars = Math.max(8, Math.floor(printPxWidth / (FONT_W * nameScale)) - 1);
-  const companyMaxChars = Math.max(8, Math.floor(printPxWidth / (FONT_W * companyScale)) - 1);
+function blitLogoToLandscape(
+  canvas: MonoGrid,
+  sprite: MonoGrid,
+  gridRowStart: number,
+  gridColStart: number,
+  rowSpan: number,
+  colSpan: number,
+): void {
+  const imgH = sprite.length;
+  const imgW = sprite[0]?.length ?? 0;
+  if (!imgW || !imgH) return;
 
-  y = renderTextBlock(wrapText(name, nameMaxChars), nameScale, canvas, y);
-  const companyLines = wrapText(company, companyMaxChars);
-  if (companyLines.length) {
-    y += TEXT_GAP;
-    renderTextBlock(companyLines, companyScale, canvas, y);
+  for (let dr = 0; dr < rowSpan; dr++) {
+    const gr = gridRowStart + dr;
+    if (gr >= canvas.length) break;
+    const sx = Math.min(imgW - 1, Math.floor((dr * imgW) / rowSpan));
+    for (let dc = 0; dc < colSpan; dc++) {
+      const gc = gridColStart + dc;
+      if (gc >= canvas[0].length) break;
+      const sy = Math.min(imgH - 1, Math.floor((dc * imgH) / colSpan));
+      if (sprite[sy][sx]) canvas[gr][gc] = true;
+    }
+  }
+}
+
+/**
+ * Visitor badge matching Brother template (ace printer .lbxs):
+ * landscape 29×90 mm — logo left, Name / Company / Email / Date of visit on the right.
+ */
+function renderVisitorBadgeGrid(fields: VisitorBadgeFields): boolean[][] {
+  const rows = LABEL.rasterLines;
+  const cols = LABEL.printPxWidth;
+  const canvas: MonoGrid = Array.from({ length: rows }, () => new Array(cols).fill(false));
+
+  const layout = BADGE_LAYOUT;
+  const scale = layout.fontScale;
+
+  const logo = loadVisitorLogoGrid(layout.logoRowSpan, layout.logoColSpan);
+  if (logo.length) {
+    blitLogoToLandscape(
+      canvas,
+      logo,
+      layout.logoRow,
+      layout.logoCol,
+      layout.logoRowSpan,
+      layout.logoColSpan,
+    );
   }
 
-  return padGridToRasterHeight(canvas);
+  const lines: Array<{ col: number; text: string }> = [
+    { col: layout.nameCol, text: `Name: ${fields.name}` },
+    { col: layout.companyCol, text: `Company: ${fields.company}` },
+    { col: layout.emailCol, text: `Email: ${fields.email}` },
+    { col: layout.visitDateCol, text: `Date of visit: ${fields.visitDate}` },
+  ];
+
+  for (const line of lines) {
+    const value = truncateForRow(line.text, layout.textRow, scale, rows);
+    if (value) renderTextAlongRows(canvas, layout.textRow, line.col, value, scale);
+  }
+
+  return canvas;
 }
 
 function renderPixelGrid(lines: string[]): boolean[][] {
@@ -433,22 +458,21 @@ function sendOverTcp(ip: string, port: number, data: Buffer): Promise<void> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Print a visitor badge (logo + name + company) on the given Brother QL printer.
+ * Print a visitor badge on the given Brother QL printer (29×90 mm landscape layout).
  */
 export async function printVisitorBadge(
   printer: Printer,
-  name: string,
-  company: string,
+  fields: VisitorBadgeFields,
 ): Promise<void> {
   const ip   = (printer as any).ipAddress as string | undefined;
   const port = ((printer as any).port as number | undefined) ?? DEFAULT_PORT;
 
   if (!ip) throw new Error("Printer has no ipAddress configured");
 
-  const pixelGrid = renderVisitorBadgeGrid(name, company);
+  const pixelGrid = renderVisitorBadgeGrid(fields);
   const packet    = buildRasterPacket(pixelGrid);
   console.log(
-    `[printer] visitor badge ${LABEL.mediaWidthMm}x${LABEL.mediaLengthMm}mm → ${ip}:${port} ("${name}")`,
+    `[printer] visitor badge ${LABEL.mediaWidthMm}x${LABEL.mediaLengthMm}mm → ${ip}:${port} ("${fields.name}")`,
   );
 
   await sendOverTcp(ip, port, packet);
