@@ -10,11 +10,8 @@
 
 import net from "net";
 import { Printer } from "@shared/schema";
-import {
-  BADGE_LAYOUT,
-  loadVisitorLogoGrid,
-  type MonoGrid,
-} from "./badgeAssets";
+import { type VisitorBadgeFields } from "./badgeAssets";
+import { renderVisitorBadgeGrid } from "./badgeRender";
 
 // ── Label media profile ───────────────────────────────────────────────────────
 
@@ -80,13 +77,6 @@ const FONT_SCALE      = 2;
 const LINE_SPACING    = 6;
 const MARGIN_TOP      = 24;
 const MARGIN_BOTTOM   = 24;
-
-export interface VisitorBadgeFields {
-  name: string;
-  company: string;
-  email: string;
-  visitDate: string;
-}
 
 // ── 8×16 bitmap font (ASCII 32–126) ─────────────────────────────────────────
 // Each character is 8 bits wide × 16 rows tall.
@@ -204,109 +194,6 @@ function glyphRow(char: string, row: number): boolean[] {
     pixels.push(((byte >> bit) & 1) === 1);
   }
   return pixels;
-}
-
-/** Text runs along the label feed axis (90 mm horizontal on 29×90 die-cut landscape). */
-function renderTextAlongRows(
-  canvas: MonoGrid,
-  startRow: number,
-  startCol: number,
-  text: string,
-  scale: number,
-): number {
-  const cleaned = text.replace(/[^\x20-\x7E]/g, "?");
-  let row = startRow;
-
-  for (let ci = 0; ci < cleaned.length; ci++) {
-    for (let gr = 0; gr < FONT_H; gr++) {
-      const pixels = glyphRow(cleaned[ci], gr);
-      for (let sr = 0; sr < scale; sr++) {
-        const r = row + gr * scale + sr;
-        if (r >= canvas.length) return row;
-        for (let px = 0; px < FONT_W; px++) {
-          for (let sc = 0; sc < scale; sc++) {
-            const c = startCol + px * scale + sc;
-            if (c < canvas[0].length && pixels[px]) canvas[r][c] = true;
-          }
-        }
-      }
-    }
-    row += FONT_W * scale;
-  }
-
-  return row;
-}
-
-function truncateForRow(text: string, startRow: number, scale: number, maxRows: number): string {
-  const charW = FONT_W * scale;
-  const budget = maxRows - startRow - 8;
-  const maxChars = Math.max(4, Math.floor(budget / charW));
-  const cleaned = text.replace(/[^\x20-\x7E]/g, "?").trim();
-  if (cleaned.length <= maxChars) return cleaned;
-  return `${cleaned.slice(0, Math.max(1, maxChars - 1))}…`;
-}
-
-function blitLogoToLandscape(
-  canvas: MonoGrid,
-  sprite: MonoGrid,
-  gridRowStart: number,
-  gridColStart: number,
-  rowSpan: number,
-  colSpan: number,
-): void {
-  const imgH = sprite.length;
-  const imgW = sprite[0]?.length ?? 0;
-  if (!imgW || !imgH) return;
-
-  for (let dr = 0; dr < rowSpan; dr++) {
-    const gr = gridRowStart + dr;
-    if (gr >= canvas.length) break;
-    const sx = Math.min(imgW - 1, Math.floor((dr * imgW) / rowSpan));
-    for (let dc = 0; dc < colSpan; dc++) {
-      const gc = gridColStart + dc;
-      if (gc >= canvas[0].length) break;
-      const sy = Math.min(imgH - 1, Math.floor((dc * imgH) / colSpan));
-      if (sprite[sy][sx]) canvas[gr][gc] = true;
-    }
-  }
-}
-
-/**
- * Visitor badge — landscape 29×90 mm, logo left, large text (10× scale) in 2×2 grid.
- */
-function renderVisitorBadgeGrid(fields: VisitorBadgeFields): boolean[][] {
-  const rows = LABEL.rasterLines;
-  const cols = LABEL.printPxWidth;
-  const canvas: MonoGrid = Array.from({ length: rows }, () => new Array(cols).fill(false));
-
-  const layout = BADGE_LAYOUT;
-  const scale = layout.fontScale;
-
-  const logo = loadVisitorLogoGrid(layout.logoRowSpan, layout.logoColSpan);
-  if (logo.length) {
-    blitLogoToLandscape(
-      canvas,
-      logo,
-      layout.logoRow,
-      layout.logoCol,
-      layout.logoRowSpan,
-      layout.logoColSpan,
-    );
-  }
-
-  const textFields: Array<{ row: number; col: number; text: string }> = [
-    { row: layout.textRowStart, col: layout.textColLeft, text: `Name: ${fields.name}` },
-    { row: layout.textRowStart, col: layout.textColRight, text: `Email: ${fields.email}` },
-    { row: layout.textRowSecond, col: layout.textColLeft, text: `Co: ${fields.company}` },
-    { row: layout.textRowSecond, col: layout.textColRight, text: `Date: ${fields.visitDate}` },
-  ];
-
-  for (const field of textFields) {
-    const value = truncateForRow(field.text, field.row, scale, rows);
-    if (value) renderTextAlongRows(canvas, field.row, field.col, value, scale);
-  }
-
-  return canvas;
 }
 
 function renderPixelGrid(lines: string[]): boolean[][] {
@@ -468,7 +355,7 @@ export async function printVisitorBadge(
 
   if (!ip) throw new Error("Printer has no ipAddress configured");
 
-  const pixelGrid = renderVisitorBadgeGrid(fields);
+  const pixelGrid = await renderVisitorBadgeGrid(fields);
   const packet    = buildRasterPacket(pixelGrid);
   console.log(
     `[printer] visitor badge ${LABEL.mediaWidthMm}x${LABEL.mediaLengthMm}mm → ${ip}:${port} ("${fields.name}")`,
@@ -498,3 +385,4 @@ export async function printLabel(printer: Printer, lines: string[]): Promise<voi
 }
 
 export default { printLabel, printVisitorBadge };
+export type { VisitorBadgeFields } from "./badgeAssets";

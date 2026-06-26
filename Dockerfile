@@ -7,7 +7,7 @@ COPY package.json package-lock.json .npmrc ./
 # Replit rewrites lockfile tarball URLs to an internal host that does not resolve in Docker.
 RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
     && npm install -g npm@11 \
-    && npm ci --ignore-scripts
+    && npm install --ignore-scripts
 
 COPY . .
 
@@ -19,6 +19,9 @@ RUN npm prune --omit=dev --omit=optional --ignore-scripts
 FROM node:22-alpine AS runner
 
 WORKDIR /app
+
+# Fonts for SVG label text rendering (DejaVu Sans)
+RUN apk add --no-cache fontconfig ttf-dejavu
 
 # Copy the already-pruned node_modules — no second npm install needed
 COPY --from=builder /app/node_modules ./node_modules
