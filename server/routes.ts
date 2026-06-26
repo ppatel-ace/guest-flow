@@ -12,6 +12,8 @@ import geoip from "geoip-lite";
 import {
   registerAceSsoRoutes,
   tryAceSsoFromRequest,
+  refreshAceSsoFromRegistry,
+  hasAppAccess,
   type AceAuthRequest,
 } from "./aceSso";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
@@ -162,8 +164,15 @@ const guestCheckinLimiter = rateLimit({
 // ─── Auth (ACE SSO + legacy session fallback) ─────────────────────────────────
 
 const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
-  const payload = tryAceSsoFromRequest(req, res);
-  if (payload) {
+  const raw = tryAceSsoFromRequest(req, res);
+  if (raw) {
+    const payload = await refreshAceSsoFromRegistry(res, raw);
+    if (!hasAppAccess(payload, "guestflow")) {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "You do not have access to this application. Contact your administrator.",
+      });
+    }
     req.user = { id: payload.sub, email: payload.email, name: payload.name };
     return next();
   }
@@ -182,11 +191,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   // ── Session check ───────────────────────────────────────────────────────────
   app.get("/api/session", async (req, res) => {
-    const payload = tryAceSsoFromRequest(req as AceAuthRequest, res);
-    if (payload) {
+    const raw = tryAceSsoFromRequest(req as AceAuthRequest, res);
+    if (raw) {
+      const payload = await refreshAceSsoFromRegistry(res, raw);
+      if (!hasAppAccess(payload, "guestflow")) {
+        return res.status(403).json({
+          authenticated: false,
+          error: "NO_ACCESS",
+          message: "You do not have access to this application. Contact your administrator.",
+        });
+      }
       return res.json({
         authenticated: true,
-        user: { email: payload.email, name: payload.name, groups: payload.groups ?? [] },
+        user: { email: payload.email, name: payload.name, groups: payload.groups ?? [], apps: payload.apps ?? [] },
       });
     }
     // 2. Legacy session

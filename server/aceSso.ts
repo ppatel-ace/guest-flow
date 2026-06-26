@@ -3,6 +3,7 @@
  */
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { hasAppAccess as hasRegistryAppAccess, refreshAceSsoFromRegistry } from "./effectiveAccess";
 
 export type AceAppSlug =
   | "hub"
@@ -44,10 +45,10 @@ export function hasAppAccess(
   payload: Pick<AceSsoJwtPayload, "groups" | "apps"> | null | undefined,
   app: AceAppSlug,
 ): boolean {
-  if (!payload) return false;
-  if (app === "crm") return payload.apps?.includes("crm") ?? payload.apps?.includes("hub") ?? false;
-  return payload.apps?.includes(app) ?? false;
+  return hasRegistryAppAccess(payload, app);
 }
+
+export { refreshAceSsoFromRegistry };
 
 function cookieDomainOptions(): { domain?: string } {
   const domain = process.env.APP_DOMAIN;
