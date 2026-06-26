@@ -1203,6 +1203,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test print to first online network printer (admin dashboard — browser cannot use Bluetooth)
+  app.post("/api/printers/test-print", requireAuth, async (_req, res) => {
+    try {
+      const printers = await storage.getAllPrinters();
+      const target = printers.find((p) => p.status === "online" && p.ipAddress);
+      if (!target) {
+        return res.status(503).json({
+          error: "NO_ONLINE_PRINTER",
+          message: "No online printer with an IP address is configured.",
+        });
+      }
+      const today = new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      await printLabel(target, ["Test Visitor", "Ace Electronics", today]);
+      console.log(
+        `[printers/test-print] sent to ${target.ipAddress}:${target.port ?? 9100} (${target.name})`,
+      );
+      res.json({ success: true, printerId: target.id, printerName: target.name });
+    } catch (err) {
+      console.error("[printers/test-print]", err);
+      res.status(500).json({
+        error: "PRINT_FAILED",
+        message: err instanceof Error ? err.message : "Print failed",
+      });
+    }
+  });
+
   // Create a print job (protected)
   app.post('/api/printers/:id/print', requireAuth, async (req, res) => {
     try {

@@ -9,6 +9,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
 import { checkConnection } from "./db";
 import { startPrinterSync } from "./printer-sync";
+import "./print-worker";
 
 // Extend Express session
 declare module "express-session" {

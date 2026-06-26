@@ -81,7 +81,6 @@ import {
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { FormField, Customer, Lead, Visitor, AcePoc } from "@shared/schema";
-import { printVisitorLabel } from "@/lib/brotherPrint";
 import {
   Select,
   SelectContent,
@@ -979,9 +978,17 @@ function DevicesTab() {
   async function handleTestPrint() {
     setIsPrinting(true);
     try {
-      const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-      await printVisitorLabel("Test Visitor", "Ace Electronics", today);
-      toast({ title: "Test print sent!", description: "Check the printer for your label." });
+      const res = await apiRequest("POST", "/api/printers/test-print", {});
+      const data = (await res.json()) as { printerName?: string; message?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Print failed");
+      }
+      toast({
+        title: "Test print sent!",
+        description: data.printerName
+          ? `Sent to ${data.printerName}. Check the printer for your label.`
+          : "Check the printer for your label.",
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast({ title: "Print failed", description: msg, variant: "destructive" });
