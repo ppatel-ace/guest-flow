@@ -89,7 +89,12 @@ export async function refreshAceSsoFromRegistry(
   payload: AceSsoJwtPayload,
 ): Promise<AceSsoJwtPayload> {
   const p = getPool();
-  if (!p) return payload;
+  if (!p) {
+    console.warn(
+      "[effectiveAccess] JOBTRACK_DATABASE_URL (or PRODUCTION_DATABASE_URL) not configured — SSO app access cannot be refreshed from registry",
+    );
+    return payload;
+  }
 
   try {
     const ssoRes = await p.query<{ is_admin: boolean; active: boolean }>(

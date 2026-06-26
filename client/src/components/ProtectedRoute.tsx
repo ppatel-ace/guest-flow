@@ -6,7 +6,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, accessDenied } = useAuth();
 
   if (isLoading) {
     return (
@@ -14,6 +14,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
+  }
+
+  if (accessDenied) {
+    return <Redirect to="/access-denied" />;
   }
 
   if (!isAuthenticated) {

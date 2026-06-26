@@ -4,6 +4,9 @@
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { hasAppAccess as hasRegistryAppAccess, refreshAceSsoFromRegistry } from "./effectiveAccess";
+import { clearAceSsoCookie } from "./guestAuth";
+
+export { clearAceSsoCookie };
 
 export type AceAppSlug =
   | "hub"
@@ -66,13 +69,21 @@ export function setAceSsoCookie(res: Response, token: string): void {
   });
 }
 
-export function clearAceSsoCookie(res: Response): void {
-  res.clearCookie("ace_sso", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    ...cookieDomainOptions(),
-  });
+export function signAceSsoToken(payload: AceSsoJwtPayload): string | null {
+  const secret = process.env.SSO_JWT_SECRET;
+  if (!secret) return null;
+  return jwt.sign(
+    {
+      sub: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      employeeId: payload.employeeId,
+      groups: payload.groups,
+      apps: payload.apps,
+    },
+    secret,
+    { expiresIn: SSO_JWT_EXPIRY_SECONDS },
+  );
 }
 
 export function refreshSsoTokenIfNeeded(
@@ -86,19 +97,8 @@ export function refreshSsoTokenIfNeeded(
     const decoded = jwt.decode(token) as { exp?: number } | null;
     if (!decoded?.exp) return;
     if (decoded.exp - Math.floor(Date.now() / 1000) >= SSO_REFRESH_THRESHOLD_SECONDS) return;
-    const newToken = jwt.sign(
-      {
-        sub: payload.sub,
-        email: payload.email,
-        name: payload.name,
-        employeeId: payload.employeeId,
-        groups: payload.groups,
-        apps: payload.apps,
-      },
-      secret,
-      { expiresIn: SSO_JWT_EXPIRY_SECONDS },
-    );
-    setAceSsoCookie(res, newToken);
+    const newToken = signAceSsoToken(payload);
+    if (newToken) setAceSsoCookie(res, newToken);
   } catch {
     /* ignore */
   }
@@ -137,13 +137,13 @@ export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
 
     const queryToken = rawToken ? decodeURIComponent(rawToken) : undefined;
     const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.ace_sso;
-    const token = queryToken || cookieToken;
+    const tokenToVerify = queryToken ?? cookieToken;
 
-    if (!token) {
+    if (!tokenToVerify) {
       return res.redirect(safeNext);
     }
 
-    const rawPayload = verifyAceSsoToken(token);
+    const rawPayload = verifyAceSsoToken(tokenToVerify);
     if (!rawPayload) {
       clearAceSsoCookie(res);
       return res.redirect(`${defaultNext}?error=sso_invalid`);
@@ -159,59 +159,8 @@ export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
       );
     }
 
-    const secret = process.env.SSO_JWT_SECRET;
-    if (secret) {
-      const freshToken = jwt.sign(
-        {
-          sub: payload.sub,
-          email: payload.email,
-          name: payload.name,
-          employeeId: payload.employeeId,
-          groups: payload.groups,
-          apps: payload.apps,
-        },
-        secret,
-        { expiresIn: SSO_JWT_EXPIRY_SECONDS },
-      );
-      setAceSsoCookie(res, freshToken);
-    } else if (queryToken) {
-      setAceSsoCookie(res, queryToken);
-    }
-
+    const signed = signAceSsoToken(payload) ?? tokenToVerify;
+    setAceSsoCookie(res, signed);
     return res.redirect(safeNext);
-  });
-
-  app.get("/api/auth/sso/session", async (req: AceAuthRequest, res) => {
-    const raw = tryAceSsoFromRequest(req, res);
-    if (!raw) {
-      const ssoBase = process.env.SSO_LOGIN_URL;
-      if (ssoBase) {
-        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-        const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent(defaultNext)}`;
-        return res.json({
-          authenticated: false,
-          ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`,
-        });
-      }
-      return res.json({ authenticated: false });
-    }
-
-    const payload = await refreshAceSsoFromRegistry(res, raw);
-    if (hasAppAccess(payload, appSlug)) {
-      return res.json({ authenticated: true, via: "sso", user: payload });
-    }
-
-    clearAceSsoCookie(res);
-    const ssoBase = process.env.SSO_LOGIN_URL;
-    if (ssoBase) {
-      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-      const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent(defaultNext)}`;
-      return res.json({
-        authenticated: false,
-        reason: "no_access",
-        ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`,
-      });
-    }
-    res.json({ authenticated: false });
   });
 }

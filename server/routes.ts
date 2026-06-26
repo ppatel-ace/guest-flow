@@ -17,6 +17,7 @@ import {
   clearAceSsoCookie,
   type AceAuthRequest,
 } from "./aceSso";
+import { buildGuestFlowSsoLoginUrl } from "./guestAuth";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
 
 // ─── IP → location helper ─────────────────────────────────────────────────────
@@ -164,14 +165,6 @@ const guestCheckinLimiter = rateLimit({
 
 // ─── Auth (ACE SSO + legacy session fallback) ─────────────────────────────────
 
-function buildGuestFlowSsoLoginUrl(req: { protocol: string; get: (name: string) => string | undefined }): string | null {
-  const ssoBase = process.env.SSO_LOGIN_URL;
-  if (!ssoBase) return null;
-  const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-  const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent("/ace-admin")}`;
-  return `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`;
-}
-
 const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
   const raw = tryAceSsoFromRequest(req, res);
   if (raw) {
@@ -179,16 +172,15 @@ const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
     if (!hasAppAccess(payload, "guestflow")) {
       clearAceSsoCookie(res);
       return res.status(403).json({
-        error: "Forbidden",
+        error: "NO_ACCESS",
         message: "You do not have access to this application. Contact your administrator.",
-        ssoLoginUrl: buildGuestFlowSsoLoginUrl(req),
       });
     }
     req.user = { id: payload.sub, email: payload.email, name: payload.name };
     return next();
   }
   if (req.session?.authenticated) {
-    req.user = { id: "admin", email: "admin", name: "Admin" };
+    req.user = { email: "admin", name: "Admin" };
     return next();
   }
   res.status(401).json({ error: "Unauthorized" });
@@ -207,19 +199,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = await refreshAceSsoFromRegistry(res, raw);
       if (!hasAppAccess(payload, "guestflow")) {
         clearAceSsoCookie(res);
-        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req);
-        if (ssoLoginUrl) {
-          return res.json({
-            authenticated: false,
-            ssoLoginUrl,
-            staleAccess: true,
-            message: "Your session does not include GuestFlow access. Sign in again to continue.",
-          });
-        }
+        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/ace-admin");
         return res.status(403).json({
           authenticated: false,
           error: "NO_ACCESS",
+          staleAccess: true,
           message: "You do not have access to this application. Contact your administrator.",
+          ssoLoginUrl: ssoLoginUrl ?? undefined,
         });
       }
       return res.json({
@@ -231,8 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (req.session?.authenticated) {
       return res.json({ authenticated: true, user: { username: "admin", name: "Admin" } });
     }
-    // Not authenticated — include ssoLoginUrl if configured
-    const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req);
+    const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/ace-admin");
     if (ssoLoginUrl) {
       return res.json({
         authenticated: false,
@@ -249,10 +234,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return a redirect URL so the frontend can follow the SSO flow.
       const ssoBase = process.env.SSO_LOGIN_URL;
       if (ssoBase) {
-        const redirect = buildGuestFlowSsoLoginUrl(req);
-        if (redirect) {
-          return res.json({ redirect });
-        }
+        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/ace-admin");
+        return res.json({ redirect: ssoLoginUrl });
       }
 
       const { username, password } = req.body;

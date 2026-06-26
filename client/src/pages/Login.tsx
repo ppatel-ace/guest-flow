@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl, staleAccess, sessionMessage } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl, staleAccess, accessDenied, sessionMessage } = useAuth();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -29,12 +29,19 @@ export default function Login() {
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  // SSO is the primary login path — redirect when configured
+  // SSO is the primary login path — redirect when configured (including stale cookie refresh)
   useEffect(() => {
     if (!authLoading && !isAuthenticated && ssoLoginUrl) {
       window.location.href = ssoLoginUrl;
     }
   }, [authLoading, isAuthenticated, ssoLoginUrl]);
+
+  // Hard access denial (registry says no guestflow) — show access-denied page
+  useEffect(() => {
+    if (!authLoading && accessDenied) {
+      setLocation("/access-denied");
+    }
+  }, [authLoading, accessDenied, setLocation]);
 
   const handleSsoSignIn = () => {
     if (ssoLoginUrl) {
