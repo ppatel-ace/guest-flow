@@ -2,7 +2,8 @@
  * Brother QL-820NWB label printer helper.
  *
  * Implements the Brother Raster Command protocol over TCP port 9100.
- * Tape assumed: 62mm continuous roll (DK-2205), 696 printable dots wide @ 300 dpi.
+ * Default media: 29 mm × 90 mm die-cut (DK-11201 / "29x90" in brother_ql).
+ * Override via LABEL_WIDTH_MM, LABEL_LENGTH_MM, LABEL_DIE_CUT=false for continuous rolls.
  *
  * Reference: Brother QL-800 series Raster Command Reference Guide.
  */
@@ -10,16 +11,70 @@
 import net from "net";
 import { Printer } from "@shared/schema";
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Label media profile ───────────────────────────────────────────────────────
+
+interface LabelMediaProfile {
+  /** Printable width in dots @ 300 dpi */
+  printPxWidth: number;
+  /** Total raster lines for the label (die-cut) or content height (continuous) */
+  rasterLines: number;
+  /** ESC i z media type: 0x0A continuous, 0x0B die-cut */
+  mediaType: number;
+  mediaWidthMm: number;
+  mediaLengthMm: number;
+  dieCut: boolean;
+}
+
+function loadLabelMediaProfile(): LabelMediaProfile {
+  const dieCut = process.env.LABEL_DIE_CUT !== "false";
+  const widthMm = parseInt(process.env.LABEL_WIDTH_MM || "29", 10);
+  const lengthMm = parseInt(process.env.LABEL_LENGTH_MM || "90", 10);
+
+  // brother_ql canonical dot sizes for common Brother labels @ 300 dpi
+  if (dieCut && widthMm === 29 && lengthMm === 90) {
+    return {
+      printPxWidth: 306,
+      rasterLines: 991,
+      mediaType: 0x0b,
+      mediaWidthMm: 29,
+      mediaLengthMm: 90,
+      dieCut: true,
+    };
+  }
+  if (!dieCut && widthMm === 62) {
+    return {
+      printPxWidth: 696,
+      rasterLines: 0,
+      mediaType: 0x0a,
+      mediaWidthMm: 62,
+      mediaLengthMm: 0,
+      dieCut: false,
+    };
+  }
+
+  const printPxWidth = Math.round(widthMm * 300 / 25.4);
+  const rasterLines = dieCut ? Math.round(lengthMm * 300 / 25.4) : 0;
+  return {
+    printPxWidth,
+    rasterLines,
+    mediaType: dieCut ? 0x0b : 0x0a,
+    mediaWidthMm: widthMm,
+    mediaLengthMm: dieCut ? lengthMm : 0,
+    dieCut,
+  };
+}
+
+const LABEL = loadLabelMediaProfile();
+
+// ── Rendering constants ───────────────────────────────────────────────────────
 
 const DEFAULT_PORT    = 9100;
-const PRINT_PX_WIDTH  = 696;   // printable dots for 62 mm tape
-const FONT_W          = 8;     // font glyph width  (pixels)
-const FONT_H          = 16;    // font glyph height (pixels)
-const FONT_SCALE      = 2;     // render at 2× → 16 px wide, 32 px tall per glyph
-const LINE_SPACING    = 8;     // extra blank rows between text lines (at 1×)
-const MARGIN_TOP      = 16;    // blank rows before first line
-const MARGIN_BOTTOM   = 16;    // blank rows after last line
+const FONT_W          = 8;
+const FONT_H          = 16;
+const FONT_SCALE      = 2;
+const LINE_SPACING    = 6;
+const MARGIN_TOP      = 24;
+const MARGIN_BOTTOM   = 24;
 
 // ── 8×16 bitmap font (ASCII 32–126) ─────────────────────────────────────────
 // Each character is 8 bits wide × 16 rows tall.
@@ -140,26 +195,27 @@ function glyphRow(char: string, row: number): boolean[] {
 }
 
 function renderPixelGrid(lines: string[]): boolean[][] {
+  const printPxWidth = LABEL.printPxWidth;
   const glyphH = FONT_H * FONT_SCALE;
   const gapH   = LINE_SPACING * FONT_SCALE;
   const rows: boolean[][] = [];
 
-  for (let i = 0; i < MARGIN_TOP; i++) rows.push(new Array(PRINT_PX_WIDTH).fill(false));
+  for (let i = 0; i < MARGIN_TOP; i++) rows.push(new Array(printPxWidth).fill(false));
 
   for (let li = 0; li < lines.length; li++) {
     const line    = lines[li].replace(/[^\x20-\x7E]/g, '?');
     const charW   = FONT_W * FONT_SCALE;
     const textPx  = line.length * charW;
-    const xOff    = Math.max(0, Math.floor((PRINT_PX_WIDTH - textPx) / 2));
+    const xOff    = Math.max(0, Math.floor((printPxWidth - textPx) / 2));
 
     for (let gr = 0; gr < FONT_H; gr++) {
       for (let sr = 0; sr < FONT_SCALE; sr++) {
-        const row = new Array<boolean>(PRINT_PX_WIDTH).fill(false);
+        const row = new Array<boolean>(printPxWidth).fill(false);
         let x = xOff;
-        for (let ci = 0; ci < line.length && x < PRINT_PX_WIDTH; ci++) {
+        for (let ci = 0; ci < line.length && x < printPxWidth; ci++) {
           const pixels = glyphRow(line[ci], gr);
-          for (let px = 0; px < FONT_W && x < PRINT_PX_WIDTH; px++) {
-            for (let sc = 0; sc < FONT_SCALE && x < PRINT_PX_WIDTH; sc++) {
+          for (let px = 0; px < FONT_W && x < printPxWidth; px++) {
+            for (let sc = 0; sc < FONT_SCALE && x < printPxWidth; sc++) {
               row[x++] = pixels[px];
             }
           }
@@ -169,19 +225,36 @@ function renderPixelGrid(lines: string[]): boolean[][] {
     }
 
     if (li < lines.length - 1) {
-      for (let i = 0; i < gapH; i++) rows.push(new Array(PRINT_PX_WIDTH).fill(false));
+      for (let i = 0; i < gapH; i++) rows.push(new Array(printPxWidth).fill(false));
     }
   }
 
-  for (let i = 0; i < MARGIN_BOTTOM; i++) rows.push(new Array(PRINT_PX_WIDTH).fill(false));
+  for (let i = 0; i < MARGIN_BOTTOM; i++) rows.push(new Array(printPxWidth).fill(false));
 
   return rows;
+}
+
+function padGridToRasterHeight(grid: boolean[][]): boolean[][] {
+  const width = LABEL.printPxWidth;
+  const targetHeight = LABEL.dieCut ? LABEL.rasterLines : grid.length;
+  if (grid.length >= targetHeight) return grid.slice(0, targetHeight);
+
+  const topPad = Math.floor((targetHeight - grid.length) / 2);
+  const blankRow = (): boolean[] => new Array(width).fill(false);
+  return [
+    ...Array.from({ length: topPad }, blankRow),
+    ...grid,
+    ...Array.from({ length: targetHeight - topPad - grid.length }, blankRow),
+  ];
 }
 
 // ── Brother QL Raster packet builder ─────────────────────────────────────────
 
 function buildRasterPacket(pixelGrid: boolean[][]): Buffer {
   const parts: Buffer[] = [];
+  const printPxWidth = LABEL.printPxWidth;
+  const grid = padGridToRasterHeight(pixelGrid);
+  const rasterLines = grid.length;
 
   // 1. Invalidate — clear any partial command in the printer buffer
   parts.push(Buffer.alloc(200, 0x00));
@@ -192,38 +265,38 @@ function buildRasterPacket(pixelGrid: boolean[][]): Buffer {
   // 3. Switch to raster mode
   parts.push(Buffer.from([0x1B, 0x69, 0x61, 0x01]));
 
-  // 4. Set media and quality (ESC i z)
-  //    flag=0x8E: print-quality + media-type + media-width + media-length valid
-  //    mediaType=0x0A: continuous roll  width=62mm  length=0 (continuous)
-  const numRows = pixelGrid.length;
+  // 4. Set media and quality (ESC i z) — 10-byte Brother raster header
+  //    0x8E = media type + width + length + quality valid
   parts.push(Buffer.from([
     0x1B, 0x69, 0x7A,
     0x8E,
-    0x0A,
-    62,
-    0,
-    numRows & 0xFF,
-    (numRows >> 8) & 0xFF,
-    0x00, 0x00, 0x00, 0x00,
+    LABEL.mediaType,
+    LABEL.mediaWidthMm,
+    LABEL.mediaLengthMm,
+    rasterLines & 0xFF,
+    (rasterLines >> 8) & 0xFF,
+    (rasterLines >> 16) & 0xFF,
+    (rasterLines >> 24) & 0xFF,
+    0x00, // starting page
+    0x00,
   ]));
 
-  // 5. Auto-cut after each label
+  // 5. Cut at end (die-cut labels are pre-sized; feed only)
   parts.push(Buffer.from([0x1B, 0x69, 0x4B, 0x08]));
 
   // 6. Set margins (feed) = 0
   parts.push(Buffer.from([0x1B, 0x69, 0x64, 0x00, 0x00]));
 
   // 7. Raster rows
-  //    696 dots → 87 bytes per row (696 / 8 = 87)
-  const bytesPerRow = Math.ceil(PRINT_PX_WIDTH / 8);
+  const bytesPerRow = Math.ceil(printPxWidth / 8);
 
-  for (const row of pixelGrid) {
+  for (const row of grid) {
     const allBlank = !row.some(Boolean);
     if (allBlank) {
-      parts.push(Buffer.from([0x5A]));           // empty-row shorthand
+      parts.push(Buffer.from([0x5A]));
     } else {
       const rowBytes = Buffer.alloc(bytesPerRow, 0x00);
-      for (let x = 0; x < PRINT_PX_WIDTH; x++) {
+      for (let x = 0; x < printPxWidth; x++) {
         if (row[x]) {
           const byteIdx = Math.floor(x / 8);
           const bitPos  = 7 - (x % 8);
@@ -281,6 +354,9 @@ export async function printLabel(printer: Printer, lines: string[]): Promise<voi
 
   const pixelGrid = renderPixelGrid(lines);
   const packet    = buildRasterPacket(pixelGrid);
+  console.log(
+    `[printer] sending ${LABEL.mediaWidthMm}x${LABEL.mediaLengthMm}mm ${LABEL.dieCut ? "die-cut" : "continuous"} label (${LABEL.printPxWidth}x${LABEL.dieCut ? LABEL.rasterLines : pixelGrid.length} dots) to ${ip}:${port}`,
+  );
 
   await sendOverTcp(ip, port, packet);
 }

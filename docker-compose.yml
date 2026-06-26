@@ -38,3 +38,7 @@ services:
       # Brother QL label printer — set to the printer's WiFi IP address
       LABEL_PRINTER_IP: ${LABEL_PRINTER_IP:-}
       LABEL_PRINTER_PORT: ${LABEL_PRINTER_PORT:-9100}
+      # Label media (default: 29×90 mm die-cut / DK-11201)
+      LABEL_WIDTH_MM: ${LABEL_WIDTH_MM:-29}
+      LABEL_LENGTH_MM: ${LABEL_LENGTH_MM:-90}
+      LABEL_DIE_CUT: ${LABEL_DIE_CUT:-true}
