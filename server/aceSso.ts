@@ -42,9 +42,11 @@ export function verifyAceSsoToken(token: string): AceSsoJwtPayload | null {
 
 export function hasAppAccess(
   payload: Pick<AceSsoJwtPayload, "groups" | "apps"> | null | undefined,
-  _app: AceAppSlug,
+  app: AceAppSlug,
 ): boolean {
-  return payload != null;
+  if (!payload) return false;
+  if (app === "crm") return payload.apps?.includes("crm") ?? payload.apps?.includes("hub") ?? false;
+  return payload.apps?.includes(app) ?? false;
 }
 
 function cookieDomainOptions(): { domain?: string } {
@@ -131,12 +133,27 @@ export function registerAceSsoRoutes(app: Express, _appSlug: AceAppSlug): void {
       if (!payload) {
         return res.redirect(`${defaultNext}?error=sso_invalid`);
       }
+      if (!hasAppAccess(payload, _appSlug)) {
+        return res.redirect(
+          `/access-denied?error=NO_ACCESS&message=${encodeURIComponent(
+            "You do not have access to this application. Contact your administrator.",
+          )}`,
+        );
+      }
       setAceSsoCookie(res, queryToken);
       return res.redirect(safeNext);
     }
 
-    if (cookieToken && verifyAceSsoToken(cookieToken)) {
-      return res.redirect(safeNext);
+    if (cookieToken) {
+      const payload = verifyAceSsoToken(cookieToken);
+      if (payload && !hasAppAccess(payload, _appSlug)) {
+        return res.redirect(
+          `/access-denied?error=NO_ACCESS&message=${encodeURIComponent(
+            "You do not have access to this application. Contact your administrator.",
+          )}`,
+        );
+      }
+      if (payload) return res.redirect(safeNext);
     }
 
     return res.redirect(safeNext);

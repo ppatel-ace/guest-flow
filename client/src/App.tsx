@@ -24,6 +24,7 @@ import SignInFlow from "@/pages/SignInFlow";
 import EnvoyAnalytics from "@/pages/EnvoyAnalytics";
 import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
+import AccessDeniedPage from "@/pages/AccessDenied";
 
 function AdminLayout() {
   const { logout } = useAuth();
@@ -103,6 +104,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Switch>
+          <Route path="/access-denied" component={AccessDeniedPage} />
           <Route path="/ace-admin" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
