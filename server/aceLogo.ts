@@ -9,12 +9,19 @@ let cachedLogo: MonoGrid | null = null;
 
 function resolveLogoPath(): string | null {
   const cwd = process.cwd();
-  const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
+  const moduleDir =
+    typeof __dirname !== "undefined"
+      ? __dirname
+      : typeof import.meta !== "undefined" && "dirname" in import.meta && import.meta.dirname
+        ? (import.meta.dirname as string)
+        : cwd;
+
   const candidates = [
     path.join(cwd, "dist/public/logos/ace-logo-idle.png"),
     path.join(cwd, "client/public/logos/ace-logo-idle.png"),
-    path.join(here, "../dist/public/logos/ace-logo-idle.png"),
-    path.join(here, "../client/public/logos/ace-logo-idle.png"),
+    path.join(moduleDir, "public/logos/ace-logo-idle.png"),
+    path.join(moduleDir, "../dist/public/logos/ace-logo-idle.png"),
+    path.join(moduleDir, "../client/public/logos/ace-logo-idle.png"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
