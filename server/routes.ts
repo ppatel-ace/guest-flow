@@ -19,6 +19,7 @@ import {
 } from "./aceSso";
 import { buildGuestFlowSsoLoginUrl } from "./guestAuth";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
+import { resolveReachablePrinter } from "./printer-sync";
 
 // ─── IP → location helper ─────────────────────────────────────────────────────
 
@@ -837,8 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const settings = await storage.getKioskSettings();
           if (!settings.labelPrinterEnabled) return;
-          const printers = await storage.getAllPrinters();
-          const target = printers.find((p) => p.status === 'online' && (p as any).ipAddress);
+          const target = await resolveReachablePrinter();
           if (!target) return;
           const dateStr = new Date().toLocaleDateString();
           try {
@@ -1206,12 +1206,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test print to first online network printer (admin dashboard — browser cannot use Bluetooth)
   app.post("/api/printers/test-print", requireAuth, async (_req, res) => {
     try {
-      const printers = await storage.getAllPrinters();
-      const target = printers.find((p) => p.status === "online" && p.ipAddress);
+      const target = await resolveReachablePrinter();
       if (!target) {
         return res.status(503).json({
           error: "NO_ONLINE_PRINTER",
-          message: "No online printer with an IP address is configured.",
+          message: "No reachable printer with an IP address was found. Check LABEL_PRINTER_IP and network access.",
         });
       }
       const today = new Date().toLocaleDateString("en-US", {

@@ -1,4 +1,5 @@
 import net from "net";
+import type { Printer } from "@shared/schema";
 import { storage } from "./storage";
 
 const PRINTER_IP   = (process.env.LABEL_PRINTER_IP  || "").trim();
@@ -28,8 +29,18 @@ function ping(ip: string, port: number): Promise<{ online: boolean; reason?: str
 async function ensureAutoCreated(): Promise<string | null> {
   if (!PRINTER_IP) return null;
   const all = await storage.getAllPrinters();
-  const existing = all.find((p) => (p as any).ipAddress === PRINTER_IP);
-  if (existing) return existing.id;
+  const existing =
+    all.find((p) => p.ipAddress === PRINTER_IP) ??
+    all.find((p) => p.name === AUTO_NAME);
+  if (existing) {
+    if (!existing.ipAddress || existing.port !== PRINTER_PORT) {
+      await storage.updatePrinter(existing.id, {
+        ipAddress: PRINTER_IP,
+        port: PRINTER_PORT,
+      });
+    }
+    return existing.id;
+  }
 
   const created = await storage.createPrinter({
     name: AUTO_NAME,
@@ -47,15 +58,19 @@ async function pollAllPrinters() {
   const all = await storage.getAllPrinters();
 
   for (const printer of all) {
-    const ip   = (printer as any).ipAddress as string | undefined;
-    const port = ((printer as any).port as number | undefined) ?? 9100;
+    const ip = printer.ipAddress?.trim();
+    const port = printer.port ?? 9100;
     if (!ip) continue;
 
     const { online, reason } = await ping(ip, port);
     const newStatus = online ? "online" : "offline";
 
-    await storage.updatePrinter(printer.id, { status: newStatus });
-    printer.status = newStatus;
+    try {
+      await storage.updatePrinter(printer.id, { status: newStatus });
+      printer.status = newStatus;
+    } catch (err) {
+      console.error(`[printer-sync] failed to persist status for ${printer.name}:`, err);
+    }
 
     if (online) {
       console.log(`[printer-sync] ${ip}:${port} (${printer.name}) → online`);
@@ -75,6 +90,34 @@ async function pollAllPrinters() {
       }
     }
   }
+}
+
+/** Live TCP ping — do not rely on cached DB status (Supabase row may lag). */
+export async function resolveReachablePrinter(): Promise<Printer | null> {
+  if (PRINTER_IP) {
+    try {
+      await ensureAutoCreated();
+    } catch (err) {
+      console.error("[printer-sync] ensureAutoCreated:", err);
+    }
+  }
+
+  const all = await storage.getAllPrinters();
+  for (const printer of all) {
+    const ip = printer.ipAddress?.trim();
+    const port = printer.port ?? 9100;
+    if (!ip) continue;
+
+    const { online } = await ping(ip, port);
+    const newStatus = online ? "online" : "offline";
+    if (online) {
+      if (printer.status !== newStatus) {
+        await storage.updatePrinter(printer.id, { status: newStatus }).catch(() => {});
+      }
+      return { ...printer, status: newStatus };
+    }
+  }
+  return null;
 }
 
 export async function startPrinterSync() {
