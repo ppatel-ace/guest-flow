@@ -117,11 +117,22 @@ export async function refreshAceSsoFromRegistry(
               access_estimate, access_guestflow, access_support
        FROM ace_user_registry
        WHERE sso_user_id = $1::uuid OR lower(employee_email) = lower($2)
-       ORDER BY CASE WHEN sso_user_id = $1::uuid THEN 0 ELSE 1 END
-       LIMIT 1`,
+       ORDER BY CASE WHEN sso_user_id = $1::uuid THEN 0 ELSE 1 END`,
       [payload.sub, payload.email],
     );
-    const registry = regRes.rows[0] ?? null;
+    const rows = regRes.rows;
+    const registry =
+      rows.length === 0
+        ? null
+        : {
+            employee_id: rows[0]?.employee_id ?? null,
+            access_hub: rows.some((r) => r.access_hub === true),
+            access_jobtrack: rows.some((r) => r.access_jobtrack === true),
+            access_inventory: rows.some((r) => r.access_inventory === true),
+            access_estimate: rows.some((r) => r.access_estimate === true),
+            access_guestflow: rows.some((r) => r.access_guestflow === true),
+            access_support: rows.some((r) => r.access_support === true),
+          };
     const effectiveApps = appsFromRegistry(registry, sso.is_admin);
     const updated: AceSsoJwtPayload = {
       ...payload,
