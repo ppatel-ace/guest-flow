@@ -272,8 +272,7 @@ function blitLogoToLandscape(
 }
 
 /**
- * Visitor badge matching Brother template (ace printer .lbxs):
- * landscape 29×90 mm — logo left, Name / Company / Email / Date of visit on the right.
+ * Visitor badge — landscape 29×90 mm, logo left, large text (10× scale) in 2×2 grid.
  */
 function renderVisitorBadgeGrid(fields: VisitorBadgeFields): boolean[][] {
   const rows = LABEL.rasterLines;
@@ -295,16 +294,16 @@ function renderVisitorBadgeGrid(fields: VisitorBadgeFields): boolean[][] {
     );
   }
 
-  const lines: Array<{ col: number; text: string }> = [
-    { col: layout.nameCol, text: `Name: ${fields.name}` },
-    { col: layout.companyCol, text: `Company: ${fields.company}` },
-    { col: layout.emailCol, text: `Email: ${fields.email}` },
-    { col: layout.visitDateCol, text: `Date of visit: ${fields.visitDate}` },
+  const textFields: Array<{ row: number; col: number; text: string }> = [
+    { row: layout.textRowStart, col: layout.textColLeft, text: `Name: ${fields.name}` },
+    { row: layout.textRowStart, col: layout.textColRight, text: `Email: ${fields.email}` },
+    { row: layout.textRowSecond, col: layout.textColLeft, text: `Co: ${fields.company}` },
+    { row: layout.textRowSecond, col: layout.textColRight, text: `Date: ${fields.visitDate}` },
   ];
 
-  for (const line of lines) {
-    const value = truncateForRow(line.text, layout.textRow, scale, rows);
-    if (value) renderTextAlongRows(canvas, layout.textRow, line.col, value, scale);
+  for (const field of textFields) {
+    const value = truncateForRow(field.text, field.row, scale, rows);
+    if (value) renderTextAlongRows(canvas, field.row, field.col, value, scale);
   }
 
   return canvas;

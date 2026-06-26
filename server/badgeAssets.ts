@@ -105,21 +105,22 @@ export function loadVisitorLogoGrid(maxWidth: number, maxHeight: number): MonoGr
   return scaleGrid(raw, w, h);
 }
 
-/** Positions from ace printer .lbxs (29×90 mm landscape, 300 dpi). */
+/** Positions for 29×90 mm landscape @ 300 dpi (fontScale 10 — 2×2 field grid beside logo). */
 export const BADGE_LAYOUT = {
   ptToDots: PT_TO_DOTS,
-  /** Logo — image:objectStyle in label.xml */
+  fontScale: 10,
+  /** Smaller logo so large text fits to the right */
   logoRow: Math.round(8.4 * PT_TO_DOTS),
   logoCol: Math.round(4.4 * PT_TO_DOTS),
-  logoRowSpan: Math.round(73.4 * PT_TO_DOTS),
-  logoColSpan: Math.round(73.4 * PT_TO_DOTS),
-  /** Text column — left edge of labels */
-  textRow: Math.round(100.5 * PT_TO_DOTS),
-  nameCol: Math.round(14.3 * PT_TO_DOTS),
-  companyCol: Math.round(25.1 * PT_TO_DOTS),
-  emailCol: Math.round(36.7 * PT_TO_DOTS),
-  visitDateCol: Math.round(48.2 * PT_TO_DOTS),
-  fontScale: 1,
+  logoRowSpan: Math.round(38 * PT_TO_DOTS),
+  logoColSpan: Math.round(70 * PT_TO_DOTS),
+  /** First text row along the 90 mm feed axis (just past logo) */
+  textRowStart: Math.round(46 * PT_TO_DOTS),
+  /** Second text row (Company / Date) */
+  textRowSecond: Math.round(46 * PT_TO_DOTS) + 320,
+  /** Two vertical bands for side-by-side fields */
+  textColLeft: 6,
+  textColRight: 142,
 } as const;
 
 export function formatVisitDate(date: Date = new Date()): string {
