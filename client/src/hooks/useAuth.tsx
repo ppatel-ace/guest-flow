@@ -12,7 +12,7 @@ interface SessionResponse {
   authenticated: boolean;
   user?: AuthUser;
   ssoLoginUrl?: string;
-  accessDenied?: boolean;
+  staleAccess?: boolean;
   message?: string;
 }
 
@@ -27,8 +27,8 @@ export function useAuth() {
       if (res.status === 403) {
         return {
           authenticated: false,
-          accessDenied: true,
           message: data.message || "Access denied",
+          ssoLoginUrl: data.ssoLoginUrl,
         };
       }
       if (!res.ok) {
@@ -58,8 +58,8 @@ export function useAuth() {
     isAuthenticated: session?.authenticated ?? false,
     user: session?.user,
     ssoLoginUrl: session?.ssoLoginUrl,
-    accessDenied: session?.accessDenied ?? false,
-    accessDeniedMessage: session?.message,
+    staleAccess: session?.staleAccess ?? false,
+    sessionMessage: session?.message,
     isLoading,
     logout: logoutMutation.mutate,
   };

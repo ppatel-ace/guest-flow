@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl, accessDenied, accessDeniedMessage } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, ssoLoginUrl, staleAccess, sessionMessage } = useAuth();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -29,12 +29,18 @@ export default function Login() {
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  // If SSO is configured and user isn't authenticated, redirect to SSO login page
+  // SSO is the primary login path — redirect when configured
   useEffect(() => {
     if (!authLoading && !isAuthenticated && ssoLoginUrl) {
       window.location.href = ssoLoginUrl;
     }
   }, [authLoading, isAuthenticated, ssoLoginUrl]);
+
+  const handleSsoSignIn = () => {
+    if (ssoLoginUrl) {
+      window.location.href = ssoLoginUrl;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,20 +90,6 @@ export default function Login() {
     }
   };
 
-  // Show access denied when Azure group membership blocks GuestFlow
-  if (!authLoading && accessDenied) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Access Denied</CardTitle>
-            <CardDescription>{accessDeniedMessage}</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
   // Show a brief loading state while redirecting to SSO
   if (!authLoading && !isAuthenticated && ssoLoginUrl) {
     return (
@@ -107,7 +99,11 @@ export default function Login() {
             <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
               <ExternalLink className="h-6 w-6 text-primary" />
             </div>
-            <p className="text-sm text-muted-foreground">Redirecting to ACE sign-in…</p>
+            <p className="text-sm text-muted-foreground">
+              {staleAccess
+                ? "Refreshing your ACE sign-in for GuestFlow…"
+                : "Redirecting to ACE sign-in…"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -123,44 +119,55 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription>
-            Sign in to access the customer management system
+            {staleAccess
+              ? sessionMessage || "Sign in with your ACE account to access GuestFlow."
+              : "Sign in with your ACE account to access the customer management system"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                data-testid="input-username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                data-testid="input-password"
-              />
-            </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-              data-testid="button-login"
-            >
-              {isLoading ? "Signing in..." : "Sign In"}
+        <CardContent className="space-y-4">
+          {ssoLoginUrl && (
+            <Button className="w-full" onClick={handleSsoSignIn} data-testid="button-sso-login">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Sign in with ACE SSO
             </Button>
-          </form>
+          )}
+
+          {!ssoLoginUrl && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  data-testid="input-username"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  data-testid="input-password"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+                data-testid="button-login"
+              >
+                {isLoading ? "Signing in..." : "Sign In"}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

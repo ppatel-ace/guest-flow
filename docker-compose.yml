@@ -23,6 +23,8 @@ services:
       SSO_JWT_SECRET: ${SSO_JWT_SECRET:-}
       # Public URL of the ace-auth login page, e.g. https://sso.aceelectronics.com
       SSO_LOGIN_URL: ${SSO_LOGIN_URL:-}
+      APP_URL: ${APP_URL:-https://guestflow.aceelectronics.com}
+      JOBTRACK_DATABASE_URL: ${JOBTRACK_DATABASE_URL:-}
       # Parent domain used when setting / clearing the shared ace_sso cookie.
       APP_DOMAIN: ${APP_DOMAIN:-}
       # Microsoft Graph API — check-in email notifications (GCC High)

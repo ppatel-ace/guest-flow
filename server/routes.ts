@@ -14,6 +14,7 @@ import {
   tryAceSsoFromRequest,
   refreshAceSsoFromRegistry,
   hasAppAccess,
+  clearAceSsoCookie,
   type AceAuthRequest,
 } from "./aceSso";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
@@ -163,14 +164,24 @@ const guestCheckinLimiter = rateLimit({
 
 // ─── Auth (ACE SSO + legacy session fallback) ─────────────────────────────────
 
+function buildGuestFlowSsoLoginUrl(req: { protocol: string; get: (name: string) => string | undefined }): string | null {
+  const ssoBase = process.env.SSO_LOGIN_URL;
+  if (!ssoBase) return null;
+  const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+  const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent("/ace-admin")}`;
+  return `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`;
+}
+
 const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
   const raw = tryAceSsoFromRequest(req, res);
   if (raw) {
     const payload = await refreshAceSsoFromRegistry(res, raw);
     if (!hasAppAccess(payload, "guestflow")) {
+      clearAceSsoCookie(res);
       return res.status(403).json({
         error: "Forbidden",
         message: "You do not have access to this application. Contact your administrator.",
+        ssoLoginUrl: buildGuestFlowSsoLoginUrl(req),
       });
     }
     req.user = { id: payload.sub, email: payload.email, name: payload.name };
@@ -195,6 +206,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (raw) {
       const payload = await refreshAceSsoFromRegistry(res, raw);
       if (!hasAppAccess(payload, "guestflow")) {
+        clearAceSsoCookie(res);
+        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req);
+        if (ssoLoginUrl) {
+          return res.json({
+            authenticated: false,
+            ssoLoginUrl,
+            staleAccess: true,
+            message: "Your session does not include GuestFlow access. Sign in again to continue.",
+          });
+        }
         return res.status(403).json({
           authenticated: false,
           error: "NO_ACCESS",
@@ -211,13 +232,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ authenticated: true, user: { username: "admin", name: "Admin" } });
     }
     // Not authenticated — include ssoLoginUrl if configured
-    const ssoBase = process.env.SSO_LOGIN_URL;
-    if (ssoBase) {
-      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-      const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent("/ace-admin")}`;
+    const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req);
+    if (ssoLoginUrl) {
       return res.json({
         authenticated: false,
-        ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`,
+        ssoLoginUrl,
       });
     }
     res.json({ authenticated: false });
@@ -230,9 +249,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return a redirect URL so the frontend can follow the SSO flow.
       const ssoBase = process.env.SSO_LOGIN_URL;
       if (ssoBase) {
-        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-        const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent("/ace-admin")}`;
-        return res.json({ redirect: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}` });
+        const redirect = buildGuestFlowSsoLoginUrl(req);
+        if (redirect) {
+          return res.json({ redirect });
+        }
       }
 
       const { username, password } = req.body;
@@ -249,17 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Logout ───────────────────────────────────────────────────────────────────
   app.post("/api/logout", (req, res) => {
-    // Clear the SSO cookie (must match domain/secure settings set by the SSO service)
-    const domain = process.env.APP_DOMAIN;
-    const isLocalDomain = !domain || domain === "localhost" || domain === "127.0.0.1";
-    res.clearCookie("ace_sso", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      ...(isLocalDomain ? {} : { domain: `.${domain}` }),
-    });
-
-    // Destroy the legacy session as well
+    clearAceSsoCookie(res);
     req.session.destroy(() => {
       // If SSO is configured, tell the frontend to hit the SSO logout endpoint
       const ssoBase = process.env.SSO_LOGIN_URL;
@@ -1719,7 +1729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/", (req, res, next) => {
     const host = req.hostname || "";
     if (host === "guestflow.aceelectronics.com") {
-      return res.redirect(302, "/dashboard");
+      return res.redirect(302, "/ace-admin");
     }
     if (host.includes("registration.aceelectronics.com")) {
       return res.redirect(302, "/guest-check-in");

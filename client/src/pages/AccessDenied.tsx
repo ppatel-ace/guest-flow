@@ -20,7 +20,10 @@ export default function AccessDeniedPage() {
           <CardTitle>Access denied</CardTitle>
           <CardDescription>{message}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          <Button asChild>
+            <a href="/ace-admin">Sign in with ACE SSO</a>
+          </Button>
           <Button asChild variant="outline">
             <a href={HUB_URL}>Return to ACE Hub</a>
           </Button>

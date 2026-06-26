@@ -66,6 +66,15 @@ export function setAceSsoCookie(res: Response, token: string): void {
   });
 }
 
+export function clearAceSsoCookie(res: Response): void {
+  res.clearCookie("ace_sso", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    ...cookieDomainOptions(),
+  });
+}
+
 export function refreshSsoTokenIfNeeded(
   token: string,
   payload: AceSsoJwtPayload,
@@ -118,45 +127,91 @@ export function buildGuestFlowCallbackUrl(appUrl: string, next = "/ace-admin"): 
   return `${appUrl.replace(/\/$/, "")}/api/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
-export function registerAceSsoRoutes(app: Express, _appSlug: AceAppSlug): void {
+export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
   const defaultNext = "/ace-admin";
 
-  app.get("/api/auth/callback", (req, res) => {
+  app.get("/api/auth/callback", async (req, res) => {
     const rawToken = req.query.ace_token as string | undefined;
     const nextPath = (req.query.next as string) || defaultNext;
     const safeNext = nextPath.startsWith("/") ? nextPath : defaultNext;
 
     const queryToken = rawToken ? decodeURIComponent(rawToken) : undefined;
     const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.ace_sso;
+    const token = queryToken || cookieToken;
 
-    if (queryToken) {
-      const payload = verifyAceSsoToken(queryToken);
-      if (!payload) {
-        return res.redirect(`${defaultNext}?error=sso_invalid`);
-      }
-      if (!hasAppAccess(payload, _appSlug)) {
-        return res.redirect(
-          `/access-denied?error=NO_ACCESS&message=${encodeURIComponent(
-            "You do not have access to this application. Contact your administrator.",
-          )}`,
-        );
-      }
-      setAceSsoCookie(res, queryToken);
+    if (!token) {
       return res.redirect(safeNext);
     }
 
-    if (cookieToken) {
-      const payload = verifyAceSsoToken(cookieToken);
-      if (payload && !hasAppAccess(payload, _appSlug)) {
-        return res.redirect(
-          `/access-denied?error=NO_ACCESS&message=${encodeURIComponent(
-            "You do not have access to this application. Contact your administrator.",
-          )}`,
-        );
-      }
-      if (payload) return res.redirect(safeNext);
+    const rawPayload = verifyAceSsoToken(token);
+    if (!rawPayload) {
+      clearAceSsoCookie(res);
+      return res.redirect(`${defaultNext}?error=sso_invalid`);
+    }
+
+    const payload = await refreshAceSsoFromRegistry(res, rawPayload);
+    if (!hasAppAccess(payload, appSlug)) {
+      clearAceSsoCookie(res);
+      return res.redirect(
+        `/access-denied?error=NO_ACCESS&message=${encodeURIComponent(
+          "You do not have access to this application. Contact your administrator.",
+        )}`,
+      );
+    }
+
+    const secret = process.env.SSO_JWT_SECRET;
+    if (secret) {
+      const freshToken = jwt.sign(
+        {
+          sub: payload.sub,
+          email: payload.email,
+          name: payload.name,
+          employeeId: payload.employeeId,
+          groups: payload.groups,
+          apps: payload.apps,
+        },
+        secret,
+        { expiresIn: SSO_JWT_EXPIRY_SECONDS },
+      );
+      setAceSsoCookie(res, freshToken);
+    } else if (queryToken) {
+      setAceSsoCookie(res, queryToken);
     }
 
     return res.redirect(safeNext);
+  });
+
+  app.get("/api/auth/sso/session", async (req: AceAuthRequest, res) => {
+    const raw = tryAceSsoFromRequest(req, res);
+    if (!raw) {
+      const ssoBase = process.env.SSO_LOGIN_URL;
+      if (ssoBase) {
+        const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent(defaultNext)}`;
+        return res.json({
+          authenticated: false,
+          ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`,
+        });
+      }
+      return res.json({ authenticated: false });
+    }
+
+    const payload = await refreshAceSsoFromRegistry(res, raw);
+    if (hasAppAccess(payload, appSlug)) {
+      return res.json({ authenticated: true, via: "sso", user: payload });
+    }
+
+    clearAceSsoCookie(res);
+    const ssoBase = process.env.SSO_LOGIN_URL;
+    if (ssoBase) {
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const callbackUrl = `${appUrl}/api/auth/callback?next=${encodeURIComponent(defaultNext)}`;
+      return res.json({
+        authenticated: false,
+        reason: "no_access",
+        ssoLoginUrl: `${ssoBase}?redirect_uri=${encodeURIComponent(callbackUrl)}`,
+      });
+    }
+    res.json({ authenticated: false });
   });
 }
