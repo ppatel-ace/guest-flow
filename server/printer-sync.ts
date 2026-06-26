@@ -3,7 +3,7 @@ import { storage } from "./storage";
 
 const PRINTER_IP   = (process.env.LABEL_PRINTER_IP  || "").trim();
 const PRINTER_PORT = parseInt(process.env.LABEL_PRINTER_PORT || "9100", 10);
-const PING_MS      = 30_000;
+const PING_MS      = 15_000;   // poll every 15 s so UI reflects reality quickly
 const TIMEOUT_MS   = 3_000;
 
 const AUTO_NAME  = "Brother QL (Auto)";
@@ -25,7 +25,8 @@ function ping(ip: string, port: number): Promise<{ online: boolean; reason?: str
   });
 }
 
-async function findOrCreate(): Promise<string> {
+async function ensureAutoCreated(): Promise<string | null> {
+  if (!PRINTER_IP) return null;
   const all = await storage.getAllPrinters();
   const existing = all.find((p) => (p as any).ipAddress === PRINTER_IP);
   if (existing) return existing.id;
@@ -42,51 +43,62 @@ async function findOrCreate(): Promise<string> {
   return created.id;
 }
 
-async function tick(printerId: string) {
-  const { online, reason } = await ping(PRINTER_IP, PRINTER_PORT);
-  const status = online ? "online" : "offline";
-  await storage.updatePrinter(printerId, { status });
-  if (online) {
-    console.log(`[printer-sync] ${PRINTER_IP}:${PRINTER_PORT} → online`);
-  } else {
-    console.log(`[printer-sync] ${PRINTER_IP}:${PRINTER_PORT} → offline (${reason})`);
+async function pollAllPrinters() {
+  const all = await storage.getAllPrinters();
+
+  for (const printer of all) {
+    const ip   = (printer as any).ipAddress as string | undefined;
+    const port = ((printer as any).port as number | undefined) ?? 9100;
+    if (!ip) continue;
+
+    const { online, reason } = await ping(ip, port);
+    const newStatus = online ? "online" : "offline";
+
+    if (printer.status !== newStatus) {
+      await storage.updatePrinter(printer.id, { status: newStatus });
+    }
+
+    if (online) {
+      console.log(`[printer-sync] ${ip}:${port} (${printer.name}) → online`);
+    } else {
+      console.log(`[printer-sync] ${ip}:${port} (${printer.name}) → offline (${reason})`);
+    }
   }
 
-  if (online) {
+  // Auto-enable label printing when at least one printer is online
+  if (all.some((p) => p.status === "online" || (p as any).ipAddress)) {
     const settings = await storage.getKioskSettings();
     if (!settings.labelPrinterEnabled) {
-      await storage.updateKioskSettings({ labelPrinterEnabled: true });
-      console.log("[printer-sync] labelPrinterEnabled → true");
+      const anyOnline = all.some((p) => p.status === "online");
+      if (anyOnline) {
+        await storage.updateKioskSettings({ labelPrinterEnabled: true });
+        console.log("[printer-sync] labelPrinterEnabled → true");
+      }
     }
   }
 }
 
 export async function startPrinterSync() {
-  if (!PRINTER_IP) {
-    console.log("[printer-sync] LABEL_PRINTER_IP not set — skipping");
-    return;
+  // Ensure the env-var-configured printer is registered in the DB
+  if (PRINTER_IP) {
+    console.log(`[printer-sync] starting — env printer ip=${PRINTER_IP} port=${PRINTER_PORT}`);
+    try {
+      await ensureAutoCreated();
+    } catch (err) {
+      console.error("[printer-sync] registration error:", err);
+    }
+  } else {
+    console.log("[printer-sync] LABEL_PRINTER_IP not set — will still poll any DB-registered printers");
   }
 
-  console.log(`[printer-sync] starting — ip=${PRINTER_IP} port=${PRINTER_PORT}`);
+  // Initial poll
+  try { await pollAllPrinters(); } catch (err) { console.error("[printer-sync] initial poll:", err); }
 
-  let id: string;
-  try {
-    id = await findOrCreate();
-  } catch (err) {
-    console.error("[printer-sync] registration error:", err);
-    return;
-  }
-
-  try { await tick(id); } catch (err) { console.error("[printer-sync] initial ping:", err); }
-
+  // Recurring poll
   setInterval(async () => {
     try {
-      // Re-fetch in case the record was deleted and needs re-creating
-      const all = await storage.getAllPrinters();
-      if (!all.find((p) => p.id === id)) {
-        id = await findOrCreate();
-      }
-      await tick(id);
+      if (PRINTER_IP) await ensureAutoCreated();
+      await pollAllPrinters();
     } catch (err) {
       console.error("[printer-sync] poll error:", err);
     }

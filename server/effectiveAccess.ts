@@ -1,7 +1,9 @@
 /** Live registry app access — shared pattern across ACE SSO apps. */
 import type { Response } from "express";
 import jwt from "jsonwebtoken";
-import { Pool } from "pg";
+import pg from "pg";
+import type { Pool as PgPool } from "pg";
+const { Pool } = pg;
 
 export type AceAppSlug =
   | "hub"
@@ -23,16 +25,19 @@ export interface AceSsoJwtPayload {
 
 const SSO_JWT_EXPIRY_SECONDS = 8 * 60 * 60;
 
-let pool: Pool | null = null;
+let pool: PgPool | null = null;
 
-function getPool(): Pool | null {
+function getPool(): PgPool | null {
   if (pool) return pool;
-  const url =
+  const raw =
     process.env.JOBTRACK_DATABASE_URL ||
     process.env.PRODUCTION_DATABASE_URL ||
     process.env.DATABASE_URL;
-  if (!url) return null;
-  pool = new Pool({ connectionString: url, max: 2 });
+  if (!raw) return null;
+  // Strip ?sslmode=… from the URL — pg ignores ssl:{} when sslmode is in the
+  // connection string, so we remove it and set ssl options explicitly.
+  const url = raw.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
+  pool = new Pool({ connectionString: url, max: 2, ssl: { rejectUnauthorized: false } });
   return pool;
 }
 

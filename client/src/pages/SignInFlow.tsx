@@ -890,6 +890,7 @@ function DevicesTab() {
 
   const { data: printerList = [], isLoading: printersLoading } = useQuery<PrinterRecord[]>({
     queryKey: ["/api/printers"],
+    refetchInterval: 15000,
   });
 
   const renameMutation = useMutation({

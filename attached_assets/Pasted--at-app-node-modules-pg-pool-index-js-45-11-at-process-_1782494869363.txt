@@ -1,0 +1,100 @@
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:25:46 PM [express] GET /api/printers 200 in 122ms :: [{"id":"709b683b-f9cc-458d-a17c-d94766416c92"…
+[printer-sync] 192.2.2.252:9100 → online
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:25:49 PM [express] DELETE /api/kiosk/devices/all 200 in 127ms :: {"deleted":7}
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:25:49 PM [express] GET /api/kiosk/devices 200 in 123ms :: []
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:25:51 PM [express] DELETE /api/printers/709b683b-f9cc-458d-a17c-d94766416c92 204 in 150ms
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:25:51 PM [express] GET /api/printers 200 in 114ms :: []
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:26:09 PM [express] POST /api/printers 201 in 164ms :: {"id":"afd0e71f-8e53-400f-bd17-4ff3c48e3204"…
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:26:09 PM [express] GET /api/printers 200 in 121ms :: [{"id":"c9851332-b5aa-43d5-8895-5b73d176fa3d"…
+[printer-sync] 192.2.2.252:9100 → online
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:26:19 PM [express] GET /api/kiosk/devices 304 in 124ms :: []
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async /app/dist/index.cjs:3480:23 {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:26:36 PM [express] GET /api/session 304 in 100ms :: {"authenticated":true,"user":{"email":"spatel@…
+5:26:37 PM [express] GET /api/form-fields 304 in 26ms :: [{"id":"0c3ee0af-43d2-4838-aa00-f0288e162a6…
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:26:39 PM [express] GET /api/printers 304 in 132ms :: [{"id":"c9851332-b5aa-43d5-8895-5b73d176fa3d"…
+5:26:39 PM [express] GET /api/kiosk/devices 304 in 138ms :: []
+[printer-sync] 192.2.2.252:9100 → online
+[effectiveAccess] registry refresh failed: Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async refreshAceSsoFromRegistry (/app/dist/index.cjs:3175:20)
+    at async requireAuth (/app/dist/index.cjs:3457:21) {
+  code: 'SELF_SIGNED_CERT_IN_CHAIN'
+}
+5:27:10 PM [express] GET /api/kiosk/devices 304 in 134ms :: []
+[printer-sync] 192.2.2.252:9100 → online

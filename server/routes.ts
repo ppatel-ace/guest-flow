@@ -177,7 +177,7 @@ const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
     return next();
   }
   if (req.session?.authenticated) {
-    req.user = { email: "admin", name: "Admin" };
+    req.user = { id: "admin", email: "admin", name: "Admin" };
     return next();
   }
   res.status(401).json({ error: "Unauthorized" });
