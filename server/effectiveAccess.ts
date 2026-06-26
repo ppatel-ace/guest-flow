@@ -27,6 +27,27 @@ const SSO_JWT_EXPIRY_SECONDS = 8 * 60 * 60;
 
 let pool: PgPool | null = null;
 
+function resolveIamDbSsl(databaseUrl: string): boolean | { rejectUnauthorized: boolean } {
+  const parsed = new URL(databaseUrl);
+  const hostname = parsed.hostname.toLowerCase();
+  const sslmode = parsed.searchParams.get("sslmode");
+  const isSupabase =
+    hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.com");
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "helium" ||
+    hostname === "127.0.0.1" ||
+    !hostname.includes(".");
+
+  if (sslmode === "disable") return false;
+  if (sslmode === "require") return { rejectUnauthorized: false };
+  if (sslmode === "verify-full" || sslmode === "verify-ca") return { rejectUnauthorized: true };
+  if (isLocal) return false;
+  if (isSupabase) return { rejectUnauthorized: true };
+  // Internal ACE / Docker Postgres hosts typically have no TLS listener.
+  return false;
+}
+
 function getPool(): PgPool | null {
   if (pool) return pool;
   const raw =
@@ -34,10 +55,14 @@ function getPool(): PgPool | null {
     process.env.PRODUCTION_DATABASE_URL ||
     process.env.DATABASE_URL;
   if (!raw) return null;
-  // Strip ?sslmode=… from the URL — pg ignores ssl:{} when sslmode is in the
-  // connection string, so we remove it and set ssl options explicitly.
-  const url = raw.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
-  pool = new Pool({ connectionString: url, max: 2, ssl: { rejectUnauthorized: false } });
+  const parsed = new URL(raw);
+  parsed.searchParams.delete("sslmode");
+  const connectionString = parsed.toString();
+  pool = new Pool({
+    connectionString,
+    max: 2,
+    ssl: resolveIamDbSsl(raw),
+  });
   return pool;
 }
 
@@ -134,6 +159,9 @@ export async function refreshAceSsoFromRegistry(
             access_support: rows.some((r) => r.access_support === true),
           };
     const effectiveApps = appsFromRegistry(registry, sso.is_admin);
+    console.log(
+      `[effectiveAccess] ${payload.email} registry refresh → apps=${effectiveApps.join(",") || "(none)"} guestflow=${registry?.access_guestflow === true}`,
+    );
     const updated: AceSsoJwtPayload = {
       ...payload,
       apps: effectiveApps,
