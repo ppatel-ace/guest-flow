@@ -51,6 +51,8 @@ expertMode = true
 
 [userenv.shared]
 DATABASE_URL = "postgresql://postgres.pagdiccadattytahnxfj:jD0l66znjEKE18XX@aws-1-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require"
+LABEL_PRINTER_IP = "192.2.2.252"
+LABEL_PRINTER_PORT = "9100"
 
 [postMerge]
 path = "scripts/post-merge.sh"
