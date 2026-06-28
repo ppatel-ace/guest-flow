@@ -7,7 +7,7 @@ COPY package.json package-lock.json .npmrc ./
 # Replit rewrites lockfile tarball URLs to an internal host that does not resolve in Docker.
 RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
     && npm install -g npm@11 \
-    && npm ci
+    && npm install --no-audit --no-fund
 
 COPY . .
 
@@ -26,7 +26,7 @@ COPY package.json package-lock.json .npmrc ./
 
 # Fresh production install so sharp gets the correct linux-x64 native binding (not musl/alpine).
 RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
-    && npm ci --omit=dev --include=optional
+    && npm install --omit=dev --include=optional --no-audit --no-fund
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
