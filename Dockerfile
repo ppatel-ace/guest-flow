@@ -1,4 +1,4 @@
-FROM node:22 AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -7,28 +7,30 @@ COPY package.json package-lock.json .npmrc ./
 # Replit rewrites lockfile tarball URLs to an internal host that does not resolve in Docker.
 RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
     && npm install -g npm@11 \
-    && npm install --ignore-scripts
+    && npm ci
 
 COPY . .
 
 RUN npm run build
 
-# Prune dev/optional deps in-place — no install scripts run, just directory removal
-RUN npm prune --omit=dev --omit=optional --ignore-scripts
-
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Fonts for SVG label text rendering (DejaVu Sans)
-RUN apk add --no-cache fontconfig ttf-dejavu
+# Fonts for SVG badge text rendering (DejaVu Sans)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the already-pruned node_modules — no second npm install needed
-COPY --from=builder /app/node_modules ./node_modules
+COPY package.json package-lock.json .npmrc ./
+
+# Fresh production install so sharp gets the correct linux-x64 native binding (not musl/alpine).
+RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
+    && npm ci --omit=dev --include=optional
+
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/server/assets ./server/assets
-COPY package.json ./
 
 ENV NODE_ENV=production
 ENV PORT=5000
