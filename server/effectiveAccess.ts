@@ -100,7 +100,7 @@ function setAceSsoCookie(res: Response, token: string): void {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: SSO_JWT_EXPIRY_SECONDS * 1000,
+    // Session cookie — expires when the browser is closed (no maxAge).
     ...cookieDomainOptions(),
   });
 }
