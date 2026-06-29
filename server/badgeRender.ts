@@ -61,7 +61,7 @@ function decodeBmpGrayscale(buf: Buffer): GrayImage {
 }
 
 function resizeGrayscaleNN(src: GrayImage, maxW: number, maxH: number): GrayImage {
-  const scale = Math.min(maxW / src.width, maxH / src.height, 1);
+  const scale = Math.min(maxW / src.width, maxH / src.height); // allow upscaling
   const dstW  = Math.max(1, Math.round(src.width  * scale));
   const dstH  = Math.max(1, Math.round(src.height * scale));
   const out   = Buffer.alloc(dstW * dstH);
@@ -93,25 +93,25 @@ async function loadLogoGrayscale(logoPath: string): Promise<GrayImage> {
 }
 
 // ── Label canvas ───────────────────────────────────────────────────────────────
-const W = 991;   // feed direction (≈ 90 mm @ 300 dpi)
+const W = 1200;  // feed direction (≈ 102 mm @ 300 dpi — long enough for full text)
 const H = 696;   // tape width    (62 mm @ 300 dpi, printable)
 
 // ── Logo area (left zone, vertically centred) ─────────────────────────────────
-const LOGO_MAX  = 280;                            // bounding box
-const LOGO_X    = 45;                             // left offset
-const LOGO_Y    = Math.floor((H - LOGO_MAX) / 2); // 208
+const LOGO_MAX  = 220;                            // bounding box
+const LOGO_X    = 35;                             // left offset
+const LOGO_Y    = Math.floor((H - LOGO_MAX) / 2); // 238
 
 // ── Text area (right of logo) ─────────────────────────────────────────────────
-const TEXT_X      = 380;                          // left edge of text zone
+const TEXT_X      = 290;                          // left edge of text zone
 const FONT_W      = 8;
 const FONT_H      = 16;
-const FONT_SCALE  = 3;                            // → 24 × 48 px per glyph
-const CHAR_W      = FONT_W  * FONT_SCALE;         // 24
-const CHAR_H      = FONT_H  * FONT_SCALE;         // 48
-const LINE_PITCH  = 140;                          // top-to-top distance
+const FONT_SCALE  = 4;                            // → 32 × 64 px per glyph (larger)
+const CHAR_W      = FONT_W  * FONT_SCALE;         // 32
+const CHAR_H      = FONT_H  * FONT_SCALE;         // 64
+const LINE_PITCH  = 92;                           // compact top-to-top distance
 const TEXT_LINES  = 4;
 const TEXT_BLOCK  = TEXT_LINES * CHAR_H + (TEXT_LINES - 1) * (LINE_PITCH - CHAR_H);
-const TEXT_START  = Math.floor((H - TEXT_BLOCK) / 2); // 114
+const TEXT_START  = Math.floor((H - TEXT_BLOCK) / 2); // 178
 
 const FIELDS = [
   { label: "Name",          key: "name"      as keyof VisitorBadgeFields },
@@ -274,9 +274,9 @@ function drawText(
  */
 async function stampLogo(grid: MonoGrid): Promise<void> {
   const logoPath =
-    resolveAssetPath("ace-visitor-logo.bmp") ??
+    resolveAssetPath("ace-visitor-logo.jpg") ??
     resolveAssetPath("ace-visitor-logo.png") ??
-    resolveAssetPath("ace-visitor-logo.jpg");
+    resolveAssetPath("ace-visitor-logo.bmp");
 
   if (!logoPath) {
     console.warn("[badge] No logo file found — label will print without logo");
