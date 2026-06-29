@@ -16,40 +16,6 @@ function getCrmSql(): ReturnType<typeof postgres> | null {
   return sql;
 }
 
-function normalizeCompanyName(name: string): string {
-  return name.trim().toLowerCase();
-}
-
-async function resolveCrmCompanyId(
-  db: ReturnType<typeof postgres>,
-  companyName: string | null | undefined,
-): Promise<string | null> {
-  const normalized = normalizeCompanyName(companyName ?? "");
-  if (!normalized) return null;
-
-  const [exact] = await db<{ id: string }[]>`
-    SELECT id FROM ace_crm.companies WHERE normalized_name = ${normalized} LIMIT 1
-  `;
-  if (exact?.id) return exact.id;
-
-  const [alias] = await db<{ company_id: string }[]>`
-    SELECT company_id FROM ace_crm.company_aliases WHERE alias_normalized = ${normalized} LIMIT 1
-  `.catch(() => [undefined]);
-  if (alias?.company_id) return alias.company_id;
-
-  if (normalized.length < 3) return null;
-
-  const [heuristic] = await db<{ id: string }[]>`
-    SELECT id FROM ace_crm.companies
-    WHERE normalized_name LIKE ${"%" + normalized + "%"}
-    ORDER BY
-      CASE WHEN source_system = 'salesforce' THEN 0 ELSE 1 END,
-      length(name) DESC
-    LIMIT 1
-  `;
-  return heuristic?.id ?? null;
-}
-
 function splitFullName(fullName: string): { firstName: string; lastName: string } {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { firstName: "Guest", lastName: "" };
@@ -65,31 +31,8 @@ export function registerAceCrmSyncOnStartup(_app: Express): void {
   }
 }
 
-export async function syncCompanyToAceCrm(name: string, sourceId: string): Promise<void> {
-  const db = getCrmSql();
-  if (!db) return;
-  const normalized = normalizeCompanyName(name);
-  if (!normalized) return;
-  try {
-    const companyId = await resolveCrmCompanyId(db, name);
-    if (companyId) {
-      await db`
-        INSERT INTO ace_crm.company_aliases (alias_normalized, company_id)
-        VALUES (${normalized}, ${companyId}::uuid)
-        ON CONFLICT (alias_normalized) DO NOTHING
-      `.catch(() => undefined);
-      return;
-    }
-    await db`
-      INSERT INTO ace_crm.companies (name, normalized_name, source_system, source_id)
-      VALUES (${name.trim()}, ${normalized}, 'guestflow', ${sourceId})
-      ON CONFLICT (normalized_name) DO UPDATE SET
-        updated_at = now(),
-        source_id = COALESCE(ace_crm.companies.source_id, EXCLUDED.source_id)
-    `;
-  } catch (err) {
-    console.warn("[aceCrmSync] company sync skipped:", (err as Error).message);
-  }
+export async function syncCompanyToAceCrm(_name: string, _sourceId: string): Promise<void> {
+  // Customers live in Salesforce only — GuestFlow company names are stored on contacts.
 }
 
 export async function syncContactToAceCrm(data: {
@@ -105,8 +48,13 @@ export async function syncContactToAceCrm(data: {
   const db = getCrmSql();
   if (!db || !data.email) return;
   try {
-    const companyId = await resolveCrmCompanyId(db, data.companyName);
     const email = data.email.trim().toLowerCase();
+    const guestflowCompany = data.companyName?.trim() || null;
+
+    await db`
+      ALTER TABLE ace_crm.contacts
+      ADD COLUMN IF NOT EXISTS guestflow_company_name TEXT
+    `.catch(() => undefined);
 
     const [updated] = await db<{ id: string }[]>`
       UPDATE ace_crm.contacts SET
@@ -115,7 +63,7 @@ export async function syncContactToAceCrm(data: {
         phone = COALESCE(${data.phone ?? null}, phone),
         title = COALESCE(${data.title ?? null}, title),
         ace_poc = COALESCE(${data.acePoc ?? null}, ace_poc),
-        company_id = COALESCE(${companyId}::uuid, company_id),
+        guestflow_company_name = COALESCE(${guestflowCompany}, guestflow_company_name),
         updated_at = now()
       WHERE lower(email) = ${email}
       RETURNING id
@@ -123,17 +71,17 @@ export async function syncContactToAceCrm(data: {
     if (!updated?.id) {
       await db`
         INSERT INTO ace_crm.contacts (
-          company_id, first_name, last_name, email, phone, title, ace_poc,
-          source_system, source_id
+          first_name, last_name, email, phone, title, ace_poc,
+          guestflow_company_name, source_system, source_id
         )
         VALUES (
-          ${companyId}::uuid,
           ${data.firstName},
           ${data.lastName},
           ${email},
           ${data.phone ?? null},
           ${data.title ?? null},
           ${data.acePoc ?? null},
+          ${guestflowCompany},
           'guestflow',
           ${data.sourceId}
         )
@@ -163,9 +111,6 @@ export async function syncVisitToAceCrm(data: {
     `;
     if (!contact) return;
 
-    const companyId =
-      contact.company_id ?? (await resolveCrmCompanyId(db, data.companyName));
-
     const [existing] = await db<{ id: string }[]>`
       SELECT id FROM ace_crm.visits
       WHERE source_system = 'guestflow' AND source_id = ${data.sourceId}
@@ -189,7 +134,7 @@ export async function syncVisitToAceCrm(data: {
       )
       VALUES (
         ${contact.id},
-        ${companyId},
+        ${contact.company_id},
         ${data.eventName ?? null},
         ${data.eventLocation ?? null},
         ${data.acePoc ?? null},
