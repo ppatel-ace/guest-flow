@@ -109,6 +109,8 @@ function App() {
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
           <Route path="/kiosk" component={Kiosk} />
+          <Route path="/" component={AdminLayout} />
+          <Route path="/dashboard" component={AdminLayout} />
           <Route component={AdminLayout} />
         </Switch>
         <Toaster />

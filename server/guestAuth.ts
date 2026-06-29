@@ -11,11 +11,11 @@ export function clearAceSsoCookie(res: Response): void {
   });
 }
 
-export function buildGuestFlowSsoLoginUrl(req: Request, next = "/ace-admin"): string | null {
+export function buildGuestFlowSsoLoginUrl(req: Request, next = "/"): string | null {
   const ssoBase = process.env.SSO_LOGIN_URL?.trim();
   if (!ssoBase) return null;
   const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-  const safeNext = next.startsWith("/") ? next : "/ace-admin";
+  const safeNext = next.startsWith("/") ? next : "/";
   const callbackUrl = `${appUrl.replace(/\/$/, "")}/api/auth/callback?next=${encodeURIComponent(safeNext)}`;
   const loginUrl = new URL(ssoBase);
   loginUrl.searchParams.set("redirect_uri", callbackUrl);

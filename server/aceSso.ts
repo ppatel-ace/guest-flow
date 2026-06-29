@@ -123,12 +123,12 @@ export function tryAceSsoFromRequest(req: AceAuthRequest, res: Response): AceSso
   return payload;
 }
 
-export function buildGuestFlowCallbackUrl(appUrl: string, next = "/ace-admin"): string {
+export function buildGuestFlowCallbackUrl(appUrl: string, next = "/"): string {
   return `${appUrl.replace(/\/$/, "")}/api/auth/callback?next=${encodeURIComponent(next)}`;
 }
 
 export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
-  const defaultNext = "/ace-admin";
+  const defaultNext = "/";
 
   app.get("/api/auth/callback", async (req, res) => {
     const rawToken = req.query.ace_token as string | undefined;

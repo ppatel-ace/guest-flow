@@ -6,7 +6,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, accessDenied } = useAuth();
+  const { isAuthenticated, isLoading, accessDenied, ssoLoginUrl } = useAuth();
 
   if (isLoading) {
     return (
@@ -21,6 +21,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
+    if (ssoLoginUrl) {
+      window.location.href = ssoLoginUrl;
+      return null;
+    }
     return <Redirect to="/ace-admin" />;
   }
 

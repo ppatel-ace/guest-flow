@@ -199,11 +199,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = await refreshAceSsoFromRegistry(res, raw);
       if (!hasAppAccess(payload, "guestflow")) {
         clearAceSsoCookie(res);
-        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/ace-admin");
+        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/");
         return res.status(403).json({
           authenticated: false,
           error: "NO_ACCESS",
-          staleAccess: true,
+          staleAccess: false,
           message: "You do not have access to this application. Contact your administrator.",
           ssoLoginUrl: ssoLoginUrl ?? undefined,
         });
@@ -217,7 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (req.session?.authenticated) {
       return res.json({ authenticated: true, user: { username: "admin", name: "Admin" } });
     }
-    const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/ace-admin");
+    const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/");
     if (ssoLoginUrl) {
       return res.json({
         authenticated: false,
@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return a redirect URL so the frontend can follow the SSO flow.
       const ssoBase = process.env.SSO_LOGIN_URL;
       if (ssoBase) {
-        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/ace-admin");
+        const ssoLoginUrl = buildGuestFlowSsoLoginUrl(req, "/");
         return res.json({ redirect: ssoLoginUrl });
       }
 
@@ -262,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           + (ssoBase.includes("/api/") ? "" : "") + "/api/auth/logout";
         // Derive the SSO service base URL (strip path if SSO_LOGIN_URL points to the root)
         const ssoServiceUrl = new URL(ssoBase).origin;
-        const redirectAfterLogout = `${appUrl}/ace-admin`;
+        const redirectAfterLogout = `${appUrl}/`;
         return res.json({
           success: true,
           ssoLogoutUrl: `${ssoServiceUrl}/api/auth/logout?redirect_uri=${encodeURIComponent(redirectAfterLogout)}`,
@@ -1750,7 +1750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/", (req, res, next) => {
     const host = req.hostname || "";
     if (host === "guestflow.aceelectronics.com") {
-      return res.redirect(302, "/ace-admin");
+      return next();
     }
     if (host.includes("registration.aceelectronics.com")) {
       return res.redirect(302, "/guest-check-in");
