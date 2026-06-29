@@ -10,11 +10,15 @@ services:
     # printer on WiFi) without Docker NAT getting in the way.
     # The app listens on PORT (6055) directly on the host — nginx proxies there.
     network_mode: host
+    env_file:
+      - path: stack.env
+        required: false
     environment:
       NODE_ENV: production
       # Must match the host port nginx proxies to (was 6055:5000 before host mode)
       PORT: 6055
       DATABASE_URL: ${DATABASE_URL}
+      ACE_CRM_DATABASE_URL: ${ACE_CRM_DATABASE_URL:-}
       SESSION_SECRET: ${SESSION_SECRET:-change_this_to_a_long_random_secret}
       FINGERPRINT_HMAC_SECRET: ${FINGERPRINT_HMAC_SECRET:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}

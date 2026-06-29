@@ -18,7 +18,7 @@ import {
   type AcePoc,
 } from "@shared/schema";
 import { db } from "./db";
-import { syncCompanyToAceCrm, syncContactToAceCrm, syncVisitToAceCrm } from "./aceCrmSync";
+import { syncCompanyToAceCrm, syncContactToAceCrm, syncVisitToAceCrm, syncVisitorToAceCrm } from "./aceCrmSync";
 import { eq, or, ilike, sql, asc, desc, and, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -780,6 +780,23 @@ export class DatabaseStorage implements IStorage {
 
   async upsertContactByEmail(data: InsertContact): Promise<Contact> {
     const normalizedEmail = data.email.trim().toLowerCase();
+    const companyName = data.companyId
+      ? (await db.select().from(companies).where(eq(companies.id, data.companyId)))[0]?.name ?? null
+      : null;
+
+    const pushToCrm = (contact: Contact) => {
+      void syncContactToAceCrm({
+        sourceId: contact.id,
+        companyName,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        title: contact.title,
+        acePoc: contact.acePoc,
+      });
+    };
+
     const [existing] = await db
       .select()
       .from(contacts)
@@ -801,6 +818,7 @@ export class DatabaseStorage implements IStorage {
         .set(updateData)
         .where(eq(contacts.id, existing.id))
         .returning();
+      pushToCrm(updated);
       return updated;
     }
 
@@ -808,16 +826,7 @@ export class DatabaseStorage implements IStorage {
       .insert(contacts)
       .values({ ...data, email: normalizedEmail })
       .returning();
-    void syncContactToAceCrm({
-      sourceId: created.id,
-      companyName: data.companyId ? undefined : null,
-      firstName: created.firstName,
-      lastName: created.lastName,
-      email: created.email,
-      phone: created.phone,
-      title: created.title,
-      acePoc: created.acePoc,
-    });
+    pushToCrm(created);
     return created;
   }
 
@@ -826,9 +835,15 @@ export class DatabaseStorage implements IStorage {
     if (visit.contactId) {
       const [contact] = await db.select().from(contacts).where(eq(contacts.id, visit.contactId));
       if (contact?.email) {
+        let companyName: string | null = null;
+        if (contact.companyId) {
+          const [co] = await db.select().from(companies).where(eq(companies.id, contact.companyId));
+          companyName = co?.name ?? null;
+        }
         void syncVisitToAceCrm({
           sourceId: visit.id,
           contactEmail: contact.email,
+          companyName,
           eventName: visit.eventName,
           eventDate: visit.eventDate,
           eventLocation: visit.eventLocation,
@@ -1003,6 +1018,16 @@ export class DatabaseStorage implements IStorage {
 
   async createVisitor(data: InsertVisitor): Promise<Visitor> {
     const [visitor] = await db.insert(visitors).values(data).returning();
+    void syncVisitorToAceCrm({
+      id: visitor.id,
+      fullName: visitor.fullName,
+      email: visitor.email,
+      phoneNumber: visitor.phoneNumber,
+      company: visitor.company,
+      acePoc: visitor.acePoc,
+      signedInAt: visitor.signedInAt ?? new Date(),
+      location: visitor.location,
+    });
     return visitor;
   }
 
