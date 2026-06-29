@@ -15,6 +15,83 @@ import sharp from "sharp";
 import type { MonoGrid, VisitorBadgeFields } from "./badgeAssets";
 import { resolveAssetPath } from "./badgeAssets";
 
+// ── Pure-JS BMP decoder ───────────────────────────────────────────────────────
+// Handles Windows 3.x BITMAPINFOHEADER BMPs (24-bit and 32-bit).
+// sharp's prebuilt binary does not support BMP; this avoids that limitation.
+
+interface GrayImage { data: Buffer; width: number; height: number; }
+
+function decodeBmpGrayscale(buf: Buffer): GrayImage {
+  if (buf[0] !== 0x42 || buf[1] !== 0x4D) throw new Error("Not a BMP file");
+  const pixelDataOffset = buf.readUInt32LE(10);
+  const width           = buf.readInt32LE(18);
+  const rawHeight       = buf.readInt32LE(22);
+  const bpp             = buf.readUInt16LE(28);
+  const topDown         = rawHeight < 0;
+  const h               = Math.abs(rawHeight);
+  const out             = Buffer.alloc(width * h);
+
+  if (bpp === 32) {
+    const rowBytes = width * 4;
+    for (let y = 0; y < h; y++) {
+      const srcY = topDown ? y : h - 1 - y;
+      const row  = pixelDataOffset + srcY * rowBytes;
+      for (let x = 0; x < width; x++) {
+        const o = row + x * 4;
+        const lum = Math.round(0.299 * buf[o + 2] + 0.587 * buf[o + 1] + 0.114 * buf[o]);
+        out[y * width + x] = lum;
+      }
+    }
+  } else if (bpp === 24) {
+    const rowBytes = Math.ceil(width * 3 / 4) * 4;
+    for (let y = 0; y < h; y++) {
+      const srcY = topDown ? y : h - 1 - y;
+      const row  = pixelDataOffset + srcY * rowBytes;
+      for (let x = 0; x < width; x++) {
+        const o = row + x * 3;
+        const lum = Math.round(0.299 * buf[o + 2] + 0.587 * buf[o + 1] + 0.114 * buf[o]);
+        out[y * width + x] = lum;
+      }
+    }
+  } else {
+    throw new Error(`Unsupported BMP bit depth: ${bpp}`);
+  }
+
+  return { data: out, width, height: h };
+}
+
+function resizeGrayscaleNN(src: GrayImage, maxW: number, maxH: number): GrayImage {
+  const scale = Math.min(maxW / src.width, maxH / src.height, 1);
+  const dstW  = Math.max(1, Math.round(src.width  * scale));
+  const dstH  = Math.max(1, Math.round(src.height * scale));
+  const out   = Buffer.alloc(dstW * dstH);
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy = Math.min(Math.floor(dy / scale), src.height - 1);
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx = Math.min(Math.floor(dx / scale), src.width - 1);
+      out[dy * dstW + dx] = src.data[sy * src.width + sx];
+    }
+  }
+  return { data: out, width: dstW, height: dstH };
+}
+
+async function loadLogoGrayscale(logoPath: string): Promise<GrayImage> {
+  const raw = fs.readFileSync(logoPath);
+  const ext = logoPath.toLowerCase();
+
+  if (ext.endsWith(".bmp")) {
+    return decodeBmpGrayscale(raw);
+  }
+
+  // PNG / JPG — use sharp (always works for these formats)
+  const { data, info } = await sharp(raw)
+    .flatten({ background: "#ffffff" })
+    .grayscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height };
+}
+
 // ── Label canvas ───────────────────────────────────────────────────────────────
 const W = 991;   // feed direction (≈ 90 mm @ 300 dpi)
 const H = 696;   // tape width    (62 mm @ 300 dpi, printable)
@@ -206,23 +283,22 @@ async function stampLogo(grid: MonoGrid): Promise<void> {
     return;
   }
 
-  const { data, info } = await sharp(fs.readFileSync(logoPath))
-    .resize(LOGO_MAX, LOGO_MAX, { fit: "inside", withoutEnlargement: false })
-    .flatten({ background: "#ffffff" })
-    .grayscale()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  let img: GrayImage;
+  try {
+    const raw = await loadLogoGrayscale(logoPath);
+    img = resizeGrayscaleNN(raw, LOGO_MAX, LOGO_MAX);
+  } catch (err) {
+    console.warn("[badge] Logo load failed, printing without logo:", (err as Error).message);
+    return;
+  }
 
-  const lw = info.width;
-  const lh = info.height;
+  // Centre the resized logo within the logo zone
+  const offsetX = LOGO_X + Math.floor((LOGO_MAX - img.width)  / 2);
+  const offsetY = LOGO_Y + Math.floor((LOGO_MAX - img.height) / 2);
 
-  // Centre the (possibly non-square) resized logo within the logo zone
-  const offsetX = LOGO_X + Math.floor((LOGO_MAX - lw) / 2);
-  const offsetY = LOGO_Y + Math.floor((LOGO_MAX - lh) / 2);
-
-  for (let ly = 0; ly < lh; ly++) {
-    for (let lx = 0; lx < lw; lx++) {
-      const lum = data[ly * lw + lx];
+  for (let ly = 0; ly < img.height; ly++) {
+    for (let lx = 0; lx < img.width; lx++) {
+      const lum = img.data[ly * img.width + lx];
       if (lum < 128) {
         const gx = offsetX + lx;
         const gy = offsetY + ly;
