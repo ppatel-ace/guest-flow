@@ -839,6 +839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: fullName,
             company: body.company ?? "",
             email: body.email ?? "",
+            visitDate: new Date(),
           });
         } catch (err) {
           console.error("[guest-checkin] print error:", err);
@@ -1203,6 +1204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: "Test Visitor",
         company: "Ace Electronics",
         email: "test@aceelectronics.com",
+        visitDate: new Date(),
       });
       res.json({ success: true, printed: true, printerName });
     } catch (err) {
@@ -1354,7 +1356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!name) {
         return res.status(400).json({ error: "name is required" });
       }
-      const { printerName } = await printVisitorBadgeLabel({ name, company, email });
+      const { printerName } = await printVisitorBadgeLabel({ name, company, email, visitDate: new Date() });
       res.json({ success: true, printed: true, printerName });
     } catch (err) {
       console.error("[kiosk/print-label]", err);
