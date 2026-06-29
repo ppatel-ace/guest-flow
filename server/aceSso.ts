@@ -130,10 +130,10 @@ export function buildGuestFlowCallbackUrl(appUrl: string, next = "/"): string {
 export function registerAceSsoRoutes(app: Express, appSlug: AceAppSlug): void {
   const defaultNext = "/";
 
-  app.get("/api/auth/callback", async (req, res) => {
+  app.get(["/api/auth/callback", "/ace-admin/api/auth/callback"], async (req, res) => {
     const rawToken = req.query.ace_token as string | undefined;
     const nextPath = (req.query.next as string) || defaultNext;
-    const safeNext = nextPath.startsWith("/") ? nextPath : defaultNext;
+    const safeNext = nextPath.startsWith("/") ? (nextPath === "/ace-admin" ? "/" : nextPath) : defaultNext;
 
     const queryToken = rawToken ? decodeURIComponent(rawToken) : undefined;
     const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.ace_sso;
