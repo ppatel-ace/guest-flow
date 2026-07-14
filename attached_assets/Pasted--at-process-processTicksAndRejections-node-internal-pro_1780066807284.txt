@@ -1,0 +1,100 @@
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)
+Error: self-signed certificate in certificate chain
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:322:21)
+    at async PGStore._rawEnsureSessionStoreTable (/app/node_modules/connect-pg-simple/index.js:177:19)
+    at async PGStore._asyncQuery (/app/node_modules/connect-pg-simple/index.js:315:7)

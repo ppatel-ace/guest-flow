@@ -1,0 +1,70 @@
+***EXTERNAL MESSAGE*** 
+PostgreSQL Database directory appears to contain a database; Skipping initialization
+2026-05-28 17:10:08.405 UTC [1] LOG:  starting PostgreSQL 16.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+2026-05-28 17:10:08.405 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-05-28 17:10:08.405 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-05-28 17:10:08.406 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-05-28 17:10:08.409 UTC [28] LOG:  database system was shut down at 2026-05-28 17:09:57 UTC
+2026-05-28 17:10:08.415 UTC [1] LOG:  database system is ready to accept connections
+2026-05-28 17:14:18.582 UTC [215] LOG:  invalid length of startup packet
+2026-05-28 17:14:18.596 UTC [216] LOG:  invalid length of startup packet
+2026-05-28 17:14:21.991 UTC [224] LOG:  invalid length of startup packet
+2026-05-28 17:14:22.007 UTC [225] LOG:  invalid length of startup packet
+2026-05-28 17:14:25.755 UTC [226] LOG:  invalid length of startup packet
+2026-05-28 17:14:25.779 UTC [227] LOG:  invalid length of startup packet
+2026-05-28 17:14:25.782 UTC [228] LOG:  invalid length of startup packet
+2026-05-28 17:14:25.804 UTC [229] LOG:  invalid length of startup packet
+2026-05-28 17:14:25.807 UTC [230] LOG:  invalid length of startup packet
+2026-05-28 17:14:27.020 UTC [231] LOG:  invalid length of startup packet
+2026-05-28 17:14:27.031 UTC [232] LOG:  invalid length of startup packet
+2026-05-28 17:14:29.783 UTC [234] LOG:  invalid length of startup packet
+2026-05-28 17:14:33.400 UTC [242] LOG:  invalid length of startup packet
+2026-05-28 17:14:33.413 UTC [243] LOG:  invalid length of startup packet
+2026-05-28 17:15:08.502 UTC [26] LOG:  checkpoint starting: time
+2026-05-28 17:15:08.707 UTC [26] LOG:  checkpoint complete: wrote 5 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.202 s, sync=0.001 s, total=0.206 s; sync files=4, longest=0.001 s, average=0.001 s; distance=7 kB, estimate=7 kB; lsn=0/19F2050, redo lsn=0/19F2018
+2026-05-28 17:23:14.259 UTC [645] LOG:  invalid length of startup packet
+2026-05-28 17:23:14.261 UTC [646] LOG:  invalid length of startup packet
+2026-05-28 17:23:20.987 UTC [647] LOG:  invalid length of startup packet
+2026-05-28 17:23:20.990 UTC [648] LOG:  invalid length of startup packet
+2026-05-28 17:23:27.225 UTC [656] LOG:  invalid length of startup packet
+2026-05-28 17:23:27.229 UTC [657] LOG:  invalid length of startup packet
+2026-05-28 17:23:27.231 UTC [658] LOG:  invalid length of startup packet
+2026-05-28 17:23:27.232 UTC [659] LOG:  invalid length of startup packet
+2026-05-28 17:23:27.238 UTC [660] LOG:  invalid length of startup packet
+2026-05-28 17:23:46.616 UTC [676] LOG:  invalid length of startup packet
+2026-05-28 17:23:46.622 UTC [677] LOG:  invalid length of startup packet
+2026-05-28 17:23:55.756 UTC [687] LOG:  invalid length of startup packet
+2026-05-28 17:23:55.759 UTC [686] LOG:  invalid length of startup packet
+2026-05-28 17:25:26.610 UTC [756] LOG:  invalid length of startup packet
+2026-05-28 17:25:26.612 UTC [757] LOG:  invalid length of startup packet
+2026-05-28 17:26:06.978 UTC [788] LOG:  invalid length of startup packet
+2026-05-28 17:26:07.002 UTC [789] LOG:  invalid length of startup packet
+2026-05-28 17:26:07.025 UTC [792] LOG:  invalid length of startup packet
+2026-05-28 17:26:07.033 UTC [790] LOG:  invalid length of startup packet
+2026-05-28 17:26:07.050 UTC [791] LOG:  invalid length of startup packet
+2026-05-28 17:26:26.642 UTC [808] LOG:  invalid length of startup packet
+2026-05-28 17:26:26.649 UTC [809] LOG:  invalid length of startup packet
+2026-05-28 17:26:32.238 UTC [811] LOG:  invalid length of startup packet
+2026-05-28 17:26:32.244 UTC [812] LOG:  invalid length of startup packet
+2026-05-28 17:51:31.323 UTC [1955] LOG:  invalid length of startup packet
+2026-05-28 17:51:31.335 UTC [1956] LOG:  invalid length of startup packet
+2026-05-28 17:51:35.721 UTC [1964] LOG:  invalid length of startup packet
+2026-05-28 17:51:35.820 UTC [1965] LOG:  invalid length of startup packet
+2026-05-28 17:51:39.369 UTC [1966] LOG:  invalid length of startup packet
+2026-05-28 17:51:39.384 UTC [1967] LOG:  invalid length of startup packet
+2026-05-28 17:52:04.456 UTC [1984] LOG:  invalid length of startup packet
+2026-05-28 17:52:42.297 UTC [2015] LOG:  invalid length of startup packet
+2026-05-28 17:52:42.299 UTC [2016] LOG:  invalid length of startup packet
+2026-05-28 17:52:44.275 UTC [2017] LOG:  invalid length of startup packet
+2026-05-28 17:52:44.282 UTC [2018] LOG:  invalid length of startup packet
+2026-05-28 17:52:46.082 UTC [2026] LOG:  invalid length of startup packet
+2026-05-28 17:52:46.085 UTC [2027] LOG:  invalid length of startup packet
+2026-05-28 17:52:51.408 UTC [2029] LOG:  invalid length of startup packet
+2026-05-28 17:52:51.414 UTC [2030] LOG:  invalid length of startup packet
+2026-05-28 17:52:59.607 UTC [2038] LOG:  invalid length of startup packet
+2026-05-28 17:52:59.609 UTC [2039] LOG:  invalid length of startup packet
+2026-05-28 17:53:03.842 UTC [2040] LOG:  invalid length of startup packet
+2026-05-28 17:53:03.845 UTC [2041] LOG:  invalid length of startup packet
+
+
+

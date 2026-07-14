@@ -1,0 +1,100 @@
+  code: '42P07',
+  message: 'relation "sso_users" already exists, skipping',
+  file: 'parse_utilcmd.c',
+  line: '207',
+  routine: 'transformCreateStmt'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "reset_token" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "reset_token_expiry" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "is_admin" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "auth_provider" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+[db] sso_users table ready
+[ace-auth] SSO service running on port 3100
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: da4eccdd-3d5c-4413-be94-b010cc421500 Correlation ID: a3f43f9c-50b1-4874-8d62-4910ea855a09 Timestamp: 2026-06-18 14:11:44Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:11:44Z',
+  trace_id: 'da4eccdd-3d5c-4413-be94-b010cc421500',
+  correlation_id: 'a3f43f9c-50b1-4874-8d62-4910ea855a09'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: 567be9da-049f-4388-91a0-28ea451f1400 Correlation ID: e6cc721f-9e2a-4f7c-a8da-0fb9c9af9140 Timestamp: 2026-06-18 14:11:47Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:11:47Z',
+  trace_id: '567be9da-049f-4388-91a0-28ea451f1400',
+  correlation_id: 'e6cc721f-9e2a-4f7c-a8da-0fb9c9af9140'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: eb290448-b434-477b-a35d-ada63f3d1100 Correlation ID: 4a9e3149-fe8f-4f38-997f-dc094377c3fa Timestamp: 2026-06-18 14:11:51Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:11:51Z',
+  trace_id: 'eb290448-b434-477b-a35d-ada63f3d1100',
+  correlation_id: '4a9e3149-fe8f-4f38-997f-dc094377c3fa'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: 34207e71-764e-49a5-af60-7e7dbd830f00 Correlation ID: 71c85ed2-282c-463d-9df1-a8f535693034 Timestamp: 2026-06-18 14:12:11Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:12:11Z',
+  trace_id: '34207e71-764e-49a5-af60-7e7dbd830f00',
+  correlation_id: '71c85ed2-282c-463d-9df1-a8f535693034'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: 6acaee1d-f69e-4d1c-a955-8a79de2f1500 Correlation ID: 5098578c-9b88-457f-9306-a01dcfcbd528 Timestamp: 2026-06-18 14:24:38Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:24:38Z',
+  trace_id: '6acaee1d-f69e-4d1c-a955-8a79de2f1500',
+  correlation_id: '5098578c-9b88-457f-9306-a01dcfcbd528'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: 029bfbdd-e963-45b4-a41c-cf6a78fc1000 Correlation ID: af8f169b-ae66-497c-b289-dd8fbc55f6f5 Timestamp: 2026-06-18 14:45:27Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:45:27Z',
+  trace_id: '029bfbdd-e963-45b4-a41c-cf6a78fc1000',
+  correlation_id: 'af8f169b-ae66-497c-b289-dd8fbc55f6f5'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_request',
+  error_description: "AADSTS9002327: Tokens issued for the 'Single-Page Application' client-type may only be redeemed via cross-origin requests. Trace ID: b2569b88-a24e-4bc7-beff-2d94f5261600 Correlation ID: e19bd3be-6ff9-430e-aa77-0cc814c184ba Timestamp: 2026-06-18 14:46:02Z",
+  error_codes: [ 9002327 ],
+  timestamp: '2026-06-18 14:46:02Z',
+  trace_id: 'b2569b88-a24e-4bc7-beff-2d94f5261600',
+  correlation_id: 'e19bd3be-6ff9-430e-aa77-0cc814c184ba'
+}

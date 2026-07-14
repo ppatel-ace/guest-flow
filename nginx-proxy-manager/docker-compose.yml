@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  npm:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - '80:80'    # HTTP (Let's Encrypt challenge + redirect to HTTPS)
+      - '443:443'  # HTTPS
+      - '81:81'    # NPM admin UI
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    # Allows NPM to reach other containers via their published host ports.
+    # Use host.docker.internal:<port> when setting up proxy hosts in the UI:
+    #   guestflow.aceelectronics.com  →  host.docker.internal:6055
+    #   sso.aceelectronics.com        →  host.docker.internal:3100
+    #   portainer.<domain>            →  host.docker.internal:9000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      npm_net:
+        ipv4_address: 172.22.0.2
+
+volumes:
+  npm_data:
+  npm_letsencrypt:
+
+networks:
+  npm_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+          gateway: 172.22.0.1

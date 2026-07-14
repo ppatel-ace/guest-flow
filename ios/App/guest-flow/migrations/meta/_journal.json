@@ -1,0 +1,97 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779289788711,
+      "tag": "0000_material_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779290491922,
+      "tag": "0001_backfill_legacy_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748000000000,
+      "tag": "0002_visitors_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779302001016,
+      "tag": "0003_visitor_merge_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1748100000000,
+      "tag": "0004_visitors_phone_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1748200000000,
+      "tag": "0005_ace_pocs",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1748300000000,
+      "tag": "0006_ace_pocs_emails",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1748400000000,
+      "tag": "0003_visitor_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1748500000000,
+      "tag": "0007_kiosk_location_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1748600000000,
+      "tag": "0008_kiosk_missing_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1749571200000,
+      "tag": "0009_device_feature_toggles",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1749657600000,
+      "tag": "0010_printers_and_device_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1750262400000,
+      "tag": "20260618_add_printer_fields_and_print_jobs",
+      "breakpoints": true
+    }
+  ]
+}

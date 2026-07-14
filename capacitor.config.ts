@@ -1,0 +1,21 @@
+import { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.shivam.guestflow',
+  appName: 'ACE GuestFlow',
+  webDir: 'dist/public',
+  server: {
+    // Point this to your deployed backend URL (Replit Deploy, Railway, etc.)
+    // Once set, any backend/UI update is reflected on the iPad without a rebuild.
+    // Example: 'https://your-app.replit.app'
+    url: 'https://guestflow.aceelectronics.com/kiosk',
+    cleartext: false,
+    androidScheme: 'https',
+  },
+  ios: {
+    contentInset: 'always',
+    scrollEnabled: false,
+  },
+};
+
+export default config;

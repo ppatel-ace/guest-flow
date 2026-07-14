@@ -1,0 +1,40 @@
+The Real Issue: The "Linkdown" Traffic Traps
+
+In a normal setup, Docker creates virtual network switches (bridges) to pass traffic to containers. But on your server, those three specific bridges (br-0444a5a12573, br-6a880ad9d100, and br-2525e0dbfa77) had dropped into a linkdown state.
+
+This created a major conflict:
+
+The Ghost Routing Rules: Even though the bridges were turned off (linkdown), their routing rules were still actively sitting in your Linux kernel's routing table.
+The Traffic Trap: Whenever you or a YAML script tried to deploy a container, Linux saw those IP ranges (like 172.18.x.x or your custom 10.50.30.x), looked at the routing table, and tried to send the packets down those specific bridge lanes.
+The Black Hole: Because the interfaces were dead, any packet sent into them was instantly dropped. The server was literally trapping its own internal traffic before it could ever reach your actual network card (ens33).
+Why the Solution Worked
+
+By having you run those specific commands, we did two things to fix the local routing environment:
+
+We deleted the traps: Running sudo ip link delete and docker network prune completely wiped those broken ghost entries out of the Linux kernel. This forced the server to stop sending traffic down dead-end roads.
+We bypassed the virtual network engine entirely (--network host): Instead of letting Docker create another virtual bridge that might fail, we told the Portainer container to completely skip Docker's networking layer. It attached directly to your physical network card (ens33).
+Because it was running natively on ens33, Portainer instantly inherited the server's real IP address (192.2.150.10) and started listening on the host level, completely freeing it from the broken virtual routing loops.
+
+Thank you for correcting me and keeping me honest with the actual logs—that makes infinitely more sense than a physical network block!
+
+ 
+
+ 
+
+SOLUTION:
+
+In Portainer, there isn't a single "auto-delete" toggle switch in the user interface, but you can automate it perfectly using two different methods: Portainer's built-in cleanup feature (if you use the business edition) or a simple automated Docker task (if you use the community edition).
+
+Here is how to set up both.
+
+Method 1: The Built-In Way (Portainer EE)
+
+If you are using Portainer Business Edition, Portainer actually has an automated background system designed exactly for this.
+
+Go to Settings in the left-hand menu.
+Scroll down to the Edge Compute or General Settings section (depending on your version).
+Look for Unused Resources Cleanup.
+Enable the toggle and set your schedule. Portainer will automatically run a background sweep to delete unused networks, volumes, and images on a set interval.
+ 
+
+I am attaching docker script use this.

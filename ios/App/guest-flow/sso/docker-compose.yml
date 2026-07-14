@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  ace-auth:
+    build: .
+    container_name: ace-auth
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      - NODE_ENV=production
+      # PostgreSQL connection string for the SSO users table.
+      # Can point to the shared ace-db or any other Postgres instance.
+      - DATABASE_URL=${DATABASE_URL}
+      # Secret used to sign JWTs. Must be the same value in every app
+      # that validates ACE SSO tokens (GuestFlow, JobTrack, etc.).
+      - SSO_JWT_SECRET=${SSO_JWT_SECRET}
+      # Parent domain for the shared cookie, e.g. "aceelectronics.com"
+      - APP_DOMAIN=${APP_DOMAIN:-aceelectronics.com}
+      # Public base URL of this SSO service (used in password-reset emails
+      # and to construct the Microsoft redirect URI)
+      - SSO_BASE_URL=${SSO_BASE_URL:-https://sso.aceelectronics.com}
+      # Microsoft Entra ID GCC High — override only if the tenant changes
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-443420ec-3e93-4fe2-b233-ee23866d66b1}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-6ab850db-8359-47f8-9e46-ddb57a3f87bd}
+      # Seed an initial admin user on first start (only runs if no users exist).
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      # Name shown for the seeded admin user
+      - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Admin}
+      # SMTP — sender address and server
+      - SMTP_HOST=${SMTP_HOST:-smtp.office365.us}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_FROM=${SMTP_FROM:-no-reply@aceelectronics.com}
+      # OAuth 2.0 / XOAUTH2 (GCC High — preferred)
+      - SMTP_OAUTH_CLIENT_ID=${SMTP_OAUTH_CLIENT_ID:-}
+      - SMTP_OAUTH_CLIENT_SECRET=${SMTP_OAUTH_CLIENT_SECRET:-}
+      - SMTP_OAUTH_TENANT_ID=${SMTP_OAUTH_TENANT_ID:-}
+      - SMTP_OAUTH_SCOPE=${SMTP_OAUTH_SCOPE:-https://outlook.office365.us/.default}
+      # Basic-auth fallback (only used if OAuth vars above are not set)
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+    networks:
+      sso_net:
+        ipv4_address: 172.25.0.2
+
+networks:
+  sso_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24
+          gateway: 172.25.0.1

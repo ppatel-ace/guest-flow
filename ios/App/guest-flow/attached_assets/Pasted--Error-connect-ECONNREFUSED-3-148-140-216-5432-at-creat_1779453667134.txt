@@ -1,0 +1,100 @@
+    Error: connect ECONNREFUSED 3.148.140.216:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '3.148.140.216',
+      port: 5432
+    },
+    Error: connect ECONNREFUSED 3.131.201.192:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '3.131.201.192',
+      port: 5432
+    }
+  ]
+}
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed — server cannot start safely: AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED 13.58.13.125:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '13.58.13.125',
+      port: 5432
+    },
+    Error: connect ECONNREFUSED 3.148.140.216:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '3.148.140.216',
+      port: 5432
+    },
+    Error: connect ECONNREFUSED 3.131.201.192:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '3.131.201.192',
+      port: 5432
+    }
+  ]
+}
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+WARN: TURNSTILE_SECRET_KEY is not set — Cloudflare Turnstile verification is DISABLED
+[migrate] Applying pending database migrations…
+[migrate] Migration failed — server cannot start safely: AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED 13.58.13.125:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '13.58.13.125',
+      port: 5432
+    },
+    Error: connect ECONNREFUSED 3.148.140.216:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '3.148.140.216',
+      port: 5432
+    },
+    Error: connect ECONNREFUSED 3.131.201.192:5432
+        at createConnectionError (node:net:1652:14)
+        at afterConnectMultiple (node:net:1682:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '3.131.201.192',
+      port: 5432
+    }
+  ]
+}

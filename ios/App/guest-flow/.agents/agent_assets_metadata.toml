@@ -1,0 +1,20 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "IZda1A5uDTsGJ8A9Y8DFE"
+uri = "file://crm-export.tar.gz"
+type = "unspecified"
+title = "GuestFlow CRM Export (crm-export.tar.gz)"
+
+[[outputs]]
+id = "Np2matBzasGw254mu-lrR"
+uri = "file://guestflow_flowchart.svg"
+type = "image"
+title = "GuestFlow Flowchart (Image)"
+
+[[outputs]]
+id = "jFB2v-ekBJh6UF-VllCTE"
+uri = "file://guestflow_flowchart.json"
+type = "unspecified"
+title = "GuestFlow — Full Architecture JSON (v2.0)"

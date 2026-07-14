@@ -1,0 +1,41 @@
+zsh (74-78)
+ 
+
+I am unable to remove all devices 
+
+  deleteUnnamedKioskDevices(): Promise<number>;
+  deleteAllKioskDevices(): Promise<number>;
+  // Printers
+  async deleteUnnamedKioskDevices(): Promise<number> {
+    // Delete unnamed devices that haven't sent a heartbeat in the last 5 minutes (clearly offline)
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+    // Delete unnamed devices with no heartbeat in 2+ minutes (matches UI "offline" status)
+  // Delete device (protected)
+  // Bulk-delete unnamed offline devices (protected)
+  app.delete("/api/kiosk/devices/cleanup", requireAuth, async (req, res) => {
+  const removeAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/kiosk/devices/all");
+              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive h-8 text-xs"
+                disabled={cleanupMutation.isPending}
+                disabled={cleanupMutation.isPending || removeAllMutation.isPending}
+                onClick={() => cleanupMutation.mutate()}
+> rest-express@1.0.0 check
+> tsc
+The "Failed to clean up devices" error was caused by a broken database query in the cleanup endpoint. It used raw SQL that Drizzle couldn't run correctly against PostgreSQL.
+
+What was wrong
+The bulk-delete query used sql\${kioskDevices.lastSeen} < ${cutoff}``, which threw a server error (500) when you clicked Remove unnamed.
+
+What I fixed
+Fixed the cleanup query — uses Drizzle's lt() for a proper timestamp comparison
+Matched UI logic — removes unnamed devices offline for 2+ minutes (same as the offline badge)
+Added "Remove all" — new button that clears every registered device at once
+What you need to do
+Redeploy the server so the fix is live on guestflow.aceelectronics.com. Until then, the production site still has the broken code.
+
+After redeploy:
+
+Remove 6 unnamed — clears offline unnamed devices (your current Mac test entries)
+Remove all — wipes the entire device list
+You can also remove devices one at a time via the ⋮ menu on each card → Remove.

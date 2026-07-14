@@ -1,0 +1,77 @@
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42P07',
+  message: 'relation "sso_users" already exists, skipping',
+  file: 'parse_utilcmd.c',
+  line: '207',
+  routine: 'transformCreateStmt'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "reset_token" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "reset_token_expiry" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "is_admin" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "auth_provider" of relation "sso_users" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+[db] sso_users table ready
+[ace-auth] SSO service running on port 3100
+[microsoft] token exchange failed: {
+  error: 'invalid_client',
+  error_description: "AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'. Trace ID: 8ea6635a-77bf-48e8-ae58-d902e6a41000 Correlation ID: 06da7668-4d52-4a48-b978-28b555f9acb7 Timestamp: 2026-06-18 17:58:30Z",
+  error_codes: [ 7000218 ],
+  timestamp: '2026-06-18 17:58:30Z',
+  trace_id: '8ea6635a-77bf-48e8-ae58-d902e6a41000',
+  correlation_id: '06da7668-4d52-4a48-b978-28b555f9acb7',
+  error_uri: 'https://login.microsoftonline.us/error?code=7000218',
+  claims: '{"access_token":{"capolids":{"essential":true,"values":["6493f78d-4657-4ece-9040-68b2df2d4627","3dd2e677-4b94-4f2f-89ef-811d85411116"]}}}'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_client',
+  error_description: "AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'. Trace ID: 1ecc8388-a545-45c6-993d-97099ad61700 Correlation ID: 36800f07-d9a0-4038-bbad-9a4e2d484b7d Timestamp: 2026-06-18 17:58:32Z",
+  error_codes: [ 7000218 ],
+  timestamp: '2026-06-18 17:58:32Z',
+  trace_id: '1ecc8388-a545-45c6-993d-97099ad61700',
+  correlation_id: '36800f07-d9a0-4038-bbad-9a4e2d484b7d',
+  error_uri: 'https://login.microsoftonline.us/error?code=7000218',
+  claims: '{"access_token":{"capolids":{"essential":true,"values":["6493f78d-4657-4ece-9040-68b2df2d4627","3dd2e677-4b94-4f2f-89ef-811d85411116"]}}}'
+}
+[microsoft] token exchange failed: {
+  error: 'invalid_client',
+  error_description: "AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'. Trace ID: 572c95b7-1381-4eaa-bf9a-4ba305411700 Correlation ID: 5b3ddffa-7ec3-4fdf-90e5-d73a6040b5ed Timestamp: 2026-06-18 17:58:39Z",
+  error_codes: [ 7000218 ],
+  timestamp: '2026-06-18 17:58:39Z',
+  trace_id: '572c95b7-1381-4eaa-bf9a-4ba305411700',
+  correlation_id: '5b3ddffa-7ec3-4fdf-90e5-d73a6040b5ed',
+  error_uri: 'https://login.microsoftonline.us/error?code=7000218',
+  claims: '{"access_token":{"capolids":{"essential":true,"values":["6493f78d-4657-4ece-9040-68b2df2d4627","3dd2e677-4b94-4f2f-89ef-811d85411116"]}}}'
+}

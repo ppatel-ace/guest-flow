@@ -1,0 +1,57 @@
+modules = ["nodejs-20", "web", "python-3.11", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["remote-exec"]
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+run = ["sh", "-c", "NODE_ENV=production node ./dist/index.cjs"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 23636
+externalPort = 3000
+
+[env]
+PORT = "5000"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[agent]
+integrations = ["javascript_database:1.0.0"]
+expertMode = true
+
+[userenv]
+
+[userenv.shared]
+DATABASE_URL = "postgresql://postgres.pagdiccadattytahnxfj:jD0l66znjEKE18XX@aws-1-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000

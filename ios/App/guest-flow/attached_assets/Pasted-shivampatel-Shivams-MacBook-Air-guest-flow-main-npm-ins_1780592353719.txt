@@ -1,0 +1,36 @@
+shivampatel@Shivams-MacBook-Air guest-flow-main % npm install
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+added 763 packages, and audited 764 packages in 1m
+
+85 packages are looking for funding
+  run `npm fund` for details
+
+24 vulnerabilities (2 low, 13 moderate, 9 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
+shivampatel@Shivams-MacBook-Air guest-flow-main % cd ios/App
+shivampatel@Shivams-MacBook-Air App % pod install
+Ignoring ffi-1.17.0 because its extensions are not built. Try: gem pristine ffi --version 1.17.0
+Ignoring ffi-1.17.0 because its extensions are not built. Try: gem pristine ffi --version 1.17.0
+Ignoring ffi-1.17.0 because its extensions are not built. Try: gem pristine ffi --version 1.17.0
+Analyzing dependencies
+[!] CocoaPods could not find compatible versions for pod "Capacitor":
+  In Podfile:
+    Capacitor (from `../../node_modules/@capacitor/ios`)
+
+Specs satisfying the `Capacitor (from `../../node_modules/@capacitor/ios`)` dependency were found, but they required a higher minimum deployment target.
+shivampatel@Shivams-MacBook-Air App % 

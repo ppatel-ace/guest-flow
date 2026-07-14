@@ -1,0 +1,113 @@
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MapPin, Calendar, Building2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { PageSettings } from "@shared/schema";
+
+export default function StandaloneCheckIn() {
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+
+  const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
+    queryKey: ["/api/page-settings/scan_page"],
+  });
+
+  useEffect(() => {
+    const checkInUrl = `${window.location.origin}/guest-check-in`;
+    fetch(`/api/generate-qr?url=${encodeURIComponent(checkInUrl)}`)
+      .then(res => res.json())
+      .then(data => setQrCodeUrl(data.qrCode))
+      .catch(err => console.error("Failed to generate QR code:", err));
+  }, []);
+
+  const title = settings?.title ?? "Welcome!";
+  const description = settings?.description ?? "Please scan the QR code with your phone to check in";
+  const eventName = settings?.eventName;
+  const eventDate = settings?.eventDate;
+  const eventLocation = settings?.eventLocation;
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="flex items-center justify-between p-4 sm:p-6 border-b">
+        <div className="flex-1" />
+        <a href="https://www.aceelectronics.com/" target="_blank" rel="noopener noreferrer" className="text-center" data-testid="link-logo">
+          <p className="text-lg font-bold tracking-tight" data-testid="text-brand">Ace Electronics Defense Systems</p>
+        </a>
+        <div className="flex-1 flex justify-end">
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="flex-1 container mx-auto p-4 sm:p-6 max-w-4xl">
+        <Card className="text-center">
+          <CardHeader className="pb-2">
+            {settingsLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-9 w-48 mx-auto" />
+                {eventName && <Skeleton className="h-6 w-64 mx-auto" />}
+                <Skeleton className="h-5 w-72 mx-auto" />
+              </div>
+            ) : (
+              <>
+                <CardTitle className="text-2xl sm:text-3xl md:text-4xl">{title}</CardTitle>
+                {eventName && (
+                  <p className="text-lg sm:text-xl font-semibold text-foreground mt-1" data-testid="text-event-name">
+                    {eventName}
+                  </p>
+                )}
+                {(eventDate || eventLocation) && (
+                  <div className="flex items-center justify-center gap-4 flex-wrap mt-2">
+                    {eventDate && (
+                      <span className="flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="text-event-date">
+                        <Calendar className="h-4 w-4" />
+                        {eventDate}
+                      </span>
+                    )}
+                    {eventLocation && (
+                      <span className="flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="text-event-location">
+                        <MapPin className="h-4 w-4" />
+                        {eventLocation}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <CardDescription className="text-base sm:text-lg mt-2">{description}</CardDescription>
+              </>
+            )}
+          </CardHeader>
+
+          <CardContent className="space-y-4 sm:space-y-6">
+            <div className="flex justify-center">
+              {qrCodeUrl ? (
+                <img
+                  src={qrCodeUrl}
+                  alt="Check-in QR Code"
+                  className="w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 border-4 border-border rounded-lg"
+                  data-testid="img-qr-code"
+                />
+              ) : (
+                <div
+                  className="w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 bg-muted rounded-lg flex items-center justify-center"
+                  data-testid="img-qr-code"
+                >
+                  <p className="text-muted-foreground">Loading QR Code...</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-base sm:text-lg font-medium">How to Check In:</p>
+              <ol className="text-sm sm:text-base text-muted-foreground space-y-1 text-left max-w-md mx-auto px-4">
+                <li>1. Open your phone's camera</li>
+                <li>2. Point it at the QR code above</li>
+                <li>3. Tap the notification to open the link</li>
+                <li>4. Enter your phone number or email to check in</li>
+              </ol>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+}
