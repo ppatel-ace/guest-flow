@@ -30,7 +30,7 @@ export function AceBrand({
       ? "text-white"
       : variant === "navy"
         ? "text-[hsl(220_100%_14%)]"
-        : "text-sidebar-foreground";
+        : "text-foreground";
 
   return (
     <div className={`flex items-center gap-3 min-w-0 ${className}`}>
@@ -78,7 +78,7 @@ export function AceBrand({
       </a>
 
       {showProductName && !compact && (
-        <div className="min-w-0 border-l border-current/20 pl-3">
+        <div className="min-w-0 border-l border-border pl-3 dark:border-white/20">
           <p className={`truncate text-sm font-semibold tracking-tight leading-tight ${productNameClass}`}>
             Customer Check in
           </p>

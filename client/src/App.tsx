@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { AceBrand } from "@/components/AceBrand";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -35,19 +36,17 @@ function AdminLayout() {
 
   return (
     <ProtectedRoute>
-      <SidebarProvider defaultOpen={false} style={style as React.CSSProperties}>
+      <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
         <div className="flex h-screen w-full bg-background">
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
             <header className="flex items-center justify-between gap-4 border-b border-border/80 bg-background/80 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
-                <div className="hidden sm:block h-5 w-px bg-border" aria-hidden />
-                <p className="hidden sm:block text-sm text-muted-foreground">
-                  Ace Electronics
-                </p>
+                <div className="hidden sm:block h-5 w-px bg-border shrink-0" aria-hidden />
+                <AceBrand showProductName className="min-w-0" />
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
