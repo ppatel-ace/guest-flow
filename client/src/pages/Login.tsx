@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { AceBrand } from "@/components/AceBrand";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -87,13 +88,23 @@ export default function Login() {
   // Show a brief loading state while redirecting to SSO
   if (!authLoading && !isAuthenticated && ssoLoginUrl) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-8 pb-8 text-center">
-            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <ExternalLink className="h-6 w-6 text-primary" />
+      <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[hsl(222_42%_8%)] p-4">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 50% at 20% 20%, hsl(220 80% 28% / 0.45), transparent), radial-gradient(ellipse 60% 40% at 90% 80%, hsl(32 70% 35% / 0.2), transparent)",
+          }}
+        />
+        <Card className="relative w-full max-w-md border-white/10 bg-white/5 text-white backdrop-blur-md">
+          <CardContent className="pt-8 pb-8 text-center space-y-4">
+            <div className="flex justify-center">
+              <AceBrand showProductName={false} variant="white" />
             </div>
-            <p className="text-sm text-muted-foreground">Redirecting to ACE sign-in…</p>
+            <div className="mx-auto w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+              <ExternalLink className="h-6 w-6 text-white" />
+            </div>
+            <p className="text-sm text-white/70">Redirecting to ACE sign-in…</p>
           </CardContent>
         </Card>
       </div>
@@ -101,16 +112,25 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
-            <LogIn className="h-6 w-6 text-primary" />
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[hsl(222_42%_8%)] p-4">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 50% at 15% 10%, hsl(220 80% 28% / 0.5), transparent), radial-gradient(ellipse 50% 40% at 85% 90%, hsl(32 70% 35% / 0.18), transparent)",
+        }}
+      />
+      <Card className="relative w-full max-w-md border-white/10 bg-card/95 shadow-xl backdrop-blur-sm">
+        <CardHeader className="space-y-4 text-center">
+          <div className="flex justify-center">
+            <AceBrand showProductName variant="navy" />
           </div>
-          <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>
-            Sign in to access the customer management system
-          </CardDescription>
+          <div className="space-y-1.5">
+            <CardTitle className="text-2xl tracking-tight">Welcome back</CardTitle>
+            <CardDescription>
+              Sign in to manage invitations and visitor check-ins
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

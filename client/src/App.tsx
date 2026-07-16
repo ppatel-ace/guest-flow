@@ -29,19 +29,25 @@ function AdminLayout() {
   const { logout } = useAuth();
 
   const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "17.5rem",
+    "--sidebar-width-icon": "3.25rem",
   };
 
   return (
     <ProtectedRoute>
-      <SidebarProvider style={style as React.CSSProperties}>
-        <div className="flex h-screen w-full">
+      <SidebarProvider defaultOpen={false} style={style as React.CSSProperties}>
+        <div className="flex h-screen w-full bg-background">
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
-            <header className="flex items-center justify-between p-4 border-b">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <div className="flex items-center gap-2">
+            <header className="flex items-center justify-between gap-4 border-b border-border/80 bg-background/80 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+              <div className="flex items-center gap-3">
+                <SidebarTrigger data-testid="button-sidebar-toggle" />
+                <div className="hidden sm:block h-5 w-px bg-border" aria-hidden />
+                <p className="hidden sm:block text-sm text-muted-foreground">
+                  Ace Electronics
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -54,19 +60,21 @@ function AdminLayout() {
                 <ThemeToggle />
               </div>
             </header>
-            <main className="flex-1 overflow-auto p-6">
-              <Switch>
-                <Route path="/" component={Dashboard} />
-                <Route path="/customers" component={Customers} />
-                <Route path="/check-in" component={CheckIn} />
-                <Route path="/invitations" component={Invitations} />
-                <Route path="/import" component={Import} />
-                <Route path="/public-pages" component={PublicPages} />
-                <Route path="/export" component={Export} />
-                <Route path="/sign-in-flow" component={SignInFlow} />
-                <Route path="/analytics" component={EnvoyAnalytics} />
-                <Route component={NotFound} />
-              </Switch>
+            <main className="flex-1 overflow-auto p-6 md:p-8">
+              <div className="mx-auto max-w-7xl">
+                <Switch>
+                  <Route path="/" component={Dashboard} />
+                  <Route path="/customers" component={Customers} />
+                  <Route path="/check-in" component={CheckIn} />
+                  <Route path="/invitations" component={Invitations} />
+                  <Route path="/import" component={Import} />
+                  <Route path="/public-pages" component={PublicPages} />
+                  <Route path="/export" component={Export} />
+                  <Route path="/sign-in-flow" component={SignInFlow} />
+                  <Route path="/analytics" component={EnvoyAnalytics} />
+                  <Route component={NotFound} />
+                </Switch>
+              </div>
             </main>
           </div>
         </div>

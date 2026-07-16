@@ -10,13 +10,23 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
   return (
-    <Card data-testid={`card-stat-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+    <Card
+      className="overflow-hidden border-border/70 shadow-sm transition-shadow hover:shadow-md"
+      data-testid={`card-stat-${title.toLowerCase().replace(/\s+/g, '-')}`}
+    >
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold" data-testid={`text-stat-value-${title.toLowerCase().replace(/\s+/g, '-')}`}>{value}</div>
+        <div
+          className="text-2xl font-bold tracking-tight tabular-nums"
+          data-testid={`text-stat-value-${title.toLowerCase().replace(/\s+/g, '-')}`}
+        >
+          {value}
+        </div>
         {description && (
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
         )}

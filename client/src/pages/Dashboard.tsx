@@ -186,10 +186,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6" data-testid="page-dashboard">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to your customer check-in system</p>
+    <div className="space-y-8" data-testid="page-dashboard">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Ace Electronics customer check-in overview
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
