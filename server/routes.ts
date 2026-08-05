@@ -1656,9 +1656,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── ACE POC roster ──────────────────────────────────────────────────────────
 
-  // GET is public so the kiosk can fetch the list without an admin session
+  // GET is public so the kiosk can fetch the list without an admin session.
+  // Optional ?location=New%20Jersey filters to POCs assigned to that office.
   app.get("/api/ace-pocs", async (req, res) => {
     try {
+      const locationParam = typeof req.query.location === "string" ? req.query.location.trim() : "";
+      if (locationParam) {
+        if (!isOfficeLocation(locationParam)) {
+          return res.status(400).json({
+            error: "location must be one of: New Jersey, Maryland, Michigan",
+          });
+        }
+        const pocs = await storage.listAcePocs(locationParam);
+        return res.json(pocs);
+      }
       const pocs = await storage.listAcePocs();
       res.json(pocs);
     } catch (error) {
@@ -1668,11 +1679,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ace-pocs", requireAuth, async (req, res) => {
     try {
-      const { name } = req.body;
+      const { name, locations } = req.body;
       if (!name || typeof name !== "string" || !name.trim()) {
         return res.status(400).json({ error: "name is required" });
       }
-      const poc = await storage.createAcePoc(name.trim());
+      if (!Array.isArray(locations) || locations.length === 0) {
+        return res.status(400).json({ error: "locations must be a non-empty array" });
+      }
+      const invalidLoc = locations.filter((l: unknown) => typeof l !== "string" || !isOfficeLocation(l));
+      if (invalidLoc.length > 0) {
+        return res.status(400).json({
+          error: "Each location must be one of: New Jersey, Maryland, Michigan",
+          invalid: invalidLoc,
+        });
+      }
+      const uniqueLocations = Array.from(new Set(locations as string[]));
+      const poc = await storage.createAcePoc(name.trim(), uniqueLocations);
       res.status(201).json(poc);
     } catch (error: any) {
       const msg = error?.message ?? "";
@@ -1693,6 +1715,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete ACE POC" });
+    }
+  });
+
+  // Update locations for a specific ACE POC (admin protected)
+  app.patch("/api/ace-pocs/:id/locations", requireAuth, async (req, res) => {
+    try {
+      const { locations } = req.body;
+      if (!Array.isArray(locations) || locations.length === 0) {
+        return res.status(400).json({ error: "locations must be a non-empty array" });
+      }
+      const invalidLoc = locations.filter((l: unknown) => typeof l !== "string" || !isOfficeLocation(l));
+      if (invalidLoc.length > 0) {
+        return res.status(400).json({
+          error: "Each location must be one of: New Jersey, Maryland, Michigan",
+          invalid: invalidLoc,
+        });
+      }
+      const uniqueLocations = Array.from(new Set(locations as string[]));
+      const poc = await storage.updateAcePocLocations(req.params.id, uniqueLocations);
+      if (!poc) return res.status(404).json({ error: "ACE POC not found" });
+      res.json(poc);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update POC locations" });
     }
   });
 

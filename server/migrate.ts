@@ -60,6 +60,11 @@ async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<vo
       updated_at timestamptz NOT NULL DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_print_jobs_status ON gf_print_jobs(status)`,
+    // ACE POC office locations
+    `ALTER TABLE gf_ace_pocs ADD COLUMN IF NOT EXISTS locations text[] NOT NULL DEFAULT '{}'`,
+    `UPDATE gf_ace_pocs
+     SET locations = ARRAY['New Jersey', 'Maryland', 'Michigan']::text[]
+     WHERE locations IS NULL OR cardinality(locations) = 0`,
   ];
   for (const sql of patches) {
     await pool.query(sql);

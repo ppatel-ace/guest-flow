@@ -28,18 +28,10 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { Turnstile } from "@marsidev/react-turnstile";
-import type { PageSettings } from "@shared/schema";
+import type { AcePoc, PageSettings } from "@shared/schema";
+import { OFFICE_LOCATIONS } from "@shared/locations";
 
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
-
-const ACE_POC_OPTIONS = [
-  "Jerry Parker",
-  "Larry Pomasan",
-  "Nish Patel",
-  "Craig Frost",
-  "Ashley Morris",
-  "Sanjay Parimi",
-];
 
 const EMAIL_DOMAINS = ["@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com", "@icloud.com"];
 
@@ -149,9 +141,15 @@ function EmailInput({
 function PocCombobox({
   value,
   onChange,
+  options,
+  disabled,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
+  options: string[];
+  disabled?: boolean;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -162,10 +160,11 @@ function PocCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className="w-full justify-between font-normal h-10 bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
           data-testid="combobox-ace-poc"
         >
-          {value || "Search by name..."}
+          {value || placeholder || "Search by name..."}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -175,7 +174,7 @@ function PocCombobox({
           <CommandList>
             <CommandEmpty>No match found.</CommandEmpty>
             <CommandGroup>
-              {ACE_POC_OPTIONS.map((poc) => (
+              {options.map((poc) => (
                 <CommandItem
                   key={poc}
                   value={poc}
@@ -224,6 +223,26 @@ export default function GuestCheckIn() {
   const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
     queryKey: ["/api/page-settings/guest_checkin_page"],
   });
+
+  const { data: acePocOptions = [], isLoading: acePocLoading } = useQuery<AcePoc[]>({
+    queryKey: ["/api/ace-pocs", { location }],
+    queryFn: async () => {
+      const res = await fetch(`/api/ace-pocs?location=${encodeURIComponent(location)}`);
+      if (!res.ok) throw new Error("Failed to load POCs");
+      return res.json();
+    },
+    enabled: !!location,
+  });
+
+  const pocNames = acePocOptions.map((p) => p.name);
+
+  useEffect(() => {
+    if (!acePoc || !location) return;
+    if (acePocLoading) return;
+    if (!pocNames.includes(acePoc)) {
+      setAcePoc("");
+    }
+  }, [acePoc, location, acePocLoading, pocNames.join("|")]);
 
   useEffect(() => {
     fetch("/api/captcha-mode")
@@ -467,7 +486,7 @@ export default function GuestCheckIn() {
                 </div>
               </div>
 
-              {/* Company + Ace POC */}
+              {/* Company + Location */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="company" className={LABEL_CLASS}>
@@ -484,28 +503,46 @@ export default function GuestCheckIn() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>
-                    Ace POC <span className="text-slate-400 font-normal normal-case">(Optional)</span>
+                  <Label htmlFor="location-select" className={LABEL_CLASS}>
+                    Location <span className="text-red-500">*</span>
                   </Label>
-                  <PocCombobox value={acePoc} onChange={setAcePoc} />
+                  <Select
+                    value={location}
+                    onValueChange={(v) => {
+                      setLocation(v);
+                      setAcePoc("");
+                    }}
+                  >
+                    <SelectTrigger id="location-select" className={INPUT_CLASS} data-testid="select-location">
+                      <SelectValue placeholder="Select your location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OFFICE_LOCATIONS.map((loc) => (
+                        <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Location */}
+              {/* Ace POC — depends on location */}
               <div className="space-y-2">
-                <Label htmlFor="location-select" className={LABEL_CLASS}>
-                  Location <span className="text-red-500">*</span>
+                <Label className={LABEL_CLASS}>
+                  Ace POC <span className="text-slate-400 font-normal normal-case">(Optional)</span>
                 </Label>
-                <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger id="location-select" className={INPUT_CLASS} data-testid="select-location">
-                    <SelectValue placeholder="Select your location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="New Jersey">New Jersey</SelectItem>
-                    <SelectItem value="Maryland">Maryland</SelectItem>
-                    <SelectItem value="Michigan">Michigan</SelectItem>
-                  </SelectContent>
-                </Select>
+                <PocCombobox
+                  value={acePoc}
+                  onChange={setAcePoc}
+                  options={pocNames}
+                  disabled={!location || acePocLoading}
+                  placeholder={
+                    !location
+                      ? "Select location first"
+                      : acePocLoading
+                      ? "Loading…"
+                      : "Search by name..."
+                  }
+                />
               </div>
             </div>
 

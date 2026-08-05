@@ -296,6 +296,7 @@ export const acePocs = pgTable("gf_ace_pocs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   emails: text("emails").array().default(sql`'{}'::text[]`),
+  locations: text("locations").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

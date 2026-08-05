@@ -81,6 +81,7 @@ import {
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { FormField, Customer, Lead, Visitor, AcePoc } from "@shared/schema";
+import { OFFICE_LOCATIONS, type OfficeLocation } from "@shared/locations";
 import { printVisitorLabel } from "@/lib/brotherPrint";
 import {
   Select,
@@ -89,6 +90,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatDistanceToNow } from "date-fns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1268,9 +1270,9 @@ function DevicesTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No default</SelectItem>
-                  <SelectItem value="New Jersey">New Jersey</SelectItem>
-                  <SelectItem value="Maryland">Maryland</SelectItem>
-                  <SelectItem value="Michigan">Michigan</SelectItem>
+                  {OFFICE_LOCATIONS.map((loc) => (
+                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -3179,11 +3181,60 @@ function EmailListEditor({
 
 // ─── ACE POC Tab ─────────────────────────────────────────────────────────────
 
+function shortLocationLabel(loc: string): string {
+  if (loc === "New Jersey") return "NJ";
+  if (loc === "Maryland") return "MD";
+  if (loc === "Michigan") return "MI";
+  return loc;
+}
+
+function LocationCheckboxes({
+  selected,
+  onChange,
+  testIdPrefix,
+}: {
+  selected: string[];
+  onChange: (next: string[]) => void;
+  testIdPrefix: string;
+}) {
+  const toggle = (loc: OfficeLocation, checked: boolean) => {
+    if (checked) {
+      if (!selected.includes(loc)) onChange([...selected, loc]);
+    } else {
+      onChange(selected.filter((s) => s !== loc));
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      {OFFICE_LOCATIONS.map((loc) => {
+        const isOn = selected.includes(loc);
+        return (
+          <label
+            key={loc}
+            className="flex items-center gap-2 text-sm cursor-pointer"
+            data-testid={`${testIdPrefix}-loc-${shortLocationLabel(loc).toLowerCase()}`}
+          >
+            <Checkbox
+              checked={isOn}
+              onCheckedChange={(v) => toggle(loc, v === true)}
+            />
+            <span>{loc}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function AcePocTab() {
   const { toast } = useToast();
   const [newName, setNewName] = useState("");
+  const [newLocations, setNewLocations] = useState<string[]>([]);
   const [expandedPocId, setExpandedPocId] = useState<string | null>(null);
+  const [editLocationsByPoc, setEditLocationsByPoc] = useState<Record<string, string[]>>({});
   const [savingEmailsFor, setSavingEmailsFor] = useState<string | null>(null);
+  const [savingLocationsFor, setSavingLocationsFor] = useState<string | null>(null);
   const [savingNotifKey, setSavingNotifKey] = useState<string | null>(null);
 
   const { data: pocs = [], isLoading } = useQuery<AcePoc[]>({
@@ -3198,9 +3249,11 @@ function AcePocTab() {
   });
 
   const addMutation = useMutation({
-    mutationFn: (name: string) => apiRequest("POST", "/api/ace-pocs", { name }),
+    mutationFn: ({ name, locations }: { name: string; locations: string[] }) =>
+      apiRequest("POST", "/api/ace-pocs", { name, locations }),
     onSuccess: () => {
       setNewName("");
+      setNewLocations([]);
       queryClient.invalidateQueries({ queryKey: ["/api/ace-pocs"] });
       toast({ title: "POC added" });
     },
@@ -3231,6 +3284,19 @@ function AcePocTab() {
       toast({ title: "Failed to update emails", variant: "destructive" });
     },
     onSettled: () => setSavingEmailsFor(null),
+  });
+
+  const updatePocLocationsMutation = useMutation({
+    mutationFn: ({ id, locations }: { id: string; locations: string[] }) =>
+      apiRequest("PATCH", `/api/ace-pocs/${id}/locations`, { locations }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ace-pocs"] });
+      toast({ title: "POC locations updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update locations", variant: "destructive" });
+    },
+    onSettled: () => setSavingLocationsFor(null),
   });
 
   const updateGlobalEmailsMutation = useMutation({
@@ -3264,29 +3330,58 @@ function AcePocTab() {
     updatePocEmailsMutation.mutate({ id: pocId, emails });
   };
 
-  const officeLocations = ["New Jersey", "Maryland", "Michigan"] as const;
+  const handleExpandPoc = (poc: AcePoc) => {
+    if (expandedPocId === poc.id) {
+      setExpandedPocId(null);
+      return;
+    }
+    setExpandedPocId(poc.id);
+    setEditLocationsByPoc((prev) => ({
+      ...prev,
+      [poc.id]: [...(poc.locations ?? [])],
+    }));
+  };
+
+  const canAdd = newName.trim().length > 0 && newLocations.length > 0 && !addMutation.isPending;
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Names that appear in the &quot;ACE POC&quot; dropdown on kiosk and guest check-in.
+        Assign offices so a person only appears when the visitor selects that location.
+      </p>
+
       {/* Add new POC */}
-      <div className="flex gap-2">
-        <Input
-          placeholder="Enter full name (e.g. Jane Smith)"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && newName.trim()) addMutation.mutate(newName.trim());
-          }}
-          data-testid="input-ace-poc-name"
-        />
-        <Button
-          onClick={() => addMutation.mutate(newName.trim())}
-          disabled={!newName.trim() || addMutation.isPending}
-          data-testid="button-add-ace-poc"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add
-        </Button>
+      <div className="rounded-md border p-3 space-y-3">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Enter full name (e.g. Jane Smith)"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && canAdd) {
+                addMutation.mutate({ name: newName.trim(), locations: newLocations });
+              }
+            }}
+            data-testid="input-ace-poc-name"
+          />
+          <Button
+            onClick={() => addMutation.mutate({ name: newName.trim(), locations: newLocations })}
+            disabled={!canAdd}
+            data-testid="button-add-ace-poc"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add
+          </Button>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Offices where this person appears in the POC list</p>
+          <LocationCheckboxes
+            selected={newLocations}
+            onChange={setNewLocations}
+            testIdPrefix="new-poc"
+          />
+        </div>
       </div>
 
       {/* POC roster */}
@@ -3299,11 +3394,19 @@ function AcePocTab() {
           {pocs.map((poc) => {
             const isExpanded = expandedPocId === poc.id;
             const pocEmails: string[] = poc.emails ?? [];
+            const pocLocations: string[] = isExpanded
+              ? (editLocationsByPoc[poc.id] ?? poc.locations ?? [])
+              : (poc.locations ?? []);
             return (
               <li key={poc.id} data-testid={`row-ace-poc-${poc.id}`}>
                 <div className="flex items-center justify-between px-3 py-2.5">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
                     <span className="text-sm font-medium truncate">{poc.name}</span>
+                    {pocLocations.map((loc) => (
+                      <Badge key={loc} variant="secondary" className="text-xs shrink-0">
+                        {shortLocationLabel(loc)}
+                      </Badge>
+                    ))}
                     {pocEmails.length > 0 && (
                       <Badge variant="outline" className="text-xs shrink-0">
                         {pocEmails.length} email{pocEmails.length !== 1 ? "s" : ""}
@@ -3315,9 +3418,9 @@ function AcePocTab() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      onClick={() => setExpandedPocId(isExpanded ? null : poc.id)}
+                      onClick={() => handleExpandPoc(poc)}
                       data-testid={`button-edit-ace-poc-${poc.id}`}
-                      title="Edit notification emails"
+                      title="Edit locations and notification emails"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -3335,16 +3438,50 @@ function AcePocTab() {
                   </div>
                 </div>
                 {isExpanded && (
-                  <div className="px-3 pb-3 border-t bg-muted/30">
-                    <p className="text-xs text-muted-foreground pt-2 mb-1">
-                      Notification emails for <strong>{poc.name}</strong> — notified when they are selected at check-in.
-                    </p>
-                    <EmailListEditor
-                      emails={pocEmails}
-                      onSave={(emails) => handlePocEmailSave(poc.id, emails)}
-                      isSaving={savingEmailsFor === poc.id && updatePocEmailsMutation.isPending}
-                      testIdPrefix={`poc-${poc.id}`}
-                    />
+                  <div className="px-3 pb-3 border-t bg-muted/30 space-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground pt-2 mb-1">
+                        Offices where <strong>{poc.name}</strong> appears in the POC dropdown.
+                      </p>
+                      <LocationCheckboxes
+                        selected={editLocationsByPoc[poc.id] ?? []}
+                        onChange={(next) =>
+                          setEditLocationsByPoc((prev) => ({ ...prev, [poc.id]: next }))
+                        }
+                        testIdPrefix={`poc-${poc.id}`}
+                      />
+                      <Button
+                        size="sm"
+                        className="mt-2"
+                        disabled={
+                          (editLocationsByPoc[poc.id] ?? []).length === 0 ||
+                          savingLocationsFor === poc.id
+                        }
+                        onClick={() => {
+                          setSavingLocationsFor(poc.id);
+                          updatePocLocationsMutation.mutate({
+                            id: poc.id,
+                            locations: editLocationsByPoc[poc.id] ?? [],
+                          });
+                        }}
+                        data-testid={`button-save-poc-locations-${poc.id}`}
+                      >
+                        {savingLocationsFor === poc.id && updatePocLocationsMutation.isPending
+                          ? "Saving…"
+                          : "Save locations"}
+                      </Button>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Notification emails for <strong>{poc.name}</strong> — notified when they are selected at check-in.
+                      </p>
+                      <EmailListEditor
+                        emails={pocEmails}
+                        onSave={(emails) => handlePocEmailSave(poc.id, emails)}
+                        isSaving={savingEmailsFor === poc.id && updatePocEmailsMutation.isPending}
+                        testIdPrefix={`poc-${poc.id}`}
+                      />
+                    </div>
                   </div>
                 )}
               </li>
@@ -3379,7 +3516,7 @@ function AcePocTab() {
       </div>
 
       {/* Per-office notification emails */}
-      {officeLocations.map((loc) => {
+      {OFFICE_LOCATIONS.map((loc) => {
         const slug = loc.toLowerCase().replace(/\s+/g, "-");
         return (
           <div key={loc} className="rounded-md border">
@@ -3561,7 +3698,9 @@ export default function SignInFlow() {
           <Card>
             <CardHeader>
               <CardTitle>ACE POC Roster</CardTitle>
-              <CardDescription>Names that appear in the "ACE POC" dropdown on the kiosk sign-in form. Add or remove entries here.</CardDescription>
+              <CardDescription>
+                Names that appear in the ACE POC dropdown on kiosk and guest check-in. Assign offices so each person only shows for the matching location.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <AcePocTab />

@@ -92,6 +92,13 @@
       "when": 1750262400000,
       "tag": "20260618_add_printer_fields_and_print_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1754394000000,
+      "tag": "0011_ace_pocs_locations",
+      "breakpoints": true
     }
   ]
 }

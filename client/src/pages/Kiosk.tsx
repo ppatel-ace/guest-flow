@@ -16,6 +16,7 @@ import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { FormField, AcePoc } from "@shared/schema";
+import { OFFICE_LOCATIONS } from "@shared/locations";
 
 // ─── Template variable substitution ──────────────────────────────────────────
 
@@ -202,9 +203,28 @@ export default function Kiosk() {
     queryKey: ["/api/form-fields"],
   });
 
+  const effectiveLocation = location || deviceDefaultLocation.current || "";
+
   const { data: acePocOptions = [], isLoading: acePocLoading } = useQuery<AcePoc[]>({
-    queryKey: ["/api/ace-pocs"],
+    queryKey: ["/api/ace-pocs", { location: effectiveLocation }],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/ace-pocs?location=${encodeURIComponent(effectiveLocation)}`
+      );
+      if (!res.ok) throw new Error("Failed to load POCs");
+      return res.json();
+    },
+    enabled: !!effectiveLocation,
   });
+
+  // Drop POC selection if it is not in the list for the current location
+  useEffect(() => {
+    if (!acePoc || !effectiveLocation) return;
+    if (acePocLoading) return;
+    if (!acePocOptions.some((p) => p.name === acePoc)) {
+      setAcePoc("");
+    }
+  }, [acePoc, acePocOptions, acePocLoading, effectiveLocation]);
 
   const timeoutSecs = settings?.kioskTimeoutSeconds ?? 30;
   const photoEnabled = settings?.photoEnabled ?? false;
@@ -805,33 +825,54 @@ export default function Kiosk() {
                     <Input className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" data-testid="input-kiosk-company" />
                   </motion.div>
 
-                  <motion.div key="field-poc" custom={4} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
-                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ace POC <span className="text-slate-400 font-normal">(Optional)</span></Label>
-                    <Select value={acePoc} onValueChange={setAcePoc} disabled={acePocLoading}>
-                      <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-ace-poc">
-                        <SelectValue placeholder={acePocLoading ? "Loading…" : "Select a POC"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {acePocOptions.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </motion.div>
-
                   {!deviceDefaultLocation.current && (
-                    <motion.div key="field-location" custom={5} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <motion.div key="field-location" custom={4} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
                       <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Location <span className="text-red-500">*</span></Label>
-                      <Select value={location} onValueChange={(v) => { setLocation(v); setSubmitError(null); }}>
+                      <Select
+                        value={location}
+                        onValueChange={(v) => {
+                          setLocation(v);
+                          setAcePoc("");
+                          setSubmitError(null);
+                        }}
+                      >
                         <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-location">
                           <SelectValue placeholder="Select your location" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="New Jersey">New Jersey</SelectItem>
-                          <SelectItem value="Maryland">Maryland</SelectItem>
-                          <SelectItem value="Michigan">Michigan</SelectItem>
+                          {OFFICE_LOCATIONS.map((loc) => (
+                            <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </motion.div>
                   )}
+
+                  <motion.div key="field-poc" custom={5} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ace POC <span className="text-slate-400 font-normal">(Optional)</span></Label>
+                    <Select
+                      value={acePoc}
+                      onValueChange={setAcePoc}
+                      disabled={!effectiveLocation || acePocLoading}
+                    >
+                      <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-ace-poc">
+                        <SelectValue
+                          placeholder={
+                            !effectiveLocation
+                              ? "Select location first"
+                              : acePocLoading
+                              ? "Loading…"
+                              : "Select a POC"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {acePocOptions.map((p) => (
+                          <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </motion.div>
 
                   {customFields.map((field, idx) => (
                     <motion.div key={`field-custom-${field.id}`} custom={6 + idx} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">

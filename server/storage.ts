@@ -247,10 +247,11 @@ export interface IStorage {
   updateVisitorsByKey(lookupKey: string, data: { fullName?: string; email?: string | null; company?: string | null; phoneNumber?: string | null }): Promise<{ updated: number }>;
   deleteVisitorsByKey(lookupKey: string): Promise<{ deleted: number }>;
   // ACE POC roster
-  listAcePocs(): Promise<AcePoc[]>;
-  createAcePoc(name: string): Promise<AcePoc>;
+  listAcePocs(location?: string | null): Promise<AcePoc[]>;
+  createAcePoc(name: string, locations: string[]): Promise<AcePoc>;
   deleteAcePoc(id: string): Promise<boolean>;
   updateAcePocEmails(id: string, emails: string[]): Promise<AcePoc | undefined>;
+  updateAcePocLocations(id: string, locations: string[]): Promise<AcePoc | undefined>;
   getAcePocByName(name: string): Promise<AcePoc | undefined>;
   // Global / per-location notification emails (page_settings keys)
   getNotificationEmails(): Promise<string[]>;
@@ -1223,12 +1224,22 @@ export class DatabaseStorage implements IStorage {
 
   // ─── ACE POC roster ──────────────────────────────────────────────────────────
 
-  async listAcePocs(): Promise<AcePoc[]> {
+  async listAcePocs(location?: string | null): Promise<AcePoc[]> {
+    if (location) {
+      return await db
+        .select()
+        .from(acePocs)
+        .where(sql`${location} = ANY(${acePocs.locations})`)
+        .orderBy(asc(acePocs.name));
+    }
     return await db.select().from(acePocs).orderBy(asc(acePocs.name));
   }
 
-  async createAcePoc(name: string): Promise<AcePoc> {
-    const [row] = await db.insert(acePocs).values({ name: name.trim() }).returning();
+  async createAcePoc(name: string, locations: string[]): Promise<AcePoc> {
+    const [row] = await db
+      .insert(acePocs)
+      .values({ name: name.trim(), locations })
+      .returning();
     return row;
   }
 
@@ -1241,6 +1252,15 @@ export class DatabaseStorage implements IStorage {
     const [row] = await db
       .update(acePocs)
       .set({ emails })
+      .where(eq(acePocs.id, id))
+      .returning();
+    return row || undefined;
+  }
+
+  async updateAcePocLocations(id: string, locations: string[]): Promise<AcePoc | undefined> {
+    const [row] = await db
+      .update(acePocs)
+      .set({ locations })
       .where(eq(acePocs.id, id))
       .returning();
     return row || undefined;
