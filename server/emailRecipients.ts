@@ -1,27 +1,51 @@
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
+import {
+  OFFICE_LOCATIONS,
+  type OfficeLocation,
+  normalizeOfficeLocation,
+} from "@shared/locations";
 
 /**
  * Centralized notification recipients for GuestFlow.
  *
- * The authoritative global check-in allowlist lives in the shared platform DB
- * table public.ace_email_recipients (managed from the ACE Hub, app_slug
- * 'guestflow', email_type 'checkin_notification'). GuestFlow's DATABASE_URL
- * points at that same database (it already dual-writes ace_crm there), so we
- * read the canonical row directly.
+ * Always-notify (all sites) and per-office lists live in public.ace_email_recipients
+ * (app_slug 'guestflow'). GuestFlow's DATABASE_URL points at that same database.
  *
- * Backward compatibility: when the canonical row does not yet exist we fall
- * back to the legacy page_settings.notification_emails list. Per-host (POC)
- * routing stays in GuestFlow and is unaffected.
+ * Backward compatibility: when a canonical row does not yet exist we fall back
+ * to legacy page_settings keys. Per-host (POC) routing stays in GuestFlow.
  *
  * Transactional auth emails (embedded SSO password reset) are NOT routed here.
  */
 
 const APP_SLUG = "guestflow";
-const EMAIL_TYPE = "checkin_notification";
-const LABEL = "Visitor Check-In Notification";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const GLOBAL_EMAIL_TYPE = "checkin_notification";
+const GLOBAL_LABEL = "Visitor Check-In Notification";
+const GLOBAL_LEGACY_KEY = "notification_emails";
+
+const LOCATION_META: Record<
+  OfficeLocation,
+  { emailType: string; label: string; legacyKey: string }
+> = {
+  "New Jersey": {
+    emailType: "checkin_notification_new_jersey",
+    label: "Visitor Check-In — New Jersey",
+    legacyKey: "notification_emails_new_jersey",
+  },
+  Maryland: {
+    emailType: "checkin_notification_maryland",
+    label: "Visitor Check-In — Maryland",
+    legacyKey: "notification_emails_maryland",
+  },
+  Michigan: {
+    emailType: "checkin_notification_michigan",
+    label: "Visitor Check-In — Michigan",
+    legacyKey: "notification_emails_michigan",
+  },
+};
 
 function rowsOf(result: unknown): any[] {
   if (Array.isArray(result)) return result;
@@ -55,18 +79,15 @@ function parseRecipients(value: unknown): string[] {
   return out;
 }
 
-/**
- * Returns the Hub-managed global check-in notification allowlist.
- * - Canonical row present & enabled  → its recipients (may be empty = nobody)
- * - Canonical row present & disabled → [] (send to nobody)
- * - Canonical row absent             → legacy page_settings fallback
- */
-export async function getCheckinGlobalRecipients(): Promise<string[]> {
+async function getRecipientsForType(
+  emailType: string,
+  legacyKey: string
+): Promise<string[]> {
   try {
     const result = await db.execute(sql`
       SELECT recipients, enabled
       FROM public.ace_email_recipients
-      WHERE app_slug = ${APP_SLUG} AND email_type = ${EMAIL_TYPE}
+      WHERE app_slug = ${APP_SLUG} AND email_type = ${emailType}
       LIMIT 1
     `);
     const rows = rowsOf(result);
@@ -76,19 +97,18 @@ export async function getCheckinGlobalRecipients(): Promise<string[]> {
     }
   } catch (err) {
     console.warn(
-      "[emailRecipients] canonical check-in lookup failed, using legacy list:",
-      (err as Error).message,
+      `[emailRecipients] canonical lookup failed for ${emailType}, using legacy list:`,
+      (err as Error).message
     );
   }
-  // Fallback for un-migrated deployments.
-  return storage.getNotificationEmails();
+  return storage.getNotificationEmailsByKey(legacyKey);
 }
 
-/**
- * Mirrors a GuestFlow admin edit of the global list back to the canonical
- * table so the ACE Hub reflects the change (updated_source = 'guestflow').
- */
-export async function mirrorCheckinRecipientsToCanonical(emails: string[]): Promise<void> {
+async function mirrorRecipientsToCanonical(
+  emailType: string,
+  label: string,
+  emails: string[]
+): Promise<void> {
   const entries = parseRecipients(emails).map((email) => ({ email, name: email }));
   const json = JSON.stringify(entries);
   try {
@@ -96,17 +116,111 @@ export async function mirrorCheckinRecipientsToCanonical(emails: string[]): Prom
       INSERT INTO public.ace_email_recipients
         (app_slug, email_type, label, recipients, enabled, updated_by, updated_source, updated_at)
       VALUES
-        (${APP_SLUG}, ${EMAIL_TYPE}, ${LABEL}, ${json}::jsonb, TRUE, ${"guestflow"}, ${"guestflow"}, now())
+        (${APP_SLUG}, ${emailType}, ${label}, ${json}::jsonb, TRUE, ${"guestflow"}, ${"guestflow"}, now())
       ON CONFLICT (app_slug, email_type) DO UPDATE SET
         recipients = EXCLUDED.recipients,
+        label = EXCLUDED.label,
         updated_by = EXCLUDED.updated_by,
         updated_source = EXCLUDED.updated_source,
         updated_at = now()
     `);
   } catch (err) {
     console.warn(
-      "[emailRecipients] failed to mirror check-in recipients to canonical table:",
-      (err as Error).message,
+      `[emailRecipients] failed to mirror ${emailType} to canonical table:`,
+      (err as Error).message
     );
   }
+}
+
+/**
+ * Returns the Hub-managed global (always-notify) check-in allowlist.
+ * - Canonical row present & enabled  → its recipients (may be empty = nobody)
+ * - Canonical row present & disabled → [] (send to nobody)
+ * - Canonical row absent             → legacy page_settings fallback
+ */
+export async function getCheckinGlobalRecipients(): Promise<string[]> {
+  return getRecipientsForType(GLOBAL_EMAIL_TYPE, GLOBAL_LEGACY_KEY);
+}
+
+/**
+ * Returns recipients for a check-in office location (empty if unknown / unset).
+ */
+export async function getCheckinLocationRecipients(
+  location: string | null | undefined
+): Promise<string[]> {
+  const office = normalizeOfficeLocation(location);
+  if (!office) return [];
+  const meta = LOCATION_META[office];
+  return getRecipientsForType(meta.emailType, meta.legacyKey);
+}
+
+export type CheckinRecipientLists = {
+  global: string[];
+  byLocation: Record<OfficeLocation, string[]>;
+};
+
+/** All configurable check-in notification lists for the admin UI. */
+export async function getAllCheckinRecipientLists(): Promise<CheckinRecipientLists> {
+  const global = await getCheckinGlobalRecipients();
+  const byLocation = {} as Record<OfficeLocation, string[]>;
+  await Promise.all(
+    OFFICE_LOCATIONS.map(async (loc) => {
+      const meta = LOCATION_META[loc];
+      byLocation[loc] = await getRecipientsForType(meta.emailType, meta.legacyKey);
+    })
+  );
+  return { global, byLocation };
+}
+
+/**
+ * Mirrors a GuestFlow admin edit of the always-notify list back to the canonical
+ * table so the ACE Hub reflects the change (updated_source = 'guestflow').
+ */
+export async function mirrorCheckinRecipientsToCanonical(emails: string[]): Promise<void> {
+  await mirrorRecipientsToCanonical(GLOBAL_EMAIL_TYPE, GLOBAL_LABEL, emails);
+}
+
+/** Mirrors a per-office recipient list to ace_email_recipients. */
+export async function mirrorLocationRecipientsToCanonical(
+  location: OfficeLocation,
+  emails: string[]
+): Promise<void> {
+  const meta = LOCATION_META[location];
+  await mirrorRecipientsToCanonical(meta.emailType, meta.label, emails);
+}
+
+/** Persist always-notify list (legacy + Hub). */
+export async function setCheckinGlobalRecipients(emails: string[]): Promise<string[]> {
+  const normalised = parseRecipients(emails);
+  await storage.setNotificationEmailsByKey(GLOBAL_LEGACY_KEY, "Always-Notify Emails", normalised);
+  await mirrorCheckinRecipientsToCanonical(normalised);
+  return normalised;
+}
+
+/** Persist a location-specific list (legacy + Hub). */
+export async function setCheckinLocationRecipients(
+  location: OfficeLocation,
+  emails: string[]
+): Promise<string[]> {
+  const meta = LOCATION_META[location];
+  const normalised = parseRecipients(emails);
+  await storage.setNotificationEmailsByKey(meta.legacyKey, meta.label, normalised);
+  await mirrorLocationRecipientsToCanonical(location, normalised);
+  return normalised;
+}
+
+/** Merge always-notify + location lists without duplicates (order preserved). */
+export function mergeInformationalRecipients(
+  globalEmails: string[],
+  locationEmails: string[]
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of [...globalEmails, ...locationEmails]) {
+    const key = e.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(e.trim());
+  }
+  return out;
 }

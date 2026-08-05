@@ -1269,6 +1269,7 @@ function DevicesTab() {
                 <SelectContent>
                   <SelectItem value="none">No default</SelectItem>
                   <SelectItem value="New Jersey">New Jersey</SelectItem>
+                  <SelectItem value="Maryland">Maryland</SelectItem>
                   <SelectItem value="Michigan">Michigan</SelectItem>
                 </SelectContent>
               </Select>
@@ -3183,12 +3184,16 @@ function AcePocTab() {
   const [newName, setNewName] = useState("");
   const [expandedPocId, setExpandedPocId] = useState<string | null>(null);
   const [savingEmailsFor, setSavingEmailsFor] = useState<string | null>(null);
+  const [savingNotifKey, setSavingNotifKey] = useState<string | null>(null);
 
   const { data: pocs = [], isLoading } = useQuery<AcePoc[]>({
     queryKey: ["/api/ace-pocs"],
   });
 
-  const { data: notifData, isLoading: notifLoading } = useQuery<{ emails: string[] }>({
+  const { data: notifData, isLoading: notifLoading } = useQuery<{
+    global: string[];
+    byLocation: Record<string, string[]>;
+  }>({
     queryKey: ["/api/notification-emails"],
   });
 
@@ -3228,22 +3233,38 @@ function AcePocTab() {
     onSettled: () => setSavingEmailsFor(null),
   });
 
-  const updateNotifEmailsMutation = useMutation({
+  const updateGlobalEmailsMutation = useMutation({
     mutationFn: (emails: string[]) =>
-      apiRequest("PATCH", "/api/notification-emails", { emails }),
+      apiRequest("PATCH", "/api/notification-emails", { global: emails }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notification-emails"] });
-      toast({ title: "Global notification emails updated" });
+      toast({ title: "Always-notify emails updated" });
     },
     onError: () => {
-      toast({ title: "Failed to update global emails", variant: "destructive" });
+      toast({ title: "Failed to update always-notify emails", variant: "destructive" });
     },
+    onSettled: () => setSavingNotifKey(null),
+  });
+
+  const updateLocationEmailsMutation = useMutation({
+    mutationFn: ({ location, emails }: { location: string; emails: string[] }) =>
+      apiRequest("PATCH", "/api/notification-emails", { location, emails }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notification-emails"] });
+      toast({ title: `${vars.location} notification emails updated` });
+    },
+    onError: () => {
+      toast({ title: "Failed to update location emails", variant: "destructive" });
+    },
+    onSettled: () => setSavingNotifKey(null),
   });
 
   const handlePocEmailSave = (pocId: string, emails: string[]) => {
     setSavingEmailsFor(pocId);
     updatePocEmailsMutation.mutate({ id: pocId, emails });
   };
+
+  const officeLocations = ["New Jersey", "Maryland", "Michigan"] as const;
 
   return (
     <div className="space-y-6">
@@ -3332,12 +3353,12 @@ function AcePocTab() {
         </ul>
       )}
 
-      {/* Global notification emails */}
+      {/* Always-notify (all offices) */}
       <div className="rounded-md border">
         <div className="px-4 py-3 border-b bg-muted/40">
-          <h3 className="text-sm font-semibold">Global Notification Emails</h3>
+          <h3 className="text-sm font-semibold">Always-notify emails</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            These addresses receive a notification for every check-in, regardless of which POC was selected.
+            These addresses receive a notification for every check-in at any office, regardless of which POC was selected.
           </p>
         </div>
         <div className="px-4 py-3">
@@ -3345,14 +3366,47 @@ function AcePocTab() {
             <p className="text-xs text-muted-foreground">Loading…</p>
           ) : (
             <EmailListEditor
-              emails={notifData?.emails ?? []}
-              onSave={(emails) => updateNotifEmailsMutation.mutate(emails)}
-              isSaving={updateNotifEmailsMutation.isPending}
+              emails={notifData?.global ?? []}
+              onSave={(emails) => {
+                setSavingNotifKey("global");
+                updateGlobalEmailsMutation.mutate(emails);
+              }}
+              isSaving={savingNotifKey === "global" && updateGlobalEmailsMutation.isPending}
               testIdPrefix="global-notif"
             />
           )}
         </div>
       </div>
+
+      {/* Per-office notification emails */}
+      {officeLocations.map((loc) => {
+        const slug = loc.toLowerCase().replace(/\s+/g, "-");
+        return (
+          <div key={loc} className="rounded-md border">
+            <div className="px-4 py-3 border-b bg-muted/40">
+              <h3 className="text-sm font-semibold">{loc} office emails</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                These addresses are notified only when a visitor checks in at {loc}.
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              {notifLoading ? (
+                <p className="text-xs text-muted-foreground">Loading…</p>
+              ) : (
+                <EmailListEditor
+                  emails={notifData?.byLocation?.[loc] ?? []}
+                  onSave={(emails) => {
+                    setSavingNotifKey(loc);
+                    updateLocationEmailsMutation.mutate({ location: loc, emails });
+                  }}
+                  isSaving={savingNotifKey === loc && updateLocationEmailsMutation.isPending}
+                  testIdPrefix={`loc-${slug}-notif`}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

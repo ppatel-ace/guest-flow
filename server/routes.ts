@@ -8,8 +8,16 @@ import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
 import { createHmac } from "crypto";
 import { sendCheckInNotification, logEmailConfigStatus } from "./email";
-import { getCheckinGlobalRecipients, mirrorCheckinRecipientsToCanonical } from "./emailRecipients";
+import {
+  getCheckinGlobalRecipients,
+  getCheckinLocationRecipients,
+  getAllCheckinRecipientLists,
+  setCheckinGlobalRecipients,
+  setCheckinLocationRecipients,
+  mergeInformationalRecipients,
+} from "./emailRecipients";
 import geoip from "geoip-lite";
+import { REGION_TO_LOCATION, isOfficeLocation } from "@shared/locations";
 import {
   hasAppAccess,
   registerAceSsoRoutes,
@@ -21,11 +29,6 @@ import {
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
 
 // ─── IP → location helper ─────────────────────────────────────────────────────
-
-const REGION_TO_LOCATION: Record<string, string> = {
-  NJ: "New Jersey",
-  MI: "Michigan",
-};
 
 function detectLocationFromIp(ip: string | undefined): string | null {
   if (!ip) return null;
@@ -837,24 +840,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fire-and-forget email notification
       const pocName = (body.acePoc as string | null | undefined) ?? null;
+      const checkInLocation = (body.location as string | null | undefined)?.trim() || null;
       (async () => {
         try {
-          const [poc, globalEmails] = await Promise.all([
+          const [poc, globalEmails, locationEmails] = await Promise.all([
             pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
             getCheckinGlobalRecipients(),
+            getCheckinLocationRecipients(checkInLocation),
           ]);
           const pocEmails: string[] = poc?.emails ?? [];
-          if (pocEmails.length > 0 || globalEmails.length > 0) {
+          const informEmails = mergeInformationalRecipients(globalEmails, locationEmails);
+          if (pocEmails.length > 0 || informEmails.length > 0) {
             await sendCheckInNotification(
               {
                 fullName,
                 email: body.email ?? null,
                 company: body.company ?? null,
                 documentsAgreed: body.documentsAgreed ?? null,
+                location: checkInLocation,
               },
               pocName,
               pocEmails,
-              globalEmails
+              informEmails
             );
           }
         } catch (err) {
@@ -1436,14 +1443,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fire-and-forget email notification
       const pocName = (body.acePoc as string | null | undefined) ?? null;
+      const checkInLocation = visitor.location;
       (async () => {
         try {
-          const [poc, globalEmails] = await Promise.all([
+          const [poc, globalEmails, locationEmails] = await Promise.all([
             pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
             getCheckinGlobalRecipients(),
+            getCheckinLocationRecipients(checkInLocation),
           ]);
           const pocEmails: string[] = poc?.emails ?? [];
-          if (pocEmails.length > 0 || globalEmails.length > 0) {
+          const informEmails = mergeInformationalRecipients(globalEmails, locationEmails);
+          if (pocEmails.length > 0 || informEmails.length > 0) {
             await sendCheckInNotification(
               {
                 fullName,
@@ -1451,10 +1461,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 company: visitor.company,
                 usCitizen: body.usCitizen ?? null,
                 documentsAgreed: visitor.documentsAgreed ?? null,
+                location: checkInLocation,
               },
               pocName,
               pocEmails,
-              globalEmails
+              informEmails
             );
           }
         } catch (err) {
@@ -1706,36 +1717,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get global notification emails (admin protected).
-  // Reads the Hub-managed canonical allowlist so edits made in the ACE Hub
-  // show up here; falls back to the legacy list when not yet migrated.
+  // Get always-notify + per-office notification emails (admin protected).
+  // Reads Hub-managed canonical rows with legacy page_settings fallback.
   app.get("/api/notification-emails", requireAuth, async (req, res) => {
     try {
-      const emails = await getCheckinGlobalRecipients();
-      res.json({ emails });
+      const lists = await getAllCheckinRecipientLists();
+      res.json(lists);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch notification emails" });
     }
   });
 
-  // Set global notification emails (admin protected)
+  // Set always-notify or a single office list (admin protected).
+  // Body: { global: string[] } OR { location: OfficeLocation, emails: string[] }
   app.patch("/api/notification-emails", requireAuth, async (req, res) => {
     try {
-      const { emails } = req.body;
-      if (!Array.isArray(emails)) {
-        return res.status(400).json({ error: "emails must be an array" });
+      const body = req.body ?? {};
+
+      const validateEmails = (emails: unknown): string[] | { error: string; invalid?: unknown[] } => {
+        if (!Array.isArray(emails)) {
+          return { error: "emails must be an array" };
+        }
+        const invalid = emails.filter(
+          (e: unknown) => typeof e !== "string" || !e.trim().toLowerCase().endsWith("@aceelectronics.com")
+        );
+        if (invalid.length > 0) {
+          return { error: "All emails must end in @aceelectronics.com", invalid };
+        }
+        return emails.map((e: string) => e.trim().toLowerCase());
+      };
+
+      if (Array.isArray(body.global)) {
+        const result = validateEmails(body.global);
+        if (!Array.isArray(result)) {
+          return res.status(400).json(result);
+        }
+        const normalised = await setCheckinGlobalRecipients(result);
+        const lists = await getAllCheckinRecipientLists();
+        return res.json({ ...lists, global: normalised });
       }
-      const invalid = emails.filter(
-        (e: unknown) => typeof e !== "string" || !e.trim().toLowerCase().endsWith("@aceelectronics.com")
-      );
-      if (invalid.length > 0) {
-        return res.status(400).json({ error: "All emails must end in @aceelectronics.com", invalid });
+
+      if (body.location != null || body.emails != null) {
+        if (!isOfficeLocation(body.location)) {
+          return res.status(400).json({
+            error: "location must be one of: New Jersey, Maryland, Michigan",
+          });
+        }
+        const result = validateEmails(body.emails);
+        if (!Array.isArray(result)) {
+          return res.status(400).json(result);
+        }
+        const normalised = await setCheckinLocationRecipients(body.location, result);
+        const lists = await getAllCheckinRecipientLists();
+        return res.json({
+          ...lists,
+          byLocation: { ...lists.byLocation, [body.location]: normalised },
+        });
       }
-      const normalised = emails.map((e: string) => e.trim().toLowerCase());
-      await storage.setNotificationEmails(normalised);
-      // Mirror to the canonical Hub table so the change flows back to the ACE Hub.
-      await mirrorCheckinRecipientsToCanonical(normalised);
-      res.json({ emails: normalised });
+
+      // Backward-compatible: { emails: string[] } updates always-notify only
+      if (Array.isArray(body.emails)) {
+        const result = validateEmails(body.emails);
+        if (!Array.isArray(result)) {
+          return res.status(400).json(result);
+        }
+        const normalised = await setCheckinGlobalRecipients(result);
+        const lists = await getAllCheckinRecipientLists();
+        return res.json({ ...lists, global: normalised });
+      }
+
+      return res.status(400).json({
+        error: "Provide { global: string[] } or { location, emails: string[] }",
+      });
     } catch (error) {
       console.error("[notification-emails] PATCH failed:", error);
       res.status(500).json({ error: "Failed to update notification emails" });
@@ -1754,6 +1807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const jobName = String(req.body?.job_name || "").trim();
       const testEmail = String(req.body?.test_email || "").trim();
+      const testLocation = String(req.body?.location || "").trim() || "New Jersey";
       if (!testEmail) {
         return res.status(400).json({ error: "test_email is required" });
       }
@@ -1767,6 +1821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: null,
           company: "ACE Hub Test",
           documentsAgreed: null,
+          location: testLocation,
         },
         null,
         [],

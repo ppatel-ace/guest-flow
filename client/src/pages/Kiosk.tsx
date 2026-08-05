@@ -826,6 +826,7 @@ export default function Kiosk() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="New Jersey">New Jersey</SelectItem>
+                          <SelectItem value="Maryland">Maryland</SelectItem>
                           <SelectItem value="Michigan">Michigan</SelectItem>
                         </SelectContent>
                       </Select>

@@ -252,9 +252,11 @@ export interface IStorage {
   deleteAcePoc(id: string): Promise<boolean>;
   updateAcePocEmails(id: string, emails: string[]): Promise<AcePoc | undefined>;
   getAcePocByName(name: string): Promise<AcePoc | undefined>;
-  // Global notification emails
+  // Global / per-location notification emails (page_settings keys)
   getNotificationEmails(): Promise<string[]>;
   setNotificationEmails(emails: string[]): Promise<void>;
+  getNotificationEmailsByKey(key: string): Promise<string[]>;
+  setNotificationEmailsByKey(key: string, title: string, emails: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1251,11 +1253,11 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Global notification emails ───────────────────────────────────────────────
 
-  async getNotificationEmails(): Promise<string[]> {
+  async getNotificationEmailsByKey(key: string): Promise<string[]> {
     const [row] = await db
       .select()
       .from(pageSettings)
-      .where(eq(pageSettings.key, "notification_emails"));
+      .where(eq(pageSettings.key, key));
     if (!row) return [];
     try {
       return JSON.parse(row.description) as string[];
@@ -1264,9 +1266,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async setNotificationEmails(emails: string[]): Promise<void> {
-    await this.upsertPageSettings("notification_emails", {
-      title: "Notification Emails",
+  async setNotificationEmailsByKey(key: string, title: string, emails: string[]): Promise<void> {
+    await this.upsertPageSettings(key, {
+      title,
       description: JSON.stringify(emails),
       successMessage: null,
       successTitle: null,
@@ -1281,6 +1283,14 @@ export class DatabaseStorage implements IStorage {
       labelPrinterEnabled: false,
       wifiCouponEnabled: false,
     });
+  }
+
+  async getNotificationEmails(): Promise<string[]> {
+    return this.getNotificationEmailsByKey("notification_emails");
+  }
+
+  async setNotificationEmails(emails: string[]): Promise<void> {
+    await this.setNotificationEmailsByKey("notification_emails", "Notification Emails", emails);
   }
 
 }

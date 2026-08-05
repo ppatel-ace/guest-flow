@@ -124,6 +124,7 @@ export interface CheckInVisitor {
   company: string | null;
   usCitizen?: string | null;
   documentsAgreed?: string | null;
+  location?: string | null;
 }
 
 function formatCheckInTime(now: Date): string {
@@ -142,6 +143,11 @@ function formatCheckInTime(now: Date): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
+function placeLabel(location: string | null | undefined): string {
+  const loc = location?.trim();
+  return loc || "Ace Electronics";
+}
+
 function buildRow(value: string, label: string): string {
   return `
     <tr>
@@ -158,13 +164,15 @@ function buildEmailHtml(
   pocName: string | null,
   isPocEmail: boolean
 ): string {
+  const place = placeLabel(visitor.location);
   const headline = isPocEmail
     ? `${escapeHtml(visitor.fullName)} is here to see you.`
     : pocName
     ? `${escapeHtml(visitor.fullName)} is here — visiting ${escapeHtml(pocName)}.`
-    : `${escapeHtml(visitor.fullName)} has checked in at Ace Electronics HQ.`;
+    : `${escapeHtml(visitor.fullName)} has checked in at ${escapeHtml(place)}.`;
 
   const rows: string[] = [buildRow(visitor.fullName, "Visitor")];
+  if (visitor.location?.trim()) rows.push(buildRow(visitor.location.trim(), "Location"));
   if (visitor.email) rows.push(buildRow(visitor.email, "Email address"));
   if (visitor.company) rows.push(buildRow(visitor.company, "Organization / Company"));
   if (pocName) rows.push(buildRow(isPocEmail ? "You" : pocName, "Here to see"));
@@ -183,7 +191,7 @@ function buildEmailHtml(
             ${headline}
           </h1>
           <p style="margin:0;font-size:14px;color:#666666;text-align:center;">
-            Checked in at Ace Electronics HQ on ${escapeHtml(timeStr)}.
+            Checked in at ${escapeHtml(place)} on ${escapeHtml(timeStr)}.
           </p>
         </td></tr>
         <tr><td style="background:#ffffff;border:1px solid #e0e0e0;border-radius:6px;padding:0 24px;">
@@ -202,7 +210,7 @@ function buildEmailHtml(
  * Send check-in notifications via Microsoft Graph API.
  *
  * - pocEmails    → receive a personal "is here to see YOU" email
- * - globalEmails → receive an informational "is here — visiting [POC]" email
+ * - informEmails → always-notify + location recipients (informational template)
  *
  * If an address appears in both lists it only gets the POC email.
  * If pocName is null (no POC selected) both lists receive a generic notification.
@@ -211,7 +219,7 @@ export async function sendCheckInNotification(
   visitor: CheckInVisitor,
   pocName: string | null,
   pocEmails: string[],
-  globalEmails: string[]
+  informEmails: string[]
 ): Promise<void> {
   const { ok, missing } = validateEmailConfig();
   if (!ok) {
@@ -220,18 +228,19 @@ export async function sendCheckInNotification(
   }
 
   const fromAddress = process.env.EMAIL_FROM!;
+  const place = placeLabel(visitor.location);
 
   const filteredPoc = pocEmails.filter((e) =>
     e.trim().toLowerCase().endsWith(ACE_DOMAIN)
   );
   const pocSet = new Set(filteredPoc.map((e) => e.trim().toLowerCase()));
-  const filteredGlobal = globalEmails.filter(
+  const filteredInform = informEmails.filter(
     (e) =>
       e.trim().toLowerCase().endsWith(ACE_DOMAIN) &&
       !pocSet.has(e.trim().toLowerCase())
   );
 
-  if (filteredPoc.length === 0 && filteredGlobal.length === 0) {
+  if (filteredPoc.length === 0 && filteredInform.length === 0) {
     console.warn("[email] No valid @aceelectronics.com addresses to notify — skipping.");
     return;
   }
@@ -248,8 +257,8 @@ export async function sendCheckInNotification(
 
   if (filteredPoc.length > 0) {
     const subject = pocName
-      ? `${visitor.fullName} is here to see you`
-      : `${visitor.fullName} has checked in at Ace Electronics HQ`;
+      ? `${visitor.fullName} is here to see you${visitor.location?.trim() ? ` (${place})` : ""}`
+      : `${visitor.fullName} has checked in at ${place}`;
     const html = buildEmailHtml(visitor, timeStr, pocName, true);
     sends.push(
       sendViaGraph(token, fromAddress, filteredPoc, subject, html).catch((err) => {
@@ -258,20 +267,20 @@ export async function sendCheckInNotification(
     );
   }
 
-  if (filteredGlobal.length > 0) {
+  if (filteredInform.length > 0) {
     const subject = pocName
-      ? `${visitor.fullName} is here — visiting ${pocName}`
-      : `${visitor.fullName} has checked in at Ace Electronics HQ`;
+      ? `${visitor.fullName} is here — visiting ${pocName} (${place})`
+      : `${visitor.fullName} has checked in at ${place}`;
     const html = buildEmailHtml(visitor, timeStr, pocName, false);
     sends.push(
-      sendViaGraph(token, fromAddress, filteredGlobal, subject, html).catch((err) => {
-        console.error("[email] Failed to send global notification:", err);
+      sendViaGraph(token, fromAddress, filteredInform, subject, html).catch((err) => {
+        console.error("[email] Failed to send check-in notification:", err);
       })
     );
   }
 
   await Promise.all(sends);
   console.log(
-    `[email] Notifications dispatched — POC: ${filteredPoc.length}, global: ${filteredGlobal.length}, visitor: ${visitor.fullName}`
+    `[email] Notifications dispatched — POC: ${filteredPoc.length}, inform: ${filteredInform.length}, location: ${place}, visitor: ${visitor.fullName}`
   );
 }
