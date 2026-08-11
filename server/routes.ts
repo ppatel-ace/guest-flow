@@ -1558,7 +1558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: visitor.email,
             company: visitor.company,
             usCitizen: extras.usCitizen,
-            purpose: extras.purpose,
+            purpose,
             documentsAgreed: visitor.documentsAgreed ?? null,
             location: checkInLocation,
           },
