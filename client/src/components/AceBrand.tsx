@@ -1,39 +1,28 @@
 const ACE_ERP_URL = "https://aceerp.aceelectronics.com";
 
 interface AceBrandProps {
-  /** Show the "Customer Check in" label beside the logo */
-  showProductName?: boolean;
-  /** Compact mark-only for collapsed sidebar */
-  compact?: boolean;
   /**
    * auto = follow theme (navy on light, white on dark)
    * white = force white lockup (dark backgrounds)
    * navy = force navy lockup (light backgrounds)
    */
   variant?: "auto" | "white" | "navy";
+  /** Compact mark-only for collapsed sidebar */
+  compact?: boolean;
   className?: string;
 }
 
 /**
  * Ace Electronics brand lockup.
- * Only the logo is a link (opens Ace ERP in the same tab).
- * Product name sits beside it and is not part of the link.
+ * Logo links to Ace ERP (same tab).
  */
 export function AceBrand({
-  showProductName = true,
   compact = false,
   variant = "auto",
   className = "",
 }: AceBrandProps) {
-  const productNameClass =
-    variant === "white"
-      ? "text-white"
-      : variant === "navy"
-        ? "text-[hsl(220_100%_14%)]"
-        : "text-foreground";
-
   return (
-    <div className={`flex items-center gap-3 min-w-0 ${className}`}>
+    <div className={`flex items-center min-w-0 ${className}`}>
       <a
         href={ACE_ERP_URL}
         target="_self"
@@ -76,14 +65,6 @@ export function AceBrand({
           </>
         )}
       </a>
-
-      {showProductName && !compact && (
-        <div className="min-w-0 border-l border-border pl-3 dark:border-white/20">
-          <p className={`truncate text-sm font-semibold tracking-tight leading-tight ${productNameClass}`}>
-            Customer Check in
-          </p>
-        </div>
-      )}
     </div>
   );
 }

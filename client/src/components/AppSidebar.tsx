@@ -69,7 +69,6 @@ export function AppSidebar() {
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <AceBrand
             compact={collapsed}
-            showProductName={!collapsed}
             className="min-w-0"
           />
           <Button

@@ -45,7 +45,7 @@ function AdminLayout() {
               <div className="flex items-center gap-3 min-w-0">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
                 <div className="hidden sm:block h-5 w-px bg-border shrink-0" aria-hidden />
-                <AceBrand showProductName className="min-w-0" />
+                <AceBrand className="min-w-0" />
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Button

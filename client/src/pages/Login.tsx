@@ -99,7 +99,7 @@ export default function Login() {
         <Card className="relative w-full max-w-md border-white/10 bg-white/5 text-white backdrop-blur-md">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
             <div className="flex justify-center">
-              <AceBrand showProductName={false} variant="white" />
+              <AceBrand variant="white" />
             </div>
             <div className="mx-auto w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
               <ExternalLink className="h-6 w-6 text-white" />
@@ -123,7 +123,7 @@ export default function Login() {
       <Card className="relative w-full max-w-md border-white/10 bg-card/95 shadow-xl backdrop-blur-sm">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
-            <AceBrand showProductName variant="navy" />
+            <AceBrand variant="navy" />
           </div>
           <div className="space-y-1.5">
             <CardTitle className="text-2xl tracking-tight">Welcome back</CardTitle>
