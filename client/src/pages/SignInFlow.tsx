@@ -1513,6 +1513,7 @@ function VisitorLogTab() {
   const [notesDraft, setNotesDraft] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [previewRows, setPreviewRows] = useState<ImportPreviewRow[]>([]);
   const [allParsedRows, setAllParsedRows] = useState<Record<string, string>[]>([]);
   const [skipCount, setSkipCount] = useState(0);
@@ -1618,6 +1619,42 @@ function VisitorLogTab() {
     setSkipCount(0);
   };
 
+  const exportVisitorsCsv = async () => {
+    if (allVisitors.length === 0) return;
+    setExportingCsv(true);
+    try {
+      const Papa = (await import("papaparse")).default;
+      const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Duration", "US Citizen", "Purpose", "Location", "Source"];
+      const rows = allVisitors.map((v) => [
+        v.fullName,
+        v.email ?? "",
+        v.company ?? "",
+        v.acePoc ?? "",
+        new Date(v.signedInAt).toLocaleString(),
+        v.signedOutAt ? new Date(v.signedOutAt).toLocaleString() : "",
+        formatDuration(v.signedInAt, v.signedOutAt),
+        v.usCitizen ?? "",
+        v.purpose ?? "",
+        v.location ?? "",
+        v.source,
+      ]);
+      const csv = Papa.unparse([headers, ...rows]);
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `visitor-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exported", description: `${allVisitors.length} visitor log${allVisitors.length !== 1 ? "s" : ""} exported to CSV.` });
+    } catch (err: any) {
+      toast({ title: "Export failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+    }
+    setExportingCsv(false);
+  };
+
   const handleEnvoyFileSelect = async (file: File) => {
     try {
       const Papa = (await import("papaparse")).default;
@@ -1714,6 +1751,16 @@ function VisitorLogTab() {
         <Button size="sm" variant="outline" onClick={() => { resetImport(); setImportOpen(true); }} data-testid="button-import-envoy">
           <Upload className="h-3.5 w-3.5 mr-1.5" />
           Import Envoy CSV
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={exportVisitorsCsv}
+          disabled={exportingCsv || allVisitors.length === 0}
+          data-testid="button-export-visitors-csv"
+        >
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          {exportingCsv ? "Exporting…" : "Export to CSV"}
         </Button>
       </div>
 
