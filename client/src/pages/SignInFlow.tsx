@@ -165,7 +165,7 @@ const FIXED_FIELDS = [
   { label: "Phone Number", type: "tel", required: true },
   { label: "Company", type: "text", required: false },
   { label: "Ace POC", type: "select", required: false },
-  { label: "Purpose", type: "text", required: false },
+  { label: "Purpose", type: "select", required: false },
 ];
 
 interface FieldDialogState {

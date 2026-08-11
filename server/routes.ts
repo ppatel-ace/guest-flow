@@ -28,7 +28,11 @@ import {
   type AceAuthRequest,
 } from "./aceSso";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
-import { resolveVisitorExtraFields, type CustomFieldValue } from "@shared/visitorFields";
+import {
+  resolveVisitorExtraFields,
+  PURPOSE_OF_VISIT_OPTIONS,
+  type CustomFieldValue,
+} from "@shared/visitorFields";
 import { startAutoCheckoutLoop } from "./autoCheckout";
 import { db } from "./db";
 import { asc } from "drizzle-orm";
@@ -1524,6 +1528,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         purpose: body.purpose,
         customFields,
       });
+      const purposeAllowed = new Set<string>(PURPOSE_OF_VISIT_OPTIONS);
+      const purpose =
+        extras.purpose && purposeAllowed.has(extras.purpose) ? extras.purpose : null;
       const visitor = await storage.createVisitor({
         fullName,
         email: body.email?.trim().toLowerCase() || null,
@@ -1533,7 +1540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signedInAt: new Date(),
         signedOutAt: null,
         usCitizen: extras.usCitizen,
-        purpose: extras.purpose,
+        purpose,
         location: body.location?.trim() || null,
         source: "kiosk",
         notes: null,

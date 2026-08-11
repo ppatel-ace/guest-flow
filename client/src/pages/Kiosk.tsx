@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { FormField, AcePoc } from "@shared/schema";
 import { OFFICE_LOCATIONS } from "@shared/locations";
+import { PURPOSE_OF_VISIT_OPTIONS } from "@shared/visitorFields";
 
 // ─── Template variable substitution ──────────────────────────────────────────
 
@@ -891,13 +892,16 @@ export default function Kiosk() {
                     <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                       Purpose <span className="text-slate-400 font-normal">(Optional)</span>
                     </Label>
-                    <Input
-                      className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600"
-                      value={purpose}
-                      onChange={(e) => setPurpose(e.target.value)}
-                      placeholder="Meeting, tour, interview…"
-                      data-testid="input-kiosk-purpose"
-                    />
+                    <Select value={purpose || undefined} onValueChange={setPurpose}>
+                      <SelectTrigger className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600" data-testid="select-kiosk-purpose">
+                        <SelectValue placeholder="Select purpose" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PURPOSE_OF_VISIT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </motion.div>
 
                   {displayCustomFields.map((field, idx) => (

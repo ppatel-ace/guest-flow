@@ -3,6 +3,16 @@
  * Custom form-field labels from the admin UI are matched by normalized slug.
  */
 
+export const PURPOSE_OF_VISIT_OPTIONS = [
+  "Meeting",
+  "Visit",
+  "Interview",
+  "Inspection",
+  "Other",
+] as const;
+
+export type PurposeOfVisit = (typeof PURPOSE_OF_VISIT_OPTIONS)[number];
+
 function slugifyLabel(label: string): string {
   return label
     .toLowerCase()
