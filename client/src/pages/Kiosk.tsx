@@ -156,6 +156,7 @@ export default function Kiosk() {
   const [company, setCompany] = useState("");
   const [acePoc, setAcePoc] = useState("");
   const [location, setLocation] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [plusOneCount, setPlusOneCount] = useState(1);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
 
@@ -202,6 +203,11 @@ export default function Kiosk() {
   const { data: customFields = [] } = useQuery<FormField[]>({
     queryKey: ["/api/form-fields"],
   });
+
+  // Purpose is a first-class kiosk field; hide any admin custom field with the same role
+  const displayCustomFields = customFields.filter(
+    (f) => !/purpose/i.test(f.label)
+  );
 
   const effectiveLocation = location || deviceDefaultLocation.current || "";
 
@@ -301,7 +307,7 @@ export default function Kiosk() {
     setWelcomeFirstName(null);
     setIsLookingUp(false);
     setFormTitle(""); setFirstName(""); setLastName(""); setEmail("");
-    setPhone(""); setCompany(""); setAcePoc(""); setLocation(""); setPlusOneCount(1);
+    setPhone(""); setCompany(""); setAcePoc(""); setLocation(""); setPurpose(""); setPlusOneCount(1);
     setCustomFieldValues({}); setPhotoData(null); setCameraError(false);
     setCurrentDocIndex(0); setAcknowledgedDocs([]);
     setSubmitError(null); setIsSubmitting(false);
@@ -513,6 +519,11 @@ export default function Kiosk() {
     setSubmitError(null);
 
     try {
+      const customFieldsPayload = customFields.map((f) => ({
+        id: f.id,
+        label: f.label,
+        value: customFieldValues[f.id] ?? "",
+      }));
       const res = await fetch("/api/kiosk/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -524,10 +535,12 @@ export default function Kiosk() {
           company: company.trim() || null,
           acePoc: acePoc || null,
           location: location || null,
+          purpose: purpose.trim() || null,
           title: formTitle || null,
           photoData: photo || null,
           plusOneCount: plusOneEnabled ? plusOneCount : 0,
           documentsAgreed: acked.length > 0 ? JSON.stringify(acked) : null,
+          customFields: customFieldsPayload,
         }),
       });
 
@@ -874,8 +887,21 @@ export default function Kiosk() {
                     </Select>
                   </motion.div>
 
-                  {customFields.map((field, idx) => (
-                    <motion.div key={`field-custom-${field.id}`} custom={6 + idx} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                  <motion.div key="field-purpose" custom={6} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Purpose <span className="text-slate-400 font-normal">(Optional)</span>
+                    </Label>
+                    <Input
+                      className="h-13 text-base rounded-xl border-slate-300 dark:border-slate-600"
+                      value={purpose}
+                      onChange={(e) => setPurpose(e.target.value)}
+                      placeholder="Meeting, tour, interview…"
+                      data-testid="input-kiosk-purpose"
+                    />
+                  </motion.div>
+
+                  {displayCustomFields.map((field, idx) => (
+                    <motion.div key={`field-custom-${field.id}`} custom={7 + idx} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
                       <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {field.label}
                         {field.required && <span className="text-red-500"> *</span>}
@@ -910,7 +936,7 @@ export default function Kiosk() {
                   ))}
 
                   {plusOneEnabled && (
-                    <motion.div key="field-plusone" custom={6 + customFields.length} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <motion.div key="field-plusone" custom={7 + displayCustomFields.length} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-2">
                       <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         <Users className="inline h-4 w-4 mr-1.5" />
                         Group size
@@ -925,7 +951,7 @@ export default function Kiosk() {
                     </motion.div>
                   )}
 
-                  <motion.div key="field-submit" custom={7 + customFields.length + (plusOneEnabled ? 1 : 0)} variants={fieldVariants} initial="hidden" animate="visible" className="pt-2">
+                  <motion.div key="field-submit" custom={8 + displayCustomFields.length + (plusOneEnabled ? 1 : 0)} variants={fieldVariants} initial="hidden" animate="visible" className="pt-2">
                     <Button type="submit" className="w-full h-14 text-lg font-semibold rounded-xl bg-blue-600 hover:bg-blue-700" data-testid="button-kiosk-continue">
                       Continue
                       <ChevronRight className="ml-2 h-5 w-5" />

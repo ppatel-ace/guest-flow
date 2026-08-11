@@ -129,6 +129,7 @@ export interface CheckInVisitor {
   email: string | null;
   company: string | null;
   usCitizen?: string | null;
+  purpose?: string | null;
   documentsAgreed?: string | null;
   location?: string | null;
 }
@@ -183,6 +184,7 @@ function buildEmailHtml(
   if (visitor.company) rows.push(buildRow(visitor.company, "Organization / Company"));
   if (pocName) rows.push(buildRow(isPocEmail ? "You" : pocName, "Here to see"));
   if (visitor.usCitizen) rows.push(buildRow(visitor.usCitizen, "US citizen or resident"));
+  if (visitor.purpose) rows.push(buildRow(visitor.purpose, "Purpose of visit"));
   if (visitor.documentsAgreed) rows.push(buildRow("Signed today", "Document"));
 
   return `<!DOCTYPE html>
@@ -230,8 +232,14 @@ export async function notifyCheckIn(
     ]);
     const pocEmails: string[] = poc?.emails ?? [];
     const informEmails = mergeInformationalRecipients(globalEmails, locationEmails);
+    console.log(
+      `[email] notifyCheckIn — always-notify: ${globalEmails.length} [${globalEmails.join(", ")}], ` +
+        `location (${location ?? "none"}): ${locationEmails.length}, POC: ${pocEmails.length}`
+    );
     if (pocEmails.length > 0 || informEmails.length > 0) {
       await sendCheckInNotification(visitor, pocName, pocEmails, informEmails);
+    } else {
+      console.warn("[email] notifyCheckIn — no recipients resolved (POC + always-notify + location all empty)");
     }
   } catch (err) {
     console.error("[email] check-in notification error:", err);
@@ -285,16 +293,26 @@ export async function sendCheckInNotification(
 
   const now = new Date();
   const timeStr = formatCheckInTime(now);
-  const sends: Promise<void>[] = [];
+  let pocOk = 0;
+  let pocFail = 0;
+  let informOk = 0;
+  let informFail = 0;
 
+  // Send one recipient per Graph call so a single bad address cannot fail the batch.
   if (filteredPoc.length > 0) {
     const subject = pocName
       ? `${visitor.fullName} is here to see you${visitor.location?.trim() ? ` (${place})` : ""}`
       : `${visitor.fullName} has checked in at ${place}`;
     const html = buildEmailHtml(visitor, timeStr, pocName, true);
-    sends.push(
-      sendViaGraph(token, fromAddress, filteredPoc, subject, html).catch((err) => {
-        console.error("[email] Failed to send POC notification:", err);
+    await Promise.all(
+      filteredPoc.map(async (addr) => {
+        try {
+          await sendViaGraph(token, fromAddress, [addr], subject, html);
+          pocOk++;
+        } catch (err) {
+          pocFail++;
+          console.error(`[email] Failed to send POC notification to ${addr}:`, err);
+        }
       })
     );
   }
@@ -304,15 +322,23 @@ export async function sendCheckInNotification(
       ? `${visitor.fullName} is here — visiting ${pocName} (${place})`
       : `${visitor.fullName} has checked in at ${place}`;
     const html = buildEmailHtml(visitor, timeStr, pocName, false);
-    sends.push(
-      sendViaGraph(token, fromAddress, filteredInform, subject, html).catch((err) => {
-        console.error("[email] Failed to send check-in notification:", err);
+    console.log(
+      `[email] Sending always-notify + location emails to: ${filteredInform.join(", ")}`
+    );
+    await Promise.all(
+      filteredInform.map(async (addr) => {
+        try {
+          await sendViaGraph(token, fromAddress, [addr], subject, html);
+          informOk++;
+        } catch (err) {
+          informFail++;
+          console.error(`[email] Failed to send check-in notification to ${addr}:`, err);
+        }
       })
     );
   }
 
-  await Promise.all(sends);
   console.log(
-    `[email] Notifications dispatched — POC: ${filteredPoc.length}, inform: ${filteredInform.length}, location: ${place}, visitor: ${visitor.fullName}`
+    `[email] Notifications finished — POC ok/fail: ${pocOk}/${pocFail}, inform ok/fail: ${informOk}/${informFail}, location: ${place}, visitor: ${visitor.fullName}`
   );
 }

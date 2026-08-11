@@ -235,7 +235,10 @@ export interface IStorage {
   // Visitors (kiosk / Envoy walk-ins)
   lookupVisitorByEmail(email: string): Promise<{ fullName: string; email: string | null; phoneNumber: string | null; company: string | null; acePoc: string | null } | null>;
   createVisitor(data: InsertVisitor): Promise<Visitor>;
+  autoCheckoutStaleVisitors(hours: number): Promise<number>;
   getAllVisitors(): Promise<Visitor[]>;
+  getAutoCheckoutHours(): Promise<number>;
+  setAutoCheckoutHours(hours: number): Promise<number>;
   bulkImportVisitors(rows: InsertVisitor[]): Promise<{ inserted: number; skipped: number; backfilled: number }>;
   countVisitorsMissingUsCitizen(): Promise<number>;
   getVisitorProfile(email?: string, name?: string): Promise<{
@@ -1045,8 +1048,64 @@ export class DatabaseStorage implements IStorage {
     return visitor;
   }
 
+  /**
+   * Auto sign-out visitors still open past the configured duration.
+   * signed_out_at is set to signed_in_at + hours so Duration is exact (not wall-clock job lag).
+   */
+  async autoCheckoutStaleVisitors(hours: number): Promise<number> {
+    const safeHours = Math.max(1, Math.min(24 * 7, Math.floor(hours)));
+    const result = await db.execute(sql`
+      UPDATE gf_visitors
+      SET signed_out_at = signed_in_at + make_interval(hours => ${safeHours})
+      WHERE signed_out_at IS NULL
+        AND signed_in_at <= now() - make_interval(hours => ${safeHours})
+      RETURNING id
+    `);
+    const rows = Array.isArray(result)
+      ? result
+      : (result as { rows?: unknown[] }).rows ?? [];
+    return rows.length;
+  }
+
   async getAllVisitors(): Promise<Visitor[]> {
     return await db.select().from(visitors).orderBy(desc(visitors.signedInAt));
+  }
+
+  async getAutoCheckoutHours(): Promise<number> {
+    const [row] = await db
+      .select()
+      .from(pageSettings)
+      .where(eq(pageSettings.key, "visitor_log_settings"));
+    if (!row?.description) return 3;
+    try {
+      const parsed = JSON.parse(row.description) as { autoCheckoutHours?: number };
+      const hours = Number(parsed.autoCheckoutHours);
+      if (Number.isFinite(hours) && hours >= 1 && hours <= 168) return Math.floor(hours);
+    } catch {
+      // fall through
+    }
+    return 3;
+  }
+
+  async setAutoCheckoutHours(hours: number): Promise<number> {
+    const safeHours = Math.max(1, Math.min(168, Math.floor(hours)));
+    await this.upsertPageSettings("visitor_log_settings", {
+      title: "Visitor Log Settings",
+      description: JSON.stringify({ autoCheckoutHours: safeHours }),
+      successMessage: null,
+      successTitle: null,
+      eventName: null,
+      eventDate: null,
+      eventLocation: null,
+      captchaBypassStart: null,
+      captchaBypassEnd: null,
+      photoEnabled: false,
+      plusOneEnabled: false,
+      kioskTimeoutSeconds: 30,
+      labelPrinterEnabled: false,
+      wifiCouponEnabled: false,
+    });
+    return safeHours;
   }
 
   async getVisitorProfile(email?: string, name?: string): Promise<{

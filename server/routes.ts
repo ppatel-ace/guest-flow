@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema, insertPrinterSchema } from "@shared/schema";
+import { insertCustomerSchema, insertFormFieldSchema, insertLeadSchema, insertDocumentSchema, insertPrinterSchema, formFields } from "@shared/schema";
 import { printLabel } from "./printer-helper";
 import { z } from "zod";
 import QRCode from "qrcode";
@@ -15,6 +15,7 @@ import {
   setCheckinGlobalRecipients,
   setCheckinLocationRecipients,
   mergeInformationalRecipients,
+  ensureEmailRecipientsSchema,
 } from "./emailRecipients";
 import geoip from "geoip-lite";
 import { REGION_TO_LOCATION, isOfficeLocation } from "@shared/locations";
@@ -27,6 +28,49 @@ import {
   type AceAuthRequest,
 } from "./aceSso";
 import { registerAceCrmSyncOnStartup } from "./aceCrmSync";
+import { resolveVisitorExtraFields, type CustomFieldValue } from "@shared/visitorFields";
+import { startAutoCheckoutLoop } from "./autoCheckout";
+import { db } from "./db";
+import { asc } from "drizzle-orm";
+
+function parseCustomFieldValues(body: any): CustomFieldValue[] {
+  const raw = body?.customFields ?? body?.customFieldValues;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((f: any) => ({
+    id: typeof f?.id === "string" ? f.id : undefined,
+    label: typeof f?.label === "string" ? f.label : undefined,
+    value: f?.value != null ? String(f.value) : null,
+  }));
+}
+
+/** When client sends only id→value map, resolve labels from form-field definitions. */
+async function resolveCustomFieldsFromBody(body: any): Promise<CustomFieldValue[]> {
+  const listed = parseCustomFieldValues(body);
+  if (listed.length > 0 && listed.some((f) => f.label)) return listed;
+
+  // Object map: { [fieldId]: value }
+  const map = body?.customFieldValues;
+  if (map && typeof map === "object" && !Array.isArray(map)) {
+    const defs = await db.select().from(formFields).orderBy(asc(formFields.sortOrder));
+    return defs.map((d) => ({
+      id: d.id,
+      label: d.label,
+      value: map[d.id] != null ? String(map[d.id]) : null,
+    }));
+  }
+
+  // Array without labels — look up by id
+  if (listed.length > 0) {
+    const defs = await db.select().from(formFields);
+    const byId = new Map(defs.map((d) => [d.id, d.label]));
+    return listed.map((f) => ({
+      ...f,
+      label: f.label || (f.id ? byId.get(f.id) : undefined),
+    }));
+  }
+
+  return [];
+}
 
 // ─── IP → location helper ─────────────────────────────────────────────────────
 
@@ -1474,6 +1518,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "firstName and lastName are required" });
       }
       const fullName = `${String(body.firstName).trim()} ${String(body.lastName).trim()}`.trim();
+      const customFields = await resolveCustomFieldsFromBody(body);
+      const extras = resolveVisitorExtraFields({
+        usCitizen: body.usCitizen,
+        purpose: body.purpose,
+        customFields,
+      });
       const visitor = await storage.createVisitor({
         fullName,
         email: body.email?.trim().toLowerCase() || null,
@@ -1482,8 +1532,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         acePoc: body.acePoc || null,
         signedInAt: new Date(),
         signedOutAt: null,
-        usCitizen: null,
-        purpose: null,
+        usCitizen: extras.usCitizen,
+        purpose: extras.purpose,
         location: body.location?.trim() || null,
         source: "kiosk",
         notes: null,
@@ -1500,7 +1550,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             fullName,
             email: visitor.email,
             company: visitor.company,
-            usCitizen: body.usCitizen ?? null,
+            usCitizen: extras.usCitizen,
+            purpose: extras.purpose,
             documentsAgreed: visitor.documentsAgreed ?? null,
             location: checkInLocation,
           },
@@ -1516,6 +1567,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to check in" });
+    }
+  });
+
+  // Visitor Log settings (auto checkout hours)
+  app.get("/api/visitor-log/settings", requireAuth, async (_req, res) => {
+    try {
+      const autoCheckoutHours = await storage.getAutoCheckoutHours();
+      res.json({ autoCheckoutHours });
+    } catch (error) {
+      console.error("[visitor-log/settings GET]", error);
+      res.status(500).json({ error: "Failed to load visitor log settings" });
+    }
+  });
+
+  app.patch("/api/visitor-log/settings", requireAuth, async (req, res) => {
+    try {
+      const raw = Number(req.body?.autoCheckoutHours);
+      if (!Number.isFinite(raw) || raw < 1 || raw > 168) {
+        return res.status(400).json({ error: "autoCheckoutHours must be between 1 and 168" });
+      }
+      const autoCheckoutHours = await storage.setAutoCheckoutHours(raw);
+      res.json({ autoCheckoutHours });
+    } catch (error) {
+      console.error("[visitor-log/settings PATCH]", error);
+      res.status(500).json({ error: "Failed to save visitor log settings" });
     }
   });
 
@@ -1937,6 +2013,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   });
+
+  // Ensure Hub email-recipient table exists + seed GuestFlow types from legacy lists
+  await ensureEmailRecipientsSchema().catch((err) =>
+    console.warn("[emailRecipients] ensure schema failed:", (err as Error).message)
+  );
+
+  startAutoCheckoutLoop();
 
   const httpServer = createServer(app);
   return httpServer;

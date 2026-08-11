@@ -165,6 +165,7 @@ const FIXED_FIELDS = [
   { label: "Phone Number", type: "tel", required: true },
   { label: "Company", type: "text", required: false },
   { label: "Ace POC", type: "select", required: false },
+  { label: "Purpose", type: "text", required: false },
 ];
 
 interface FieldDialogState {
@@ -1517,10 +1518,37 @@ function VisitorLogTab() {
   const [previewRows, setPreviewRows] = useState<ImportPreviewRow[]>([]);
   const [allParsedRows, setAllParsedRows] = useState<Record<string, string>[]>([]);
   const [skipCount, setSkipCount] = useState(0);
+  const [autoCheckoutDraft, setAutoCheckoutDraft] = useState("3");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: allVisitors = [], isLoading, refetch } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
+  });
+
+  const { data: logSettings, isLoading: logSettingsLoading } = useQuery<{ autoCheckoutHours: number }>({
+    queryKey: ["/api/visitor-log/settings"],
+  });
+
+  useEffect(() => {
+    if (logSettings?.autoCheckoutHours != null) {
+      setAutoCheckoutDraft(String(logSettings.autoCheckoutHours));
+    }
+  }, [logSettings?.autoCheckoutHours]);
+
+  const saveAutoCheckoutMutation = useMutation({
+    mutationFn: async (hours: number) => {
+      const res = await apiRequest("PATCH", "/api/visitor-log/settings", { autoCheckoutHours: hours });
+      return res.json() as Promise<{ autoCheckoutHours: number }>;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/visitor-log/settings"], data);
+      setAutoCheckoutDraft(String(data.autoCheckoutHours));
+      toast({
+        title: "Auto checkout updated",
+        description: `Visitors sign out automatically after ${data.autoCheckoutHours} hour${data.autoCheckoutHours === 1 ? "" : "s"}.`,
+      });
+    },
+    onError: () => toast({ title: "Failed to save auto checkout", variant: "destructive" }),
   });
 
   const { data: missingUsCitizenData } = useQuery<{ count: number }>({
@@ -1599,6 +1627,10 @@ function VisitorLogTab() {
       v.fullName.toLowerCase().includes(q) ||
       v.email?.toLowerCase().includes(q) ||
       v.company?.toLowerCase().includes(q) ||
+      v.acePoc?.toLowerCase().includes(q) ||
+      v.purpose?.toLowerCase().includes(q) ||
+      v.usCitizen?.toLowerCase().includes(q) ||
+      v.location?.toLowerCase().includes(q) ||
       false
     );
   });
@@ -1612,6 +1644,19 @@ function VisitorLogTab() {
       false
     );
   });
+
+  const applyAutoCheckout = () => {
+    const hours = Number(autoCheckoutDraft);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 168) {
+      toast({
+        title: "Invalid hours",
+        description: "Enter a number of hours between 1 and 168.",
+        variant: "destructive",
+      });
+      return;
+    }
+    saveAutoCheckoutMutation.mutate(Math.floor(hours));
+  };
 
   const resetImport = () => {
     setPreviewRows([]);
@@ -1712,12 +1757,44 @@ function VisitorLogTab() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/20 px-3 py-2.5">
+        <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Auto checkout</p>
+          <p className="text-xs text-muted-foreground">
+            Visitors still open after this many hours are signed out automatically (Signed Out + Duration fill in).
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={1}
+            max={168}
+            className="h-9 w-20"
+            value={autoCheckoutDraft}
+            onChange={(e) => setAutoCheckoutDraft(e.target.value)}
+            disabled={logSettingsLoading || saveAutoCheckoutMutation.isPending}
+            data-testid="input-auto-checkout-hours"
+          />
+          <span className="text-sm text-muted-foreground">hours</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={applyAutoCheckout}
+            disabled={logSettingsLoading || saveAutoCheckoutMutation.isPending}
+            data-testid="button-save-auto-checkout"
+          >
+            {saveAutoCheckoutMutation.isPending ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            placeholder="Search by name, email, or company…"
+            placeholder="Search by name, email, company, purpose…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             data-testid="input-visitor-search"
@@ -1856,13 +1933,16 @@ function VisitorLogTab() {
         </div>
       ) : (
         /* ── By-visit: individual rows ── */
-        <div className="rounded-md border overflow-hidden">
-          <div className="hidden lg:grid grid-cols-[2rem_1fr_1fr_1fr_80px_88px_88px_56px_64px] gap-x-3 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+        <div className="rounded-md border overflow-x-auto">
+          <div className="min-w-[1100px]">
+          <div className="hidden lg:grid grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px] gap-x-2 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
             <span />
             <span>Name / Email</span>
             <span>Company</span>
             <span>ACE POC</span>
             <span>Location</span>
+            <span>Purpose</span>
+            <span>U.S. Citizen</span>
             <span>Signed In</span>
             <span>Signed Out</span>
             <span>Duration</span>
@@ -1872,7 +1952,7 @@ function VisitorLogTab() {
             {filtered.map((visitor) => (
               <button
                 key={visitor.id}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_1fr_1fr_1fr_80px_88px_88px_56px_64px] lg:gap-x-3 lg:items-center hover:bg-muted/30 transition-colors"
+                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px] lg:gap-x-2 lg:items-center hover:bg-muted/30 transition-colors"
                 onClick={() => setSelected(visitor)}
                 data-testid={`row-visitor-${visitor.id}`}
               >
@@ -1892,6 +1972,12 @@ function VisitorLogTab() {
                 <div className="hidden lg:block text-sm text-muted-foreground truncate">{visitor.company || "—"}</div>
                 <div className="hidden lg:block text-sm text-muted-foreground truncate">{visitor.acePoc || "—"}</div>
                 <div className="hidden lg:block text-xs text-muted-foreground truncate">{visitor.location || "—"}</div>
+                <div className="hidden lg:block text-xs text-muted-foreground truncate" title={visitor.purpose || undefined}>
+                  {visitor.purpose || "—"}
+                </div>
+                <div className="hidden lg:block text-xs text-muted-foreground truncate" title={visitor.usCitizen || undefined}>
+                  {visitor.usCitizen || "—"}
+                </div>
                 <div className="hidden lg:block text-xs text-muted-foreground whitespace-nowrap">
                   {new Date(visitor.signedInAt).toLocaleDateString()}
                 </div>
@@ -1904,6 +1990,7 @@ function VisitorLogTab() {
                 <div className="shrink-0">{sourceBadge(visitor.source)}</div>
               </button>
             ))}
+          </div>
           </div>
         </div>
       )}
@@ -3035,95 +3122,6 @@ function ContactsTab() {
   );
 }
 
-// ─── Export Data Tab ───────────────────────────────────────────────────────────
-
-function ExportDataTab() {
-  const { toast } = useToast();
-  const [exporting, setExporting] = useState(false);
-
-  const { data: visitors = [] } = useQuery<Visitor[]>({ queryKey: ["/api/visitors"] });
-
-  const dateRange = (() => {
-    if (visitors.length === 0) return null;
-    const dates = visitors.map((v) => new Date(v.signedInAt).getTime());
-    const min = new Date(Math.min(...dates));
-    const max = new Date(Math.max(...dates));
-    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    return min.toDateString() === max.toDateString() ? fmt(min) : `${fmt(min)} – ${fmt(max)}`;
-  })();
-
-  const exportVisitorsXlsx = async () => {
-    setExporting(true);
-    try {
-      const XLSX = (await import("xlsx")).default;
-      const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Duration", "US Citizen", "Purpose", "Location", "Source"];
-      const rows = visitors.map((v) => [
-        v.fullName,
-        v.email ?? "",
-        v.company ?? "",
-        v.acePoc ?? "",
-        new Date(v.signedInAt).toLocaleString(),
-        v.signedOutAt ? new Date(v.signedOutAt).toLocaleString() : "",
-        formatDuration(v.signedInAt, v.signedOutAt),
-        v.usCitizen ?? "",
-        v.purpose ?? "",
-        v.location ?? "",
-        v.source,
-      ]);
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const colWidths = headers.map((h, i) => {
-        const maxLen = Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length));
-        return { wch: Math.min(maxLen + 2, 40) };
-      });
-      ws["!cols"] = colWidths;
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Visitor Log");
-      const date = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `visitor-log-${date}.xlsx`);
-      toast({ title: "Exported", description: `${visitors.length} visitor${visitors.length !== 1 ? "s" : ""} exported to Excel.` });
-    } catch (err: any) {
-      toast({ title: "Export failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    }
-    setExporting(false);
-  };
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Download visitor records as an Excel file for use in spreadsheets or other tools.
-      </p>
-      <Card>
-        <CardContent className="pt-5 pb-4 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="rounded-lg p-2 bg-muted shrink-0">
-              <UserCheck className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Visitor Log</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {visitors.length} record{visitors.length !== 1 ? "s" : ""}
-                {dateRange && <span className="ml-1">· {dateRange}</span>}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Columns: Full Name, Email, Company, ACE POC, Signed In, Signed Out, Duration, US Citizen, Purpose, Location, Source
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            onClick={exportVisitorsXlsx}
-            disabled={exporting || visitors.length === 0}
-            data-testid="button-export-visitors"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            {exporting ? "Exporting…" : "Download Excel"}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 // ─── Email list editor (shared by per-POC and global notification sections) ──
 
 const ACE_DOMAIN = "@aceelectronics.com";
@@ -3635,10 +3633,6 @@ export default function SignInFlow() {
             <BookUser className="h-4 w-4 mr-1.5" />
             Contacts
           </TabsTrigger>
-          <TabsTrigger value="export-data" data-testid="tab-export-data">
-            <Download className="h-4 w-4 mr-1.5" />
-            Export Data
-          </TabsTrigger>
           <TabsTrigger value="ace-pocs" data-testid="tab-ace-pocs">
             <UserCog className="h-4 w-4 mr-1.5" />
             ACE POC
@@ -3725,18 +3719,6 @@ export default function SignInFlow() {
             </CardHeader>
             <CardContent>
               <ContactsTab />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="export-data">
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Data</CardTitle>
-              <CardDescription>Download visitor log and event lead data as CSV files.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExportDataTab />
             </CardContent>
           </Card>
         </TabsContent>

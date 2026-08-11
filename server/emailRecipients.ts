@@ -47,6 +47,73 @@ const LOCATION_META: Record<
   },
 };
 
+let schemaReady: Promise<void> | null = null;
+
+/**
+ * Create public.ace_email_recipients if missing (shared Hub SoT) and seed GuestFlow
+ * notification types from legacy page_settings so always-notify works even when
+ * Platform Hub migrations have not been applied to this database.
+ */
+export async function ensureEmailRecipientsSchema(): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.ace_email_recipients (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          app_slug TEXT NOT NULL,
+          email_type TEXT NOT NULL,
+          label TEXT NOT NULL,
+          recipients JSONB NOT NULL DEFAULT '[]'::jsonb,
+          enabled BOOLEAN NOT NULL DEFAULT TRUE,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_by TEXT,
+          updated_source TEXT NOT NULL DEFAULT 'migration',
+          UNIQUE (app_slug, email_type)
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS ace_email_recipients_app_idx
+          ON public.ace_email_recipients (app_slug, email_type)
+      `);
+
+      // Seed from GuestFlow-configured legacy lists when canonical rows are absent
+      const seeds: Array<{ emailType: string; label: string; legacyKey: string }> = [
+        { emailType: GLOBAL_EMAIL_TYPE, label: GLOBAL_LABEL, legacyKey: GLOBAL_LEGACY_KEY },
+        ...OFFICE_LOCATIONS.map((loc) => ({
+          emailType: LOCATION_META[loc].emailType,
+          label: LOCATION_META[loc].label,
+          legacyKey: LOCATION_META[loc].legacyKey,
+        })),
+      ];
+      for (const s of seeds) {
+        try {
+          const legacy = await storage.getNotificationEmailsByKey(s.legacyKey);
+          if (legacy.length === 0) continue;
+          const entries = parseRecipients(legacy).map((email) => ({ email, name: email }));
+          const json = JSON.stringify(entries);
+          await db.execute(sql`
+            INSERT INTO public.ace_email_recipients
+              (app_slug, email_type, label, recipients, enabled, updated_by, updated_source, updated_at)
+            VALUES
+              (${APP_SLUG}, ${s.emailType}, ${s.label}, ${json}::jsonb, TRUE, ${"guestflow"}, ${"guestflow-migrate"}, now())
+            ON CONFLICT (app_slug, email_type) DO NOTHING
+          `);
+        } catch (err) {
+          console.warn(
+            `[emailRecipients] seed ${s.emailType} skipped:`,
+            (err as Error).message
+          );
+        }
+      }
+      console.log("[emailRecipients] public.ace_email_recipients ready");
+    })().catch((err) => {
+      schemaReady = null;
+      throw err;
+    });
+  }
+  return schemaReady;
+}
+
 function rowsOf(result: unknown): any[] {
   if (Array.isArray(result)) return result;
   if (result && typeof result === "object" && Array.isArray((result as any).rows)) {

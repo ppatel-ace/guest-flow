@@ -65,6 +65,25 @@ async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<vo
     `UPDATE gf_ace_pocs
      SET locations = ARRAY['New Jersey', 'Maryland', 'Michigan']::text[]
      WHERE locations IS NULL OR cardinality(locations) = 0`,
+    // Visitors walk-in columns (idempotent)
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS us_citizen text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS purpose text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS signed_out_at timestamptz`,
+    // Shared Hub email recipient SoT (always-notify + per-office)
+    `CREATE TABLE IF NOT EXISTS public.ace_email_recipients (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      app_slug TEXT NOT NULL,
+      email_type TEXT NOT NULL,
+      label TEXT NOT NULL,
+      recipients JSONB NOT NULL DEFAULT '[]'::jsonb,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_by TEXT,
+      updated_source TEXT NOT NULL DEFAULT 'migration',
+      UNIQUE (app_slug, email_type)
+    )`,
+    `CREATE INDEX IF NOT EXISTS ace_email_recipients_app_idx
+      ON public.ace_email_recipients (app_slug, email_type)`,
   ];
   for (const sql of patches) {
     await pool.query(sql);
