@@ -98,6 +98,16 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
 
+// Unified recent check-in record (customers, kiosk visitors, and web-form leads)
+export type RecentCheckIn = {
+  fullName: string;
+  email: string | null;
+  company: string | null;
+  location: string | null;
+  checkedInAt: Date;
+  source: string;
+};
+
 // ─── Documents table ──────────────────────────────────────────────────────────
 
 export const documents = pgTable("gf_documents", {

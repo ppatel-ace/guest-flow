@@ -1,4 +1,10 @@
 import { ConfidentialClientApplication } from "@azure/msal-node";
+import { storage } from "./storage";
+import {
+  getCheckinGlobalRecipients,
+  getCheckinLocationRecipients,
+  mergeInformationalRecipients,
+} from "./emailRecipients";
 
 // ─── Required environment variables ──────────────────────────────────────────
 // EMAIL_FROM          — no-reply@aceelectronics.com
@@ -204,6 +210,32 @@ function buildEmailHtml(
   </table>
 </body>
 </html>`;
+}
+
+/**
+ * Fire-and-forget helper used by every check-in path. Resolves the POC,
+ * always-notify (global), and location recipients, then sends notifications.
+ * Always-notify recipients are notified regardless of location or POC.
+ */
+export async function notifyCheckIn(
+  visitor: CheckInVisitor,
+  pocName: string | null,
+  location: string | null
+): Promise<void> {
+  try {
+    const [poc, globalEmails, locationEmails] = await Promise.all([
+      pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
+      getCheckinGlobalRecipients(),
+      getCheckinLocationRecipients(location),
+    ]);
+    const pocEmails: string[] = poc?.emails ?? [];
+    const informEmails = mergeInformationalRecipients(globalEmails, locationEmails);
+    if (pocEmails.length > 0 || informEmails.length > 0) {
+      await sendCheckInNotification(visitor, pocName, pocEmails, informEmails);
+    }
+  } catch (err) {
+    console.error("[email] check-in notification error:", err);
+  }
 }
 
 /**

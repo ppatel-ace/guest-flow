@@ -7,7 +7,7 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
 import { createHmac } from "crypto";
-import { sendCheckInNotification, logEmailConfigStatus } from "./email";
+import { notifyCheckIn, sendCheckInNotification, logEmailConfigStatus } from "./email";
 import {
   getCheckinGlobalRecipients,
   getCheckinLocationRecipients,
@@ -422,6 +422,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!customer) {
         return res.status(404).json({ error: "Customer not found" });
       }
+      (async () => {
+        await notifyCheckIn(
+          {
+            fullName: customer.name,
+            email: customer.email ?? null,
+            company: null,
+            location: null,
+          },
+          null,
+          null
+        );
+      })();
       res.json(customer);
     } catch (error) {
       res.status(500).json({ error: "Failed to check-in customer" });
@@ -442,6 +454,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const checkedIn = await storage.checkInCustomer(customer.id);
+      (async () => {
+        await notifyCheckIn(
+          {
+            fullName: checkedIn?.name ?? customer.name,
+            email: checkedIn?.email ?? customer.email ?? null,
+            company: null,
+            location: null,
+          },
+          null,
+          null
+        );
+      })();
       res.json(checkedIn);
     } catch (error) {
       res.status(500).json({ error: "Failed to check-in customer" });
@@ -462,6 +486,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const checkedIn = await storage.checkInCustomer(customer.id);
+      (async () => {
+        await notifyCheckIn(
+          {
+            fullName: checkedIn?.name ?? customer.name,
+            email: checkedIn?.email ?? customer.email ?? null,
+            company: null,
+            location: null,
+          },
+          null,
+          null
+        );
+      })();
       res.json(checkedIn);
     } catch (error) {
       res.status(500).json({ error: "Failed to check-in customer" });
@@ -483,6 +519,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const checkedIn = await storage.checkInCustomer(customer.id);
+      (async () => {
+        await notifyCheckIn(
+          {
+            fullName: checkedIn?.name ?? customer.name,
+            email: checkedIn?.email ?? customer.email ?? null,
+            company: null,
+            location: null,
+          },
+          null,
+          null
+        );
+      })();
       res.json(checkedIn);
     } catch (error) {
       res.status(500).json({ error: "Failed to check-in customer" });
@@ -842,31 +890,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pocName = (body.acePoc as string | null | undefined) ?? null;
       const checkInLocation = (body.location as string | null | undefined)?.trim() || null;
       (async () => {
-        try {
-          const [poc, globalEmails, locationEmails] = await Promise.all([
-            pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
-            getCheckinGlobalRecipients(),
-            getCheckinLocationRecipients(checkInLocation),
-          ]);
-          const pocEmails: string[] = poc?.emails ?? [];
-          const informEmails = mergeInformationalRecipients(globalEmails, locationEmails);
-          if (pocEmails.length > 0 || informEmails.length > 0) {
-            await sendCheckInNotification(
-              {
-                fullName,
-                email: body.email ?? null,
-                company: body.company ?? null,
-                documentsAgreed: body.documentsAgreed ?? null,
-                location: checkInLocation,
-              },
-              pocName,
-              pocEmails,
-              informEmails
-            );
-          }
-        } catch (err) {
-          console.error("[guest-checkin] email notification error:", err);
-        }
+        await notifyCheckIn(
+          {
+            fullName,
+            email: body.email ?? null,
+            company: body.company ?? null,
+            documentsAgreed: body.documentsAgreed ?? null,
+            location: checkInLocation,
+          },
+          pocName,
+          checkInLocation
+        );
       })();
 
       // Fire-and-forget label printing (if enabled and a printer is configured)
@@ -942,6 +976,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const customer = await storage.createCustomer(customerData);
       const checkedIn = await storage.checkInCustomer(customer.id);
+      const registerLocation =
+        metadata && typeof metadata === "object"
+          ? String((metadata as { location?: unknown }).location ?? "").trim() || null
+          : null;
+      (async () => {
+        await notifyCheckIn(
+          {
+            fullName: checkedIn?.name ?? customer.name,
+            email: checkedIn?.email ?? customer.email ?? null,
+            company: null,
+            location: registerLocation,
+          },
+          null,
+          registerLocation
+        );
+      })();
       res.status(201).json(checkedIn);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1445,32 +1495,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pocName = (body.acePoc as string | null | undefined) ?? null;
       const checkInLocation = visitor.location;
       (async () => {
-        try {
-          const [poc, globalEmails, locationEmails] = await Promise.all([
-            pocName ? storage.getAcePocByName(pocName) : Promise.resolve(null),
-            getCheckinGlobalRecipients(),
-            getCheckinLocationRecipients(checkInLocation),
-          ]);
-          const pocEmails: string[] = poc?.emails ?? [];
-          const informEmails = mergeInformationalRecipients(globalEmails, locationEmails);
-          if (pocEmails.length > 0 || informEmails.length > 0) {
-            await sendCheckInNotification(
-              {
-                fullName,
-                email: visitor.email,
-                company: visitor.company,
-                usCitizen: body.usCitizen ?? null,
-                documentsAgreed: visitor.documentsAgreed ?? null,
-                location: checkInLocation,
-              },
-              pocName,
-              pocEmails,
-              informEmails
-            );
-          }
-        } catch (err) {
-          console.error("[kiosk/checkin] email notification error:", err);
-        }
+        await notifyCheckIn(
+          {
+            fullName,
+            email: visitor.email,
+            company: visitor.company,
+            usCitizen: body.usCitizen ?? null,
+            documentsAgreed: visitor.documentsAgreed ?? null,
+            location: checkInLocation,
+          },
+          pocName,
+          checkInLocation
+        );
       })();
 
       res.status(201).json(visitor);
@@ -1536,6 +1572,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[visitors GET]", error);
       res.status(500).json({ error: "Failed to fetch visitors" });
+    }
+  });
+
+  // Most recent check-ins across customers, kiosk visitors, and web-form leads
+  app.get("/api/checkins/recent", requireAuth, async (_req, res) => {
+    try {
+      const recent = await storage.getRecentCheckIns(10);
+      res.json(recent);
+    } catch (error) {
+      console.error("[checkins/recent GET]", error);
+      res.status(500).json({ error: "Failed to fetch recent check-ins" });
     }
   });
 

@@ -83,6 +83,8 @@ async function getRecipientsForType(
   emailType: string,
   legacyKey: string
 ): Promise<string[]> {
+  let canonical: string[] = [];
+  let canonicalDisabled = false;
   try {
     const result = await db.execute(sql`
       SELECT recipients, enabled
@@ -92,8 +94,10 @@ async function getRecipientsForType(
     `);
     const rows = rowsOf(result);
     if (rows.length > 0) {
-      if (rows[0].enabled === false) return [];
-      return parseRecipients(rows[0].recipients);
+      canonicalDisabled = rows[0].enabled === false;
+      if (!canonicalDisabled) {
+        canonical = parseRecipients(rows[0].recipients);
+      }
     }
   } catch (err) {
     console.warn(
@@ -101,7 +105,15 @@ async function getRecipientsForType(
       (err as Error).message
     );
   }
-  return storage.getNotificationEmailsByKey(legacyKey);
+  // Explicitly disabled in the Hub means "send to nobody".
+  if (canonicalDisabled) return [];
+  // Always merge the GuestFlow-configured list with the canonical one so the
+  // configured always-notify emails are never lost (e.g. when a canonical row
+  // exists with an empty list).
+  return mergeInformationalRecipients(
+    canonical,
+    await storage.getNotificationEmailsByKey(legacyKey)
+  );
 }
 
 async function mirrorRecipientsToCanonical(

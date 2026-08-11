@@ -16,6 +16,7 @@ import {
   type VisitorNote,
   type VisitorMergeEvent,
   type AcePoc,
+  type RecentCheckIn,
 } from "@shared/schema";
 import { db } from "./db";
 import { syncCompanyToAceCrm, syncContactToAceCrm, syncVisitToAceCrm } from "./aceCrmSync";
@@ -181,6 +182,7 @@ export interface IStorage {
   checkInCustomer(id: string): Promise<Customer | undefined>;
   sendInvitation(id: string): Promise<Customer | undefined>;
   getMonthlyCheckIns(): Promise<MonthlyCheckIn[]>;
+  getRecentCheckIns(limit?: number): Promise<RecentCheckIn[]>;
   getVisitorAnalytics(start: Date, end: Date, bucket: 'day' | 'week' | 'month'): Promise<VisitorAnalyticsResult>;
   initSchema(): Promise<void>;
   importFromSQL(sql: string): Promise<ImportResult>;
@@ -452,6 +454,40 @@ export class DatabaseStorage implements IStorage {
       month,
       count: checkInsMap.get(month) ?? 0,
       walkIns: walkInsMap.get(month) ?? 0,
+    }));
+  }
+
+  async getRecentCheckIns(limit = 10): Promise<RecentCheckIn[]> {
+    const result = await db.execute(sql`
+      SELECT full_name, email, company, location, checked_in_at, source
+      FROM (
+        SELECT c.name AS full_name, c.email AS email, NULL::text AS company,
+               NULL::text AS location, c.checked_in_at AS checked_in_at, 'invite' AS source
+        FROM gf_customers c
+        WHERE c.checked_in_at IS NOT NULL
+        UNION ALL
+        SELECT v.full_name AS full_name, v.email AS email, v.company AS company,
+               v.location AS location, v.signed_in_at AS checked_in_at,
+               COALESCE(v.source, 'kiosk') AS source
+        FROM gf_visitors v
+        UNION ALL
+        SELECT LTRIM(CONCAT_WS(' ', l.first_name, l.last_name)) AS full_name,
+               l.email AS email, l.company AS company, l.location AS location,
+               l.submitted_at AS checked_in_at, 'form' AS source
+        FROM gf_leads l
+      ) t
+      ORDER BY t.checked_in_at DESC
+      LIMIT ${limit}
+    `);
+    const raw: any = result as any;
+    const rows: any[] = Array.isArray(raw) ? raw : Array.isArray(raw?.rows) ? raw.rows : [];
+    return rows.map((row) => ({
+      fullName: row.full_name,
+      email: row.email ?? null,
+      company: row.company ?? null,
+      location: row.location ?? null,
+      checkedInAt: new Date(row.checked_in_at),
+      source: row.source,
     }));
   }
 

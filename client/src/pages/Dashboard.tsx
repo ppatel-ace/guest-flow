@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { StatsCard } from "@/components/StatsCard";
-import { CustomerTable, Customer } from "@/components/CustomerTable";
-import { Users, CheckCircle, Mail, Clock, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users, CheckCircle, Mail, Clock, ShieldAlert, ShieldCheck, UserCheck, FileText } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { Customer as CustomerType } from "@shared/schema";
+import type { Customer as CustomerType, RecentCheckIn } from "@shared/schema";
 
 interface MonthlyCheckIn {
   month: string;
@@ -144,13 +144,9 @@ export default function Dashboard() {
     queryKey: ["/api/stats/monthly-checkins"],
   });
 
-  const handleSendInvite = (id: string) => {
-    console.log("Send invite to customer:", id);
-  };
-
-  const handleCheckIn = (id: string) => {
-    console.log("Check in customer:", id);
-  };
+  const { data: recentCheckIns = [], isLoading: recentLoading } = useQuery<RecentCheckIn[]>({
+    queryKey: ["/api/checkins/recent"],
+  });
 
   const totalCustomers = customers.length;
   const checkedInCount = customers.filter(c => c.status === "checked-in").length;
@@ -164,14 +160,20 @@ export default function Dashboard() {
     return { month: monthName, checkIns: stat.count, walkIns: stat.walkIns };
   });
 
-  const recentCustomers: Customer[] = customers.slice(0, 5).map(c => ({
-    id: c.id,
-    name: c.name,
-    email: c.email,
-    phone: c.phone ?? undefined,
-    status: c.status,
-    invitedAt: c.invitedAt ? formatTimeAgo(c.invitedAt) : "Not invited",
-  }));
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+
+  const SOURCE_LABELS: Record<string, { label: string; className: string }> = {
+    kiosk: { label: "Kiosk", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+    form: { label: "Form", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
+    invite: { label: "Invite", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+    envoy: { label: "Envoy", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
+  };
 
   function formatTimeAgo(date: Date | string): string {
     const d = typeof date === "string" ? new Date(date) : date;
@@ -232,10 +234,66 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-        <CustomerTable customers={recentCustomers} onSendInvite={handleSendInvite} onCheckIn={handleCheckIn} />
-      </div>
+      <Card data-testid="card-recent-activity">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5" />
+            Recent Activity
+          </CardTitle>
+          <CardDescription>
+            The 10 most recent people who checked in
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {recentLoading ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Loading recent check-ins…</p>
+          ) : recentCheckIns.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center" data-testid="text-recent-empty">
+              No check-ins yet.
+            </p>
+          ) : (
+            <div className="divide-y" data-testid="list-recent-checkins">
+              {recentCheckIns.map((item, i) => {
+                const sourceMeta = SOURCE_LABELS[item.source] ?? { label: item.source, className: "bg-muted text-muted-foreground" };
+                return (
+                  <div key={`${item.checkedInAt}-${i}`} className="flex items-center justify-between gap-3 py-2.5" data-testid={`row-recent-${i}`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="h-9 w-9 shrink-0">
+                        <AvatarFallback>{getInitials(item.fullName)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate" data-testid={`text-recent-name-${i}`}>
+                          {item.fullName}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate" data-testid={`text-recent-email-${i}`}>
+                          {item.email || "—"}
+                          {item.company ? ` · ${item.company}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        {item.location && (
+                          <p className="text-xs text-muted-foreground truncate max-w-32">
+                            <FileText className="inline h-3 w-3 mr-1" />
+                            {item.location}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground" data-testid={`text-recent-time-${i}`}>
+                          {formatTimeAgo(item.checkedInAt)}
+                        </p>
+                      </div>
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${sourceMeta.className}`}>
+                        {sourceMeta.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

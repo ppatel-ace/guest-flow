@@ -1,6 +1,7 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown, Workflow, BarChart2 } from "lucide-react";
+import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown, Workflow, BarChart2, Pin, PinOff } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +34,7 @@ export function AppSidebar() {
   const { logout } = useAuth();
   const { setOpen, state } = useSidebar();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pinned, setPinned] = useState(false);
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
@@ -50,6 +52,8 @@ export function AppSidebar() {
   };
 
   const handleMouseLeave = () => {
+    // While pinned the sidebar stays open — no auto-collapse.
+    if (pinned) return;
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => setOpen(false), 180);
   };
@@ -61,11 +65,28 @@ export function AppSidebar() {
       onMouseLeave={handleMouseLeave}
     >
       <SidebarHeader className="border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-2">
-        <AceBrand
-          compact={collapsed}
-          showProductName={!collapsed}
-          className="group-data-[collapsible=icon]:justify-center"
-        />
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <AceBrand
+            compact={collapsed}
+            showProductName={!collapsed}
+            className="min-w-0"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 group-data-[collapsible=icon]:hidden"
+            onClick={() => setPinned((p) => !p)}
+            title={pinned ? "Unpin sidebar" : "Pin sidebar open"}
+            aria-pressed={pinned}
+            data-testid="button-sidebar-pin"
+          >
+            {pinned ? (
+              <Pin className="h-4 w-4 text-primary" />
+            ) : (
+              <PinOff className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
