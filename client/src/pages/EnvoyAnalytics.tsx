@@ -9,18 +9,45 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// ── Location chart palette ────────────────────────────────────────────────────
+
+const LOCATION_SERIES = [
+  { key: "newJersey" as const, name: "New Jersey", color: "#2563eb" }, // blue
+  { key: "michigan" as const, name: "Michigan", color: "#dc2626" }, // red
+  { key: "maryland" as const, name: "Maryland", color: "#eab308" }, // yellow
+];
+
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface LocationTotals {
+  newJersey: number;
+  maryland: number;
+  michigan: number;
+  total: number;
+}
 
 interface VisitorAnalyticsPeriod {
   period: string;
-  visitors: number;
-  invites: number;
+  newJersey: number;
+  maryland: number;
+  michigan: number;
+  total: number;
+}
+
+interface VisitorAnalyticsHourly {
+  hour: number;
+  label: string;
+  newJersey: number;
+  maryland: number;
+  michigan: number;
+  count: number;
 }
 
 interface VisitorAnalyticsResult {
   periods: VisitorAnalyticsPeriod[];
-  hourly: { hour: number; label: string; count: number }[];
+  hourly: VisitorAnalyticsHourly[];
   avgVisitDurationMinutes: number | null;
+  byLocation?: LocationTotals;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -134,18 +161,32 @@ export default function Analytics() {
   // Merge server data with all expected periods (fill zeros for empty buckets)
   const chartData = useMemo(() => {
     const serverMap = new Map(rawPeriods.map(p => [p.period, p]));
-    return generateAllPeriods(start, end, bucket).map(period => ({
-      label: formatPeriodLabel(period, bucket),
-      visitors: serverMap.get(period)?.visitors ?? 0,
-      invites: serverMap.get(period)?.invites ?? 0,
-    }));
+    return generateAllPeriods(start, end, bucket).map(period => {
+      const row = serverMap.get(period);
+      return {
+        label: formatPeriodLabel(period, bucket),
+        newJersey: row?.newJersey ?? 0,
+        maryland: row?.maryland ?? 0,
+        michigan: row?.michigan ?? 0,
+        total: row?.total ?? 0,
+      };
+    });
   }, [rawPeriods, start, end, bucket]);
 
-  const totalVisitors = chartData.reduce((s, d) => s + d.visitors, 0);
-  const totalInvites = chartData.reduce((s, d) => s + d.invites, 0);
+  const byLocation = data?.byLocation ?? chartData.reduce(
+    (acc, d) => {
+      acc.newJersey += d.newJersey;
+      acc.maryland += d.maryland;
+      acc.michigan += d.michigan;
+      acc.total += d.total;
+      return acc;
+    },
+    { newJersey: 0, maryland: 0, michigan: 0, total: 0 }
+  );
+
+  const totalVisitors = byLocation.total;
   const periodCount = chartData.length || 1;
   const avgPerPeriod = (totalVisitors / periodCount).toFixed(1);
-  const checkInRate = totalInvites > 0 ? Math.round((totalVisitors / totalInvites) * 100) : 0;
 
   const peakMax = Math.max(...hourlyData.map(h => h.count), 1);
   const peakHour = hourlyData.find(h => h.count === Math.max(...hourlyData.map(x => x.count)));
@@ -163,7 +204,7 @@ export default function Analytics() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Analytics</h1>
-        <p className="text-muted-foreground mt-1">Visitor check-in trends over time</p>
+        <p className="text-muted-foreground mt-1">Visitor check-in trends by office location</p>
       </div>
 
       {/* Date range controls */}
@@ -216,14 +257,26 @@ export default function Analytics() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard icon={Users} label="Total visitors" value={totalVisitors} sub="check-ins submitted" />
-        <StatCard icon={CalendarDays} label="Total invites" value={totalInvites} sub="invites created" />
-        <StatCard icon={TrendingUp} label={`Avg / ${bucket}`} value={avgPerPeriod} sub="visitor check-ins" />
+        <StatCard
+          icon={CalendarDays}
+          label="New Jersey"
+          value={byLocation.newJersey}
+          sub="visitors"
+          color="text-blue-600 dark:text-blue-400"
+        />
         <StatCard
           icon={UserCheck}
-          label="Check-in rate"
-          value={totalInvites > 0 ? `${checkInRate}%` : "—"}
-          sub="visitors ÷ invites"
-          color={checkInRate >= 75 ? "text-green-600 dark:text-green-400" : ""}
+          label="Michigan"
+          value={byLocation.michigan}
+          sub="visitors"
+          color="text-red-600 dark:text-red-400"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Maryland"
+          value={byLocation.maryland}
+          sub="visitors"
+          color="text-yellow-600 dark:text-yellow-400"
         />
         <StatCard
           icon={Clock}
@@ -236,8 +289,12 @@ export default function Analytics() {
               })()
             : "—"
           }
-          sub={data?.avgVisitDurationMinutes != null ? "from Envoy sign-outs" : "no sign-out data yet"}
+          sub={data?.avgVisitDurationMinutes != null ? "from sign-outs" : "no sign-out data yet"}
         />
+      </div>
+
+      <div className="text-xs text-muted-foreground">
+        Avg {avgPerPeriod} visitors / {bucket}
       </div>
 
       {/* Visitors over time chart */}
@@ -248,13 +305,14 @@ export default function Analytics() {
             {start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             {" – "}
             {end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            {" · by office location"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
@@ -265,8 +323,17 @@ export default function Analytics() {
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6 }} cursor={{ fill: "hsl(var(--muted))" }} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="visitors" name="Visitors" fill="hsl(var(--primary))" fillOpacity={0.85} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="invites" name="Invites" fill="hsl(142 71% 45%)" fillOpacity={0.75} radius={[3, 3, 0, 0]} />
+                {LOCATION_SERIES.map((loc) => (
+                  <Bar
+                    key={loc.key}
+                    dataKey={loc.key}
+                    name={loc.name}
+                    stackId="location"
+                    fill={loc.color}
+                    fillOpacity={0.9}
+                    radius={loc.key === "maryland" ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                  />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -280,7 +347,7 @@ export default function Analytics() {
             <div>
               <CardTitle className="text-base">Peak visit hours</CardTitle>
               <CardDescription className="mt-0.5">
-                Sign-ins by hour of day (8am–6pm) for selected period
+                Sign-ins by hour of day (8am–6pm), stacked by location
               </CardDescription>
             </div>
             {peakHour && peakHour.count > 0 && (
@@ -296,29 +363,59 @@ export default function Analytics() {
           {isLoading ? (
             <div className="h-24 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
           ) : (
-            <div className="space-y-1.5" data-testid="chart-peak-hours">
-              {hourlyData.map(({ label, count, hour }) => {
-                const pct = Math.round((count / peakMax) * 100);
-                const isPeak = peakHour?.hour === hour && count > 0;
-                return (
-                  <div key={label} className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-9 shrink-0 text-right">{label}</span>
-                    <div className="flex-1 h-5 rounded bg-muted overflow-hidden">
-                      <div
-                        className={`h-5 rounded transition-all ${isPeak ? "bg-primary" : "bg-primary/60"}`}
-                        style={{ width: count > 0 ? `${Math.max(pct, 2)}%` : "0%" }}
-                      />
+            <div className="space-y-3" data-testid="chart-peak-hours">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                {LOCATION_SERIES.map((loc) => (
+                  <span key={loc.key} className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: loc.color }} />
+                    {loc.name}
+                  </span>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                {hourlyData.map((row) => {
+                  const { label, count, hour, newJersey, maryland, michigan } = row;
+                  const isPeak = peakHour?.hour === hour && count > 0;
+                  const segments = [
+                    { key: "nj", count: newJersey, color: LOCATION_SERIES[0].color },
+                    { key: "mi", count: michigan, color: LOCATION_SERIES[1].color },
+                    { key: "md", count: maryland, color: LOCATION_SERIES[2].color },
+                  ];
+                  const totalKnown = newJersey + maryland + michigan;
+                  return (
+                    <div key={label} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-9 shrink-0 text-right">{label}</span>
+                      <div className="flex-1 h-5 rounded bg-muted overflow-hidden flex">
+                        {totalKnown > 0
+                          ? segments.map((seg) => {
+                              if (seg.count <= 0) return null;
+                              const pct = (seg.count / peakMax) * 100;
+                              return (
+                                <div
+                                  key={seg.key}
+                                  className="h-5 transition-all"
+                                  style={{
+                                    width: `${Math.max(pct, 0.5)}%`,
+                                    backgroundColor: seg.color,
+                                    opacity: isPeak ? 1 : 0.85,
+                                  }}
+                                  title={`${seg.count}`}
+                                />
+                              );
+                            })
+                          : null}
+                      </div>
+                      <span className="text-xs w-6 shrink-0 text-right">
+                        {count > 0 ? (
+                          <span className={isPeak ? "font-semibold" : "text-muted-foreground"}>{count}</span>
+                        ) : (
+                          <span className="text-muted-foreground/40">—</span>
+                        )}
+                      </span>
                     </div>
-                    <span className="text-xs w-6 shrink-0 text-right">
-                      {count > 0 ? (
-                        <span className={isPeak ? "font-semibold" : "text-muted-foreground"}>{count}</span>
-                      ) : (
-                        <span className="text-muted-foreground/40">—</span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
               {hourlyData.every(h => h.count === 0) && (
                 <p className="text-sm text-muted-foreground text-center py-4">No visitor data for this period.</p>
               )}

@@ -25,20 +25,45 @@ import { randomUUID } from "crypto";
 
 export interface MonthlyCheckIn {
   month: string;
+  /** @deprecated use location breakdown fields */
   count: number;
+  /** @deprecated use location breakdown fields */
   walkIns: number;
+  newJersey: number;
+  maryland: number;
+  michigan: number;
 }
+
+export type LocationCountKey = "newJersey" | "maryland" | "michigan";
 
 export interface VisitorAnalyticsPeriod {
   period: string;
-  visitors: number;
-  invites: number;
+  newJersey: number;
+  maryland: number;
+  michigan: number;
+  /** Total visitors for the period (all locations including unknown). */
+  total: number;
+}
+
+export interface VisitorAnalyticsHourly {
+  hour: number;
+  label: string;
+  newJersey: number;
+  maryland: number;
+  michigan: number;
+  count: number;
 }
 
 export interface VisitorAnalyticsResult {
   periods: VisitorAnalyticsPeriod[];
-  hourly: { hour: number; label: string; count: number }[];
+  hourly: VisitorAnalyticsHourly[];
   avgVisitDurationMinutes: number | null;
+  byLocation: {
+    newJersey: number;
+    maryland: number;
+    michigan: number;
+    total: number;
+  };
 }
 
 export interface ImportResult {
@@ -353,27 +378,30 @@ export class DatabaseStorage implements IStorage {
     const startStr = start.toISOString();
     const endStr = end.toISOString();
 
-    const [visitorRows, inviteRows, hourlyRows, durationRows] = await Promise.all([
+    // Canonicalise free-text location to NJ / MD / MI buckets
+    const locationBucket = sql<string>`CASE
+      WHEN LOWER(TRIM(COALESCE(${visitors.location}, ''))) IN ('new jersey', 'nj', 'n.j.') THEN 'newJersey'
+      WHEN LOWER(TRIM(COALESCE(${visitors.location}, ''))) IN ('maryland', 'md', 'm.d.') THEN 'maryland'
+      WHEN LOWER(TRIM(COALESCE(${visitors.location}, ''))) IN ('michigan', 'mi', 'm.i.') THEN 'michigan'
+      ELSE 'other'
+    END`;
+
+    const [visitorRows, hourlyRows, durationRows] = await Promise.all([
       db.select({
         period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${visitors.signedInAt}), 'YYYY-MM-DD')`,
+        locationKey: locationBucket,
         count: sql<number>`COUNT(*)::int`,
       }).from(visitors)
         .where(sql`${visitors.signedInAt} >= ${startStr}::timestamptz AND ${visitors.signedInAt} <= ${endStr}::timestamptz`)
-        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${visitors.signedInAt})`),
-
-      db.select({
-        period: sql<string>`TO_CHAR(DATE_TRUNC(${bucketLiteral}, ${customers.createdAt}), 'YYYY-MM-DD')`,
-        count: sql<number>`COUNT(*)::int`,
-      }).from(customers)
-        .where(sql`${customers.createdAt} >= ${startStr}::timestamptz AND ${customers.createdAt} <= ${endStr}::timestamptz`)
-        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${customers.createdAt})`),
+        .groupBy(sql`DATE_TRUNC(${bucketLiteral}, ${visitors.signedInAt})`, locationBucket),
 
       db.select({
         hour: sql<number>`EXTRACT(HOUR FROM ${visitors.signedInAt})::int`,
+        locationKey: locationBucket,
         count: sql<number>`COUNT(*)::int`,
       }).from(visitors)
         .where(sql`${visitors.signedInAt} >= ${startStr}::timestamptz AND ${visitors.signedInAt} <= ${endStr}::timestamptz`)
-        .groupBy(sql`EXTRACT(HOUR FROM ${visitors.signedInAt})`),
+        .groupBy(sql`EXTRACT(HOUR FROM ${visitors.signedInAt})`, locationBucket),
 
       db.select({
         avgMinutes: sql<number | null>`AVG(EXTRACT(EPOCH FROM (${visitors.signedOutAt} - ${visitors.signedInAt})) / 60.0)`,
@@ -381,27 +409,40 @@ export class DatabaseStorage implements IStorage {
         .where(sql`${visitors.signedOutAt} IS NOT NULL AND ${visitors.signedInAt} >= ${startStr}::timestamptz AND ${visitors.signedInAt} <= ${endStr}::timestamptz`),
     ]);
 
-    const periodsMap = new Map<string, { visitors: number; invites: number }>();
-    visitorRows.forEach(r => {
-      if (r.period) {
-        const e = periodsMap.get(r.period) ?? { visitors: 0, invites: 0 };
-        e.visitors = r.count;
-        periodsMap.set(r.period, e);
-      }
-    });
-    inviteRows.forEach(r => {
-      if (r.period) {
-        const e = periodsMap.get(r.period) ?? { visitors: 0, invites: 0 };
-        e.invites = r.count;
-        periodsMap.set(r.period, e);
-      }
-    });
+    const emptyLoc = () => ({ newJersey: 0, maryland: 0, michigan: 0, other: 0 });
 
-    const hourlyMap = new Map(hourlyRows.map(r => [r.hour, r.count]));
+    const periodsMap = new Map<string, ReturnType<typeof emptyLoc>>();
+    for (const r of visitorRows) {
+      if (!r.period) continue;
+      const e = periodsMap.get(r.period) ?? emptyLoc();
+      const key = (r.locationKey as keyof ReturnType<typeof emptyLoc>) || "other";
+      if (key in e) e[key] += r.count;
+      else e.other += r.count;
+      periodsMap.set(r.period, e);
+    }
+
+    const hourlyLocMap = new Map<number, ReturnType<typeof emptyLoc>>();
+    for (const r of hourlyRows) {
+      const e = hourlyLocMap.get(r.hour) ?? emptyLoc();
+      const key = (r.locationKey as keyof ReturnType<typeof emptyLoc>) || "other";
+      if (key in e) e[key] += r.count;
+      else e.other += r.count;
+      hourlyLocMap.set(r.hour, e);
+    }
+
     const hourly = Array.from({ length: 11 }, (_, i) => {
       const h = i + 8;
       const label = h === 12 ? "12pm" : h < 12 ? `${h}am` : `${h - 12}pm`;
-      return { hour: h, label, count: hourlyMap.get(h) ?? 0 };
+      const loc = hourlyLocMap.get(h) ?? emptyLoc();
+      const count = loc.newJersey + loc.maryland + loc.michigan + loc.other;
+      return {
+        hour: h,
+        label,
+        newJersey: loc.newJersey,
+        maryland: loc.maryland,
+        michigan: loc.michigan,
+        count,
+      };
     });
 
     const rawAvg = durationRows[0]?.avgMinutes;
@@ -409,12 +450,32 @@ export class DatabaseStorage implements IStorage {
       ? Math.round(Number(rawAvg))
       : null;
 
+    const periods = Array.from(periodsMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, data]) => ({
+        period,
+        newJersey: data.newJersey,
+        maryland: data.maryland,
+        michigan: data.michigan,
+        total: data.newJersey + data.maryland + data.michigan + data.other,
+      }));
+
+    const byLocation = periods.reduce(
+      (acc, p) => {
+        acc.newJersey += p.newJersey;
+        acc.maryland += p.maryland;
+        acc.michigan += p.michigan;
+        acc.total += p.total;
+        return acc;
+      },
+      { newJersey: 0, maryland: 0, michigan: 0, total: 0 }
+    );
+
     return {
-      periods: Array.from(periodsMap.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([period, data]) => ({ period, ...data })),
+      periods,
       hourly,
       avgVisitDurationMinutes,
+      byLocation,
     };
   }
 
@@ -423,7 +484,14 @@ export class DatabaseStorage implements IStorage {
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
     const twelveMonthsAgoStr = twelveMonthsAgo.toISOString();
 
-    const [checkInResults, walkInResults] = await Promise.all([
+    const locationBucket = sql<string>`CASE
+      WHEN LOWER(TRIM(COALESCE(${visitors.location}, ''))) IN ('new jersey', 'nj', 'n.j.') THEN 'newJersey'
+      WHEN LOWER(TRIM(COALESCE(${visitors.location}, ''))) IN ('maryland', 'md', 'm.d.') THEN 'maryland'
+      WHEN LOWER(TRIM(COALESCE(${visitors.location}, ''))) IN ('michigan', 'mi', 'm.i.') THEN 'michigan'
+      ELSE 'other'
+    END`;
+
+    const [qrResults, walkInByLocation] = await Promise.all([
       db.select({
         month: sql<string>`TO_CHAR(${customers.checkedInAt}, 'YYYY-MM')`,
         count: sql<number>`COUNT(*)::int`,
@@ -434,30 +502,52 @@ export class DatabaseStorage implements IStorage {
 
       db.select({
         month: sql<string>`TO_CHAR(${visitors.signedInAt}, 'YYYY-MM')`,
+        locationKey: locationBucket,
         count: sql<number>`COUNT(*)::int`,
       })
       .from(visitors)
       .where(sql`${visitors.signedInAt} >= ${twelveMonthsAgoStr}::timestamptz`)
-      .groupBy(sql`TO_CHAR(${visitors.signedInAt}, 'YYYY-MM')`),
+      .groupBy(sql`TO_CHAR(${visitors.signedInAt}, 'YYYY-MM')`, locationBucket),
     ]);
 
-    const checkInsMap = new Map<string, number>();
-    const walkInsMap = new Map<string, number>();
+    type LocMonth = { newJersey: number; maryland: number; michigan: number; other: number; qr: number };
+    const monthMap = new Map<string, LocMonth>();
     const now = new Date();
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      checkInsMap.set(monthKey, 0);
-      walkInsMap.set(monthKey, 0);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      monthMap.set(monthKey, { newJersey: 0, maryland: 0, michigan: 0, other: 0, qr: 0 });
     }
-    checkInResults.forEach(r => { if (r.month) checkInsMap.set(r.month, r.count); });
-    walkInResults.forEach(r => { if (r.month) walkInsMap.set(r.month, r.count); });
+    qrResults.forEach((r) => {
+      if (!r.month) return;
+      const e = monthMap.get(r.month) ?? { newJersey: 0, maryland: 0, michigan: 0, other: 0, qr: 0 };
+      e.qr = r.count;
+      monthMap.set(r.month, e);
+    });
+    walkInByLocation.forEach((r) => {
+      if (!r.month) return;
+      const e = monthMap.get(r.month) ?? { newJersey: 0, maryland: 0, michigan: 0, other: 0, qr: 0 };
+      const key = r.locationKey as keyof LocMonth;
+      if (key === "newJersey" || key === "maryland" || key === "michigan" || key === "other") {
+        e[key] += r.count;
+      } else {
+        e.other += r.count;
+      }
+      monthMap.set(r.month, e);
+    });
 
-    return Array.from(checkInsMap.keys()).map(month => ({
-      month,
-      count: checkInsMap.get(month) ?? 0,
-      walkIns: walkInsMap.get(month) ?? 0,
-    }));
+    return Array.from(monthMap.keys()).map((month) => {
+      const e = monthMap.get(month)!;
+      const walkIns = e.newJersey + e.maryland + e.michigan + e.other;
+      return {
+        month,
+        count: e.qr,
+        walkIns,
+        newJersey: e.newJersey,
+        maryland: e.maryland,
+        michigan: e.michigan,
+      };
+    });
   }
 
   async getRecentCheckIns(limit = 10): Promise<RecentCheckIn[]> {

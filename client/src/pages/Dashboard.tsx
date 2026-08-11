@@ -10,7 +10,16 @@ interface MonthlyCheckIn {
   month: string;
   count: number;
   walkIns: number;
+  newJersey?: number;
+  maryland?: number;
+  michigan?: number;
 }
+
+const LOCATION_LINES = [
+  { key: "newJersey" as const, name: "New Jersey", color: "#2563eb" },
+  { key: "michigan" as const, name: "Michigan", color: "#dc2626" },
+  { key: "maryland" as const, name: "Maryland", color: "#eab308" },
+];
 
 interface BotStats {
   date: string;
@@ -157,7 +166,12 @@ export default function Dashboard() {
     const [year, month] = stat.month.split("-");
     const date = new Date(parseInt(year), parseInt(month) - 1);
     const monthName = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-    return { month: monthName, checkIns: stat.count, walkIns: stat.walkIns };
+    return {
+      month: monthName,
+      newJersey: stat.newJersey ?? 0,
+      maryland: stat.maryland ?? 0,
+      michigan: stat.michigan ?? 0,
+    };
   });
 
   const getInitials = (name: string) =>
@@ -207,8 +221,8 @@ export default function Dashboard() {
 
       <Card data-testid="card-monthly-checkins">
         <CardHeader>
-          <CardTitle>Monthly Check-Ins</CardTitle>
-          <CardDescription>QR check-ins and walk-in visitors over the last 12 months</CardDescription>
+          <CardTitle>Monthly Visitors by Location</CardTitle>
+          <CardDescription>Walk-in / kiosk visitors over the last 12 months by office</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-80">
@@ -226,8 +240,17 @@ export default function Dashboard() {
                   labelStyle={{ color: "hsl(var(--popover-foreground))" }}
                 />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Line type="monotone" dataKey="checkIns" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-2))" }} name="QR Check-Ins" />
-                <Line type="monotone" dataKey="walkIns" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))" }} name="Walk-Ins" />
+                {LOCATION_LINES.map((loc) => (
+                  <Line
+                    key={loc.key}
+                    type="monotone"
+                    dataKey={loc.key}
+                    stroke={loc.color}
+                    strokeWidth={2}
+                    dot={{ fill: loc.color }}
+                    name={loc.name}
+                  />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
