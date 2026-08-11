@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { AceBrand } from "@/components/AceBrand";
+import { APP_VERSION } from "@/lib/version";
 
 const mainMenuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -117,6 +118,15 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <div
+          className="px-3 pb-3 pt-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:text-center"
+          data-testid="sidebar-app-version"
+        >
+          <span className="group-data-[collapsible=icon]:hidden">v{APP_VERSION}</span>
+          <span className="hidden group-data-[collapsible=icon]:inline" title={`GuestFlow v${APP_VERSION}`}>
+            {APP_VERSION}
+          </span>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

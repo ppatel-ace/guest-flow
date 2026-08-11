@@ -25,6 +25,7 @@ import SignInFlow from "@/pages/SignInFlow";
 import EnvoyAnalytics from "@/pages/EnvoyAnalytics";
 import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
+import { APP_VERSION } from "@/lib/version";
 
 function AdminLayout() {
   const { logout } = useAuth();
@@ -60,19 +61,27 @@ function AdminLayout() {
               </div>
             </header>
             <main className="flex-1 overflow-auto p-6 md:p-8">
-              <div className="mx-auto max-w-7xl">
-                <Switch>
-                  <Route path="/" component={Dashboard} />
-                  <Route path="/customers" component={Customers} />
-                  <Route path="/check-in" component={CheckIn} />
-                  <Route path="/invitations" component={Invitations} />
-                  <Route path="/import" component={Import} />
-                  <Route path="/public-pages" component={PublicPages} />
-                  <Route path="/export" component={Export} />
-                  <Route path="/sign-in-flow" component={SignInFlow} />
-                  <Route path="/analytics" component={EnvoyAnalytics} />
-                  <Route component={NotFound} />
-                </Switch>
+              <div className="mx-auto max-w-7xl min-h-full flex flex-col">
+                <div className="flex-1">
+                  <Switch>
+                    <Route path="/" component={Dashboard} />
+                    <Route path="/customers" component={Customers} />
+                    <Route path="/check-in" component={CheckIn} />
+                    <Route path="/invitations" component={Invitations} />
+                    <Route path="/import" component={Import} />
+                    <Route path="/public-pages" component={PublicPages} />
+                    <Route path="/export" component={Export} />
+                    <Route path="/sign-in-flow" component={SignInFlow} />
+                    <Route path="/analytics" component={EnvoyAnalytics} />
+                    <Route component={NotFound} />
+                  </Switch>
+                </div>
+                <footer
+                  className="mt-10 pt-4 border-t border-border/60 text-center text-xs text-muted-foreground"
+                  data-testid="app-version-footer"
+                >
+                  GuestFlow v{APP_VERSION}
+                </footer>
               </div>
             </main>
           </div>
