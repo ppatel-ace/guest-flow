@@ -65,10 +65,34 @@ async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<vo
     `UPDATE gf_ace_pocs
      SET locations = ARRAY['New Jersey', 'Maryland', 'Michigan']::text[]
      WHERE locations IS NULL OR cardinality(locations) = 0`,
-    // Visitors walk-in columns (idempotent)
+    // Visitors walk-in table + columns (idempotent). Older migrations created
+    // unprefixed "visitors"; the app reads gf_visitors.
+    `CREATE TABLE IF NOT EXISTS gf_visitors (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      full_name text NOT NULL,
+      email text,
+      phone_number text,
+      company text,
+      ace_poc text,
+      signed_in_at timestamp NOT NULL DEFAULT now(),
+      signed_out_at timestamptz,
+      us_citizen text,
+      purpose text,
+      location text,
+      source text NOT NULL DEFAULT 'kiosk',
+      notes text,
+      photo_data text,
+      documents_agreed text,
+      created_at timestamp NOT NULL DEFAULT now()
+    )`,
     `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS us_citizen text`,
     `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS purpose text`,
     `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS signed_out_at timestamptz`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS phone_number text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS photo_data text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS documents_agreed text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS location text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS notes text`,
     // Shared Hub email recipient SoT (always-notify + per-office)
     `CREATE TABLE IF NOT EXISTS public.ace_email_recipients (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -89,6 +113,52 @@ async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<vo
     await pool.query(sql);
   }
   console.log("[migrate] Schema patches applied.");
+}
+
+/** If gf_visitors was recreated empty, copy rows back from legacy unprefixed visitors. */
+async function restoreLegacyVisitorsIfEmpty(pool: InstanceType<typeof PgPool>): Promise<void> {
+  try {
+    const legacy = await pool.query(`SELECT to_regclass('public.visitors') IS NOT NULL AS exists`);
+    if (!legacy.rows[0]?.exists) return;
+    const counts = await pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM gf_visitors) AS gf_count,
+        (SELECT COUNT(*)::int FROM visitors) AS legacy_count
+    `);
+    const gfCount = Number(counts.rows[0]?.gf_count ?? 0);
+    const legacyCount = Number(counts.rows[0]?.legacy_count ?? 0);
+    if (gfCount > 0 || legacyCount === 0) return;
+
+    const inserted = await pool.query(`
+      INSERT INTO gf_visitors (
+        id, full_name, email, company, ace_poc, signed_in_at, signed_out_at,
+        us_citizen, purpose, location, source, notes, photo_data, documents_agreed, created_at
+      )
+      SELECT
+        id, full_name, email, company, ace_poc, signed_in_at, signed_out_at,
+        us_citizen, purpose, location, COALESCE(NULLIF(source, ''), 'kiosk'),
+        notes, photo_data, documents_agreed, COALESCE(created_at, now())
+      FROM visitors
+      ON CONFLICT (id) DO NOTHING
+    `);
+    const phoneCol = await pool.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'visitors' AND column_name = 'phone_number'
+    `);
+    if ((phoneCol.rowCount ?? 0) > 0) {
+      await pool.query(`
+        UPDATE gf_visitors g
+        SET phone_number = v.phone_number
+        FROM visitors v
+        WHERE g.id = v.id
+          AND g.phone_number IS NULL
+          AND v.phone_number IS NOT NULL
+      `);
+    }
+    console.log(`[migrate] Restored ${inserted.rowCount ?? 0} visitor rows from legacy visitors → gf_visitors.`);
+  } catch (err) {
+    console.warn("[migrate] Legacy visitor restore skipped:", err);
+  }
 }
 
 export async function runMigrations(): Promise<void> {
@@ -120,6 +190,7 @@ export async function runMigrations(): Promise<void> {
       // Run idempotent safety patches after migrations so any columns that were
       // missed due to journal desync are always present.
       await applySchemaPatches(pool);
+      await restoreLegacyVisitorsIfEmpty(pool);
       await pool.end();
     }
 

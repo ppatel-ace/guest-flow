@@ -302,6 +302,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private legacyVisitorCopyAttempted = false;
+
   async getCustomer(id: string): Promise<Customer | undefined> {
     const [customer] = await db.select().from(customers).where(eq(customers.id, id));
     return customer || undefined;
@@ -1156,7 +1158,11 @@ export class DatabaseStorage implements IStorage {
         signedInAt: visitors.signedInAt,
       })
       .from(visitors)
-      .where(sql`${visitors.email} IS NOT NULL AND TRIM(${visitors.email}) <> '' AND LOWER(${visitors.email}) LIKE ${like}`)
+      .where(and(
+        sql`${visitors.email} IS NOT NULL`,
+        sql`TRIM(${visitors.email}) <> ''`,
+        sql`LOWER(${visitors.email}) LIKE ${like}`,
+      ))
       .orderBy(desc(visitors.signedInAt))
       .limit(40);
     const seen = new Set<string>();
@@ -1211,7 +1217,107 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllVisitors(): Promise<Visitor[]> {
-    return await db.select().from(visitors).orderBy(desc(visitors.signedInAt));
+    try {
+      const rows = await this.readVisitorListFromGf();
+      if (rows.length > 0) return rows;
+      await this.copyLegacyVisitorsIfEmpty();
+      const afterCopy = await this.readVisitorListFromGf().catch(() => [] as Visitor[]);
+      if (afterCopy.length > 0) return afterCopy;
+    } catch (err) {
+      console.error("[getAllVisitors] gf_visitors read failed:", err);
+    }
+    const legacy = await this.readVisitorListFromLegacyTable();
+    if (legacy.length > 0) {
+      console.warn(`[getAllVisitors] serving ${legacy.length} rows from legacy visitors table`);
+    }
+    return legacy;
+  }
+
+  private async copyLegacyVisitorsIfEmpty(): Promise<void> {
+    if (this.legacyVisitorCopyAttempted) return;
+    this.legacyVisitorCopyAttempted = true;
+    try {
+      await db.execute(sql`
+        INSERT INTO gf_visitors (
+          id, full_name, email, company, ace_poc, signed_in_at, signed_out_at,
+          us_citizen, purpose, location, source, notes, photo_data, documents_agreed, created_at
+        )
+        SELECT
+          id, full_name, email, company, ace_poc, signed_in_at, signed_out_at,
+          us_citizen, purpose, location, COALESCE(NULLIF(source, ''), 'kiosk'),
+          notes, photo_data, documents_agreed, COALESCE(created_at, now())
+        FROM visitors
+        ON CONFLICT (id) DO NOTHING
+      `);
+      console.log("[getAllVisitors] copied rows from legacy visitors into gf_visitors");
+    } catch (err) {
+      console.warn("[getAllVisitors] inline legacy copy skipped:", err);
+    }
+  }
+
+  /** List payload omits photo_data blobs so Visitor Log / Contacts can load. */
+  private async readVisitorListFromGf(): Promise<Visitor[]> {
+    const base = {
+      id: visitors.id,
+      fullName: visitors.fullName,
+      email: visitors.email,
+      company: visitors.company,
+      acePoc: visitors.acePoc,
+      signedInAt: visitors.signedInAt,
+      signedOutAt: visitors.signedOutAt,
+      usCitizen: visitors.usCitizen,
+      purpose: visitors.purpose,
+      location: visitors.location,
+      source: visitors.source,
+      notes: visitors.notes,
+      documentsAgreed: visitors.documentsAgreed,
+      createdAt: visitors.createdAt,
+    };
+    try {
+      const rows = await db
+        .select({ ...base, phoneNumber: visitors.phoneNumber })
+        .from(visitors)
+        .orderBy(desc(visitors.signedInAt));
+      return rows.map((r) => ({ ...r, photoData: null }));
+    } catch (err) {
+      console.error("[getAllVisitors] retry without phone_number:", err);
+      const rows = await db.select(base).from(visitors).orderBy(desc(visitors.signedInAt));
+      return rows.map((r) => ({ ...r, phoneNumber: null, photoData: null }));
+    }
+  }
+
+  private async readVisitorListFromLegacyTable(): Promise<Visitor[]> {
+    try {
+      const result = await db.execute(sql`
+        SELECT * FROM visitors ORDER BY signed_in_at DESC NULLS LAST
+      `);
+      const raw: any[] = Array.isArray(result) ? result : (result as { rows?: any[] }).rows ?? [];
+      return raw.map((row) => {
+        const signedOut = row.signed_out_at ?? row.signedOutAt ?? null;
+        const created = row.created_at ?? row.createdAt ?? null;
+        return {
+          id: String(row.id),
+          fullName: String(row.full_name ?? row.fullName ?? ""),
+          email: row.email ?? null,
+          phoneNumber: row.phone_number ?? row.phoneNumber ?? null,
+          company: row.company ?? null,
+          acePoc: row.ace_poc ?? row.acePoc ?? null,
+          signedInAt: new Date(row.signed_in_at ?? row.signedInAt),
+          signedOutAt: signedOut ? new Date(signedOut) : null,
+          usCitizen: row.us_citizen ?? row.usCitizen ?? null,
+          purpose: row.purpose ?? null,
+          location: row.location ?? null,
+          source: row.source || "kiosk",
+          notes: row.notes ?? null,
+          photoData: null,
+          documentsAgreed: row.documents_agreed ?? row.documentsAgreed ?? null,
+          createdAt: created ? new Date(created) : new Date(),
+        };
+      });
+    } catch (err) {
+      console.warn("[getAllVisitors] legacy visitors table unavailable:", err);
+      return [];
+    }
   }
 
   async getAutoCheckoutHours(): Promise<number> {

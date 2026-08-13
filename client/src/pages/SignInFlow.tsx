@@ -1531,7 +1531,7 @@ function VisitorLogTab() {
   const [editUsCitizen, setEditUsCitizen] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: allVisitors = [], isLoading, refetch } = useQuery<Visitor[]>({
+  const { data: allVisitors = [], isLoading, isError, refetch } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
   });
 
@@ -1586,6 +1586,11 @@ function VisitorLogTab() {
   const { data: notesData, isLoading: notesLoading } = useQuery<{ lookupKey: string; notes: string }>({
     queryKey: ["/api/visitors/notes", notesLookupKey],
     enabled: notesLookupKey !== null,
+    queryFn: async () => {
+      const res = await fetch(`/api/visitors/notes?key=${encodeURIComponent(notesLookupKey!)}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   });
 
   const { data: mergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
@@ -1871,7 +1876,7 @@ function VisitorLogTab() {
           </button>
         </div>
         <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {isLoading ? "Loading…" : displayCount}
+          {isError ? "Load failed" : isLoading ? "Loading…" : displayCount}
         </span>
         <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-refresh-visitors">
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -1917,7 +1922,16 @@ function VisitorLogTab() {
         </div>
       )}
 
-      {isLoading ? (
+      {isError ? (
+        <div className="py-12 text-center border border-dashed rounded-md space-y-3">
+          <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
+          <p className="text-sm text-muted-foreground">Could not load visitors. Try refresh.</p>
+          <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-retry-visitors">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Retry
+          </Button>
+        </div>
+      ) : isLoading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Loading visitors…</div>
       ) : viewMode === "by-visitor" ? (
         /* ── By-visitor grouped list ── */
@@ -2530,7 +2544,7 @@ function ContactsTab() {
     return () => clearTimeout(t);
   }, [mergeCountdown]);
 
-  const { data: allVisitors = [], isLoading } = useQuery<Visitor[]>({
+  const { data: allVisitors = [], isLoading, isError, refetch } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
   });
 
@@ -2550,6 +2564,11 @@ function ContactsTab() {
   const { data: notesData, isLoading: notesLoading } = useQuery<{ lookupKey: string; notes: string }>({
     queryKey: ["/api/visitors/notes", notesLookupKey],
     enabled: notesLookupKey !== null,
+    queryFn: async () => {
+      const res = await fetch(`/api/visitors/notes?key=${encodeURIComponent(notesLookupKey!)}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   });
 
   const { data: contactsMergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
@@ -2785,7 +2804,7 @@ function ContactsTab() {
         )}
 
         <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {isLoading ? "Loading…" : `${displayList.length} contact${displayList.length !== 1 ? "s" : ""}`}
+          {isError ? "Load failed" : isLoading ? "Loading…" : `${displayList.length} contact${displayList.length !== 1 ? "s" : ""}`}
         </span>
 
         {checkedKeys.size === 2 && (
@@ -2821,7 +2840,16 @@ function ContactsTab() {
       )}
 
       {/* Contact list */}
-      {isLoading ? (
+      {isError ? (
+        <div className="py-12 text-center border border-dashed rounded-md space-y-3">
+          <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
+          <p className="text-sm text-muted-foreground">Could not load contacts. Try refresh.</p>
+          <Button size="sm" variant="outline" onClick={() => refetch()} data-testid="button-retry-contacts">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Retry
+          </Button>
+        </div>
+      ) : isLoading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Loading contacts…</div>
       ) : displayList.length === 0 ? (
         <div className="py-12 text-center border border-dashed rounded-md space-y-2">

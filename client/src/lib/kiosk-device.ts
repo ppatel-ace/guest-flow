@@ -48,7 +48,7 @@ const IPAD_MODEL_NAMES: Record<string, string> = {
   "iPad13,17": "iPad Air (5th gen)",
 };
 
-const WEB_APP_VERSION = "1.1.0";
+const WEB_APP_VERSION = "1.1.1";
 
 export function friendlyIpadModel(raw: string): string {
   return IPAD_MODEL_NAMES[raw] ?? raw;
