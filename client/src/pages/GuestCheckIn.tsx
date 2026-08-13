@@ -40,16 +40,22 @@ const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | u
 const LABEL_CLASS = "text-slate-600 text-xs font-semibold uppercase tracking-wider";
 const INPUT_CLASS = "bg-slate-50 border-slate-200 focus:border-blue-500 focus:ring-blue-500 transition-colors h-10";
 
+type EmailVisitorMatch = { email: string; name: string; company?: string | null };
+
 function EmailInput({
   value,
   onChange,
+  onPickVisitor,
 }: {
   value: string;
   onChange: (v: string) => void;
+  onPickVisitor?: (match: EmailVisitorMatch) => void;
 }) {
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [domainSuggestions, setDomainSuggestions] = useState<string[]>([]);
+  const [visitorMatches, setVisitorMatches] = useState<EmailVisitorMatch[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -61,48 +67,69 @@ function EmailInput({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    onChange(val);
+  useEffect(() => {
+    const q = value.trim();
+    if (q.length < 3) {
+      setVisitorMatches([]);
+      return;
+    }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/kiosk/visitor-search?q=${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as EmailVisitorMatch[];
+        setVisitorMatches(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) setShowSuggestions(true);
+      } catch {
+        /* ignore */
+      }
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [value]);
 
+  const updateDomainHints = (val: string) => {
     const atIdx = val.indexOf("@");
     if (atIdx > 0) {
       const afterAt = val.slice(atIdx + 1).toLowerCase();
       const local = val.slice(0, atIdx);
-      const filtered = EMAIL_DOMAINS.filter((d) =>
-        d.slice(1).startsWith(afterAt)
-      ).map((d) => `${local}${d}`);
-      setSuggestions(filtered);
-      setShowSuggestions(filtered.length > 0);
-    } else if (atIdx === -1 && val.length > 0) {
-      setSuggestions(EMAIL_DOMAINS.map((d) => `${val}${d}`));
-      setShowSuggestions(false);
+      const filtered = EMAIL_DOMAINS.filter((d) => d.slice(1).startsWith(afterAt)).map((d) => `${local}${d}`);
+      setDomainSuggestions(filtered);
     } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
+      setDomainSuggestions([]);
     }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    onChange(val);
+    updateDomainHints(val);
+    setShowSuggestions(true);
   };
 
   const handleFocus = () => {
-    const atIdx = value.indexOf("@");
-    if (atIdx > 0) {
-      const afterAt = value.slice(atIdx + 1).toLowerCase();
-      const local = value.slice(0, atIdx);
-      const filtered = EMAIL_DOMAINS.filter((d) =>
-        d.slice(1).startsWith(afterAt)
-      ).map((d) => `${local}${d}`);
-      if (filtered.length > 0) {
-        setSuggestions(filtered);
-        setShowSuggestions(true);
-      }
-    }
+    updateDomainHints(value);
+    if (visitorMatches.length > 0 || domainSuggestions.length > 0) setShowSuggestions(true);
   };
 
-  const pickSuggestion = (s: string) => {
+  const pickDomain = (s: string) => {
     onChange(s);
-    setSuggestions([]);
+    setDomainSuggestions([]);
     setShowSuggestions(false);
   };
+
+  const pickVisitor = (match: EmailVisitorMatch) => {
+    onChange(match.email);
+    onPickVisitor?.(match);
+    setVisitorMatches([]);
+    setDomainSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const showDropdown =
+    showSuggestions && (visitorMatches.length > 0 || domainSuggestions.length > 0);
 
   return (
     <div ref={containerRef} className="relative">
@@ -118,20 +145,40 @@ function EmailInput({
         className={INPUT_CLASS}
         data-testid="input-guest-email"
       />
-      {showSuggestions && suggestions.length > 0 && (
+      {showDropdown && (
         <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-md overflow-hidden">
-          {suggestions.map((s) => (
+          {visitorMatches.map((m) => (
             <li
-              key={s}
+              key={m.email}
               className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 transition-colors text-slate-700"
               onMouseDown={(e) => {
                 e.preventDefault();
-                pickSuggestion(s);
+                pickVisitor(m);
               }}
+              data-testid={`suggestion-guest-email-${m.email}`}
             >
-              {s}
+              <div className="font-medium">{m.email}</div>
+              {(m.name || m.company) && (
+                <div className="text-xs text-slate-500">
+                  {[m.name, m.company].filter(Boolean).join(" · ")}
+                </div>
+              )}
             </li>
           ))}
+          {domainSuggestions
+            .filter((s) => !visitorMatches.some((m) => m.email.toLowerCase() === s.toLowerCase()))
+            .map((s) => (
+              <li
+                key={s}
+                className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 transition-colors text-slate-700"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickDomain(s);
+                }}
+              >
+                {s}
+              </li>
+            ))}
         </ul>
       )}
     </div>
@@ -466,7 +513,16 @@ export default function GuestCheckIn() {
                   <Label htmlFor="guest-email" className={LABEL_CLASS}>
                     Email <span className="text-red-500">*</span>
                   </Label>
-                  <EmailInput value={email} onChange={setEmail} />
+                  <EmailInput
+                    value={email}
+                    onChange={setEmail}
+                    onPickVisitor={(match) => {
+                      const parts = (match.name || "").trim().split(/\s+/);
+                      if (parts[0]) setFirstName(parts[0]);
+                      if (parts.length > 1) setLastName(parts.slice(1).join(" "));
+                      if (match.company) setCompany(match.company);
+                    }}
+                  />
                 </div>
 
                 <div className="space-y-2">

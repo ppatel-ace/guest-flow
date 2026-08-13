@@ -177,7 +177,7 @@ export default function Kiosk() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Email autocomplete
-  const [emailSuggestions, setEmailSuggestions] = useState<Array<{ email: string; name: string }>>([]);
+  const [emailSuggestions, setEmailSuggestions] = useState<Array<{ email: string; name: string; company?: string | null }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -739,7 +739,11 @@ export default function Kiosk() {
                               data-testid={`suggestion-email-${i}`}
                             >
                               <span className="text-base font-medium text-slate-900 dark:text-white">{s.email}</span>
-                              {s.name && <span className="text-sm text-slate-500 dark:text-slate-400">{s.name}</span>}
+                              {(s.name || s.company) && (
+                                <span className="text-sm text-slate-500 dark:text-slate-400">
+                                  {[s.name, s.company].filter(Boolean).join(" · ")}
+                                </span>
+                              )}
                             </button>
                           ))}
                         </div>

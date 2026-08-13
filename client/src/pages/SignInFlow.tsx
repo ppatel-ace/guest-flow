@@ -82,6 +82,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { FormField, Customer, Lead, Visitor, AcePoc } from "@shared/schema";
 import { OFFICE_LOCATIONS, type OfficeLocation } from "@shared/locations";
+import { PURPOSE_OF_VISIT_OPTIONS } from "@shared/visitorFields";
 import { printVisitorLabel } from "@/lib/brotherPrint";
 import {
   Select,
@@ -1519,10 +1520,23 @@ function VisitorLogTab() {
   const [allParsedRows, setAllParsedRows] = useState<Record<string, string>[]>([]);
   const [skipCount, setSkipCount] = useState(0);
   const [autoCheckoutDraft, setAutoCheckoutDraft] = useState("3");
+  const [visitEdit, setVisitEdit] = useState<Visitor | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editCompany, setEditCompany] = useState("");
+  const [editAcePoc, setEditAcePoc] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editPurpose, setEditPurpose] = useState("");
+  const [editUsCitizen, setEditUsCitizen] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: allVisitors = [], isLoading, refetch } = useQuery<Visitor[]>({
     queryKey: ["/api/visitors"],
+  });
+
+  const { data: acePocRoster = [] } = useQuery<AcePoc[]>({
+    queryKey: ["/api/ace-pocs"],
   });
 
   const { data: logSettings, isLoading: logSettingsLoading } = useQuery<{ autoCheckoutHours: number }>({
@@ -1577,6 +1591,44 @@ function VisitorLogTab() {
   const { data: mergeEvents = [] } = useQuery<VisitorMergeEvent[]>({
     queryKey: [`/api/visitors/merge-events?key=${encodeURIComponent(notesLookupKey!)}`],
     enabled: notesLookupKey !== null,
+  });
+
+  const openVisitEdit = (visitor: Visitor, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setVisitEdit(visitor);
+    setEditFullName(visitor.fullName);
+    setEditEmail(visitor.email ?? "");
+    setEditPhone(visitor.phoneNumber ?? "");
+    setEditCompany(visitor.company ?? "");
+    setEditAcePoc(visitor.acePoc ?? "");
+    setEditLocation(visitor.location ?? "");
+    setEditPurpose(visitor.purpose ?? "");
+    setEditUsCitizen(visitor.usCitizen ?? "");
+  };
+
+  const saveVisitMutation = useMutation({
+    mutationFn: async () => {
+      if (!visitEdit) throw new Error("No visit selected");
+      const res = await apiRequest("PATCH", `/api/visitors/${visitEdit.id}`, {
+        fullName: editFullName.trim(),
+        email: editEmail.trim(),
+        phoneNumber: editPhone.trim(),
+        company: editCompany.trim(),
+        acePoc: editAcePoc.trim(),
+        location: editLocation.trim(),
+        purpose: editPurpose.trim(),
+        usCitizen: editUsCitizen.trim(),
+      });
+      return res.json() as Promise<Visitor>;
+    },
+    onSuccess: (updated) => {
+      toast({ title: "Check-in updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      if (profileQueryKey) queryClient.invalidateQueries({ queryKey: [profileQueryKey] });
+      setSelected((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
+      setVisitEdit(null);
+    },
+    onError: () => toast({ title: "Failed to update check-in", variant: "destructive" }),
   });
 
   const saveNotesMutation = useMutation({
@@ -1935,7 +1987,7 @@ function VisitorLogTab() {
         /* ── By-visit: individual rows ── */
         <div className="rounded-md border overflow-x-auto">
           <div className="min-w-[1100px]">
-          <div className="hidden lg:grid grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px] gap-x-2 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+          <div className="hidden lg:grid grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px_2.25rem] gap-x-2 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
             <span />
             <span>Name / Email</span>
             <span>Company</span>
@@ -1947,13 +1999,17 @@ function VisitorLogTab() {
             <span>Signed Out</span>
             <span>Duration</span>
             <span>Source</span>
+            <span className="sr-only">Edit</span>
           </div>
           <div className="divide-y">
             {filtered.map((visitor) => (
-              <button
+              <div
                 key={visitor.id}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px] lg:gap-x-2 lg:items-center hover:bg-muted/30 transition-colors"
+                role="button"
+                tabIndex={0}
+                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px_2.25rem] lg:gap-x-2 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer"
                 onClick={() => setSelected(visitor)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(visitor); } }}
                 data-testid={`row-visitor-${visitor.id}`}
               >
                 <Avatar className="h-8 w-8 shrink-0">
@@ -1988,7 +2044,18 @@ function VisitorLogTab() {
                   {formatDuration(visitor.signedInAt, visitor.signedOutAt)}
                 </div>
                 <div className="shrink-0">{sourceBadge(visitor.source)}</div>
-              </button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0"
+                  title="Edit check-in"
+                  data-testid={`button-edit-visit-${visitor.id}`}
+                  onClick={(e) => openVisitEdit(visitor, e)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ))}
           </div>
           </div>
@@ -2001,7 +2068,18 @@ function VisitorLogTab() {
           {selected && (
             <>
               <SheetHeader className="pb-4">
-                <SheetTitle>Visitor Profile</SheetTitle>
+                <div className="flex items-start justify-between gap-3 pr-8">
+                  <SheetTitle>Visitor Profile</SheetTitle>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openVisitEdit(selected)}
+                    data-testid="button-edit-selected-visit"
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                    Edit check-in
+                  </Button>
+                </div>
               </SheetHeader>
 
               {/* Header: avatar + name + email + company */}
@@ -2232,6 +2310,108 @@ function VisitorLogTab() {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog open={visitEdit !== null} onOpenChange={(open) => { if (!open) setVisitEdit(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit check-in</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="visit-edit-name">Name</Label>
+              <Input id="visit-edit-name" className="h-11" value={editFullName} onChange={(e) => setEditFullName(e.target.value)} data-testid="input-edit-visit-name" />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="visit-edit-email">Email</Label>
+              <Input id="visit-edit-email" type="email" className="h-11" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} data-testid="input-edit-visit-email" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="visit-edit-phone">Phone</Label>
+              <Input id="visit-edit-phone" className="h-11" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} data-testid="input-edit-visit-phone" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="visit-edit-company">Company</Label>
+              <Input id="visit-edit-company" className="h-11" value={editCompany} onChange={(e) => setEditCompany(e.target.value)} data-testid="input-edit-visit-company" />
+            </div>
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Select value={editLocation || "__none__"} onValueChange={(v) => setEditLocation(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-11" data-testid="select-edit-visit-location">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  {OFFICE_LOCATIONS.map((loc) => (
+                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>ACE POC</Label>
+              <Select value={editAcePoc || "__none__"} onValueChange={(v) => setEditAcePoc(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-11" data-testid="select-edit-visit-poc">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  {acePocRoster.map((poc) => (
+                    <SelectItem key={poc.id} value={poc.name}>{poc.name}</SelectItem>
+                  ))}
+                  {editAcePoc && !acePocRoster.some((p) => p.name === editAcePoc) && (
+                    <SelectItem value={editAcePoc}>{editAcePoc}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Purpose</Label>
+              <Select value={editPurpose || "__none__"} onValueChange={(v) => setEditPurpose(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-11" data-testid="select-edit-visit-purpose">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  {PURPOSE_OF_VISIT_OPTIONS.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                  {editPurpose && !(PURPOSE_OF_VISIT_OPTIONS as readonly string[]).includes(editPurpose) && (
+                    <SelectItem value={editPurpose}>{editPurpose}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>U.S. Citizen</Label>
+              <Select value={editUsCitizen || "__none__"} onValueChange={(v) => setEditUsCitizen(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-11" data-testid="select-edit-visit-citizen">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  <SelectItem value="Yes">Yes</SelectItem>
+                  <SelectItem value="No">No</SelectItem>
+                  {editUsCitizen && editUsCitizen !== "Yes" && editUsCitizen !== "No" && (
+                    <SelectItem value={editUsCitizen}>{editUsCitizen}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setVisitEdit(null)} disabled={saveVisitMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => saveVisitMutation.mutate()}
+              disabled={saveVisitMutation.isPending || !editFullName.trim()}
+              data-testid="button-save-edit-visit"
+            >
+              {saveVisitMutation.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Envoy import dialog */}
       <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) resetImport(); }}>

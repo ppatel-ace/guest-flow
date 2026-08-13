@@ -259,6 +259,17 @@ export interface IStorage {
   getContactById(id: string): Promise<ContactDetail | undefined>;
   // Visitors (kiosk / Envoy walk-ins)
   lookupVisitorByEmail(email: string): Promise<{ fullName: string; email: string | null; phoneNumber: string | null; company: string | null; acePoc: string | null } | null>;
+  searchVisitorEmails(q: string): Promise<Array<{ email: string; name: string; company: string | null }>>;
+  updateVisitorById(id: string, data: {
+    fullName?: string;
+    email?: string | null;
+    phoneNumber?: string | null;
+    company?: string | null;
+    acePoc?: string | null;
+    location?: string | null;
+    purpose?: string | null;
+    usCitizen?: string | null;
+  }): Promise<Visitor | undefined>;
   createVisitor(data: InsertVisitor): Promise<Visitor>;
   autoCheckoutStaleVisitors(hours: number): Promise<number>;
   getAllVisitors(): Promise<Visitor[]>;
@@ -1131,6 +1142,48 @@ export class DatabaseStorage implements IStorage {
       company: row.company,
       acePoc: row.acePoc,
     };
+  }
+
+  async searchVisitorEmails(q: string): Promise<Array<{ email: string; name: string; company: string | null }>> {
+    const term = q.trim().toLowerCase();
+    if (term.length < 3) return [];
+    const like = `${term}%`;
+    const rows = await db
+      .select({
+        email: visitors.email,
+        fullName: visitors.fullName,
+        company: visitors.company,
+        signedInAt: visitors.signedInAt,
+      })
+      .from(visitors)
+      .where(sql`${visitors.email} IS NOT NULL AND TRIM(${visitors.email}) <> '' AND LOWER(${visitors.email}) LIKE ${like}`)
+      .orderBy(desc(visitors.signedInAt))
+      .limit(40);
+    const seen = new Set<string>();
+    const out: Array<{ email: string; name: string; company: string | null }> = [];
+    for (const row of rows) {
+      const email = (row.email || "").trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      out.push({ email, name: row.fullName, company: row.company ?? null });
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+
+  async updateVisitorById(id: string, data: {
+    fullName?: string;
+    email?: string | null;
+    phoneNumber?: string | null;
+    company?: string | null;
+    acePoc?: string | null;
+    location?: string | null;
+    purpose?: string | null;
+    usCitizen?: string | null;
+  }): Promise<Visitor | undefined> {
+    if (Object.keys(data).length === 0) return undefined;
+    const [row] = await db.update(visitors).set(data).where(eq(visitors.id, id)).returning();
+    return row;
   }
 
   async createVisitor(data: InsertVisitor): Promise<Visitor> {

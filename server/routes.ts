@@ -1503,12 +1503,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const q = (req.query.q as string | undefined)?.trim();
       if (!q || q.length < 3) return res.json([]);
-      const results = await storage.searchCustomers(q);
-      const suggestions = results
-        .filter((c) => c.email)
+      const fromVisitors = await storage.searchVisitorEmails(q);
+      const seen = new Set(fromVisitors.map((v) => v.email.toLowerCase()));
+      const fromCustomers = await storage.searchCustomers(q).catch(() => []);
+      const extra = fromCustomers
+        .filter((c) => c.email && !seen.has(c.email.trim().toLowerCase()))
         .slice(0, 5)
-        .map((c) => ({ email: c.email, name: c.name }));
-      res.json(suggestions);
+        .map((c) => ({
+          email: c.email!.trim().toLowerCase(),
+          name: c.name,
+          company: null as string | null,
+        }));
+      res.json([...fromVisitors, ...extra].slice(0, 8));
     } catch (error) {
       console.error("[kiosk/visitor-search]", error);
       res.status(500).json({ error: "Search failed" });
@@ -1746,6 +1752,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[visitors/merge]", error);
       res.status(500).json({ error: "Failed to merge contacts" });
+    }
+  });
+
+  app.patch("/api/visitors/:id", requireAuth, async (req, res) => {
+    try {
+      const id = String(req.params.id || "").trim();
+      if (!id) return res.status(400).json({ error: "id is required" });
+      const body = req.body as Record<string, unknown>;
+      const data: {
+        fullName?: string;
+        email?: string | null;
+        phoneNumber?: string | null;
+        company?: string | null;
+        acePoc?: string | null;
+        location?: string | null;
+        purpose?: string | null;
+        usCitizen?: string | null;
+      } = {};
+      if (typeof body.fullName === "string") data.fullName = body.fullName.trim();
+      if (body.email !== undefined) data.email = String(body.email || "").trim().toLowerCase() || null;
+      if (body.phoneNumber !== undefined) data.phoneNumber = String(body.phoneNumber || "").trim() || null;
+      if (body.company !== undefined) data.company = String(body.company || "").trim() || null;
+      if (body.acePoc !== undefined) data.acePoc = String(body.acePoc || "").trim() || null;
+      if (body.location !== undefined) data.location = String(body.location || "").trim() || null;
+      if (body.purpose !== undefined) data.purpose = String(body.purpose || "").trim() || null;
+      if (body.usCitizen !== undefined) data.usCitizen = String(body.usCitizen || "").trim() || null;
+      if (!data.fullName && Object.keys(data).length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
+      if (data.fullName !== undefined && !data.fullName) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      const updated = await storage.updateVisitorById(id, data);
+      if (!updated) return res.status(404).json({ error: "Visitor not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("[visitors/:id PATCH]", error);
+      res.status(500).json({ error: "Failed to update check-in" });
     }
   });
 
