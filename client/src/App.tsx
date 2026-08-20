@@ -27,6 +27,7 @@ import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
 import { AceAppVersionFooter } from "@/components/AceAppVersionFooter";
 import { AceBacklogPanel } from "@/components/AceBacklogPanel";
+import { AceDesignPanel } from "@/components/AceDesignPanel";
 
 function AdminLayout() {
   const { logout } = useAuth();
@@ -87,8 +88,13 @@ function AdminLayout() {
                     fallbackVersion="1.1.1"
                   />
                 </footer>
-                <div className="mt-6 rounded-lg border border-border/60 p-4">
-                  <AceBacklogPanel appSlug="guestflow" compact />
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-lg border border-border/60 p-4">
+                    <AceBacklogPanel appSlug="guestflow" compact />
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-4">
+                    <AceDesignPanel appSlug="guestflow" compact />
+                  </div>
                 </div>
               </div>
             </main>
