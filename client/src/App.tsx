@@ -25,7 +25,7 @@ import SignInFlow from "@/pages/SignInFlow";
 import EnvoyAnalytics from "@/pages/EnvoyAnalytics";
 import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
-import { APP_VERSION } from "@/lib/version";
+import { AceAppVersionFooter } from "@/components/AceAppVersionFooter";
 
 function AdminLayout() {
   const { logout } = useAuth();
@@ -80,7 +80,11 @@ function AdminLayout() {
                   className="mt-10 pt-4 border-t border-border/60 text-center text-xs text-muted-foreground"
                   data-testid="app-version-footer"
                 >
-                  GuestFlow v{APP_VERSION}
+                  <AceAppVersionFooter
+                    appSlug="guestflow"
+                    displayName="GuestFlow"
+                    fallbackVersion="1.1.1"
+                  />
                 </footer>
               </div>
             </main>
