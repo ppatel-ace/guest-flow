@@ -28,6 +28,7 @@ import NotFound from "@/pages/not-found";
 import { AceAppVersionFooter } from "@/components/AceAppVersionFooter";
 import { AceBacklogPanel } from "@/components/AceBacklogPanel";
 import { AceDesignPanel } from "@/components/AceDesignPanel";
+import { AceUsageBeacon } from "@/components/AceUsageBeacon";
 
 function AdminLayout() {
   const { logout } = useAuth();
@@ -39,7 +40,9 @@ function AdminLayout() {
 
   return (
     <ProtectedRoute>
-      <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
+      <>
+        <AceUsageBeacon appSlug="guestflow" />
+        <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
         <div className="flex h-screen w-full bg-background">
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
@@ -101,6 +104,7 @@ function AdminLayout() {
           </div>
         </div>
       </SidebarProvider>
+      </>
     </ProtectedRoute>
   );
 }

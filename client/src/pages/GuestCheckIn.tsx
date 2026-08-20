@@ -26,6 +26,7 @@ import {
 import { CheckCircle2, ChevronsUpDown, Check, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { trackFeature } from "@/components/AceUsageBeacon";
 import { useQuery } from "@tanstack/react-query";
 import { Turnstile } from "@marsidev/react-turnstile";
 import type { AcePoc, PageSettings } from "@shared/schema";
@@ -325,6 +326,7 @@ export default function GuestCheckIn() {
     }
 
     setSubmitting(true);
+    trackFeature("guestflow.checkin.submit", "Guest check-in submit");
     const normalizedEmail = email.trim().toLowerCase();
     const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
