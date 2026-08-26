@@ -217,7 +217,6 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				B1A10003FEEDBEEF00000001 /* BrotherPrintPlugin.swift in Sources */,
-				B1A10004FEEDBEEF00000002 /* BrotherPrintPlugin.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

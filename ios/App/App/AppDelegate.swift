@@ -29,9 +29,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 
-// Registers inline Capacitor plugins — no separate file needed.
+// Registers local Capacitor plugins (Capacitor 6+ requires registerPluginInstance).
 class MainViewController: CAPBridgeViewController {
-    override func capacitorDidLoad() {
-        bridge?.registerPluginType(BrotherPrintPlugin.self)
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(BrotherPrintPlugin())
     }
 }
