@@ -17,10 +17,11 @@ public class BrotherPrintPlugin: CAPPlugin, CAPBridgedPlugin {
         let date = call.getString("date") ?? ""
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let option = BRLMBLESearchOption()
-            let searchResult = BRLMPrinterSearcher.startBLESearch(option)
+            // QL-820NWB uses classic MFi Bluetooth (not BLE).
+            // Pair the printer in iPad Settings → Bluetooth first, then search.
+            let searchResult = BRLMPrinterSearcher.startBluetoothSearch()
             guard let channel = searchResult.channels.first else {
-                call.reject("No Brother printer found via Bluetooth. Make sure the QL-820NWB is powered on and in range.")
+                call.reject("No paired Brother printer found. On the iPad go to Settings → Bluetooth, pair QL-820NWB, wait until it says Connected, then try again.")
                 return
             }
 
@@ -68,8 +69,7 @@ public class BrotherPrintPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func getPairedPrinters(_ call: CAPPluginCall) {
         DispatchQueue.global(qos: .userInitiated).async {
-            let option = BRLMBLESearchOption()
-            let result = BRLMPrinterSearcher.startBLESearch(option)
+            let result = BRLMPrinterSearcher.startBluetoothSearch()
             let count = result.channels.count
             call.resolve(["count": count, "found": count > 0])
         }
