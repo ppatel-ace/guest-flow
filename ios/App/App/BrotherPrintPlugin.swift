@@ -18,9 +18,9 @@ public class BrotherPrintPlugin: CAPPlugin, CAPBridgedPlugin {
 
         DispatchQueue.global(qos: .userInitiated).async {
             // QL-820NWB uses classic MFi Bluetooth (not BLE).
-            // Pair the printer in iPad Settings → Bluetooth first, then search.
+            // Pair in iPad Settings → Bluetooth and wait until status is Connected.
             let searchResult = BRLMPrinterSearcher.startBluetoothSearch()
-            guard let channel = searchResult.channels.first else {
+            guard let found = searchResult.channels.first else {
                 call.reject("No paired Brother printer found. On the iPad go to Settings → Bluetooth, pair QL-820NWB, wait until it says Connected, then try again.")
                 return
             }
@@ -43,9 +43,28 @@ public class BrotherPrintPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
-            let openResult = BRLMPrinterDriverGenerator.open(channel)
-            guard openResult.error.code == .noError, let driver = openResult.driver else {
-                call.reject("Could not open printer channel: \(openResult.error.code.rawValue)")
+            // Try searched channel, then rebuild from Bluetooth local name (EA session).
+            var channels: [BRLMChannel] = [found]
+            let localName = found.channelInfo
+            if !localName.isEmpty {
+                channels.append(BRLMChannel(bluetoothLocalName: localName))
+            }
+
+            var driver: BRLMPrinterDriver?
+            var lastCode: Int = -1
+            for channel in channels {
+                // External Accessory sessions are more reliable on the main thread.
+                let opened = self.openPrinterOnMain(channel: channel)
+                lastCode = opened.code
+                if let d = opened.driver {
+                    driver = d
+                    break
+                }
+                Thread.sleep(forTimeInterval: 0.4)
+            }
+
+            guard let driver else {
+                call.reject(self.openChannelHelpMessage(code: lastCode))
                 return
             }
             defer { driver.closeChannel() }
@@ -65,6 +84,30 @@ public class BrotherPrintPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("Print failed, error code: \(printErr.code.rawValue)")
             }
         }
+    }
+
+    /// Open MFi channel on the main thread (required for External Accessory stability).
+    private func openPrinterOnMain(channel: BRLMChannel) -> (driver: BRLMPrinterDriver?, code: Int) {
+        var driver: BRLMPrinterDriver?
+        var code = -1
+        let sem = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async {
+            let result = BRLMPrinterDriverGenerator.open(channel)
+            code = result.error.code.rawValue
+            if result.error.code == .noError {
+                driver = result.driver
+            }
+            sem.signal()
+        }
+        _ = sem.wait(timeout: .now() + 15)
+        return (driver, code)
+    }
+
+    private func openChannelHelpMessage(code: Int) -> String {
+        if code == 30001 {
+            return "Printer found but Bluetooth stream failed (30001). On the iPad: Settings → Bluetooth → forget QL-820NWB → pair again → wait until it says Connected (not Not Connected). Close Brother iPrint&Label if open, keep the printer near the iPad, then retry."
+        }
+        return "Could not open printer channel: \(code)"
     }
 
     @objc func getPairedPrinters(_ call: CAPPluginCall) {
