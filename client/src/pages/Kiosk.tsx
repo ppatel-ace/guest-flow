@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight } from "lucide-react";
+import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight, LogOut, LogIn } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { FormField, AcePoc } from "@shared/schema";
@@ -63,8 +63,25 @@ interface VisitorLookupResult {
   acePoc: string | null;
 }
 
-type KioskStep = "idle" | "form" | "documents" | "photo" | "thanks";
+type KioskStep =
+  | "idle"
+  | "form"
+  | "documents"
+  | "photo"
+  | "thanks"
+  | "signOutEmail"
+  | "signOutConfirm"
+  | "signOutThanks";
 type FormStage = "email" | "fields";
+
+interface OpenVisitMatch {
+  id: string;
+  fullName: string;
+  email: string | null;
+  company: string | null;
+  signedInAt: string;
+  location: string | null;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -142,6 +159,14 @@ export default function Kiosk() {
   const deviceDefaultLocation = useRef<string | null>(null);
   const [step, setStep] = useState<KioskStep>("idle");
   const [visitorName, setVisitorName] = useState("");
+
+  // Sign-out flow
+  const [signOutEmail, setSignOutEmail] = useState("");
+  const [signOutMatches, setSignOutMatches] = useState<OpenVisitMatch[]>([]);
+  const [signOutSelectedId, setSignOutSelectedId] = useState<string | null>(null);
+  const [signOutLookingUp, setSignOutLookingUp] = useState(false);
+  const [signOutSubmitting, setSignOutSubmitting] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   // Two-stage form state
   const [formStage, setFormStage] = useState<FormStage>("email");
@@ -312,6 +337,12 @@ export default function Kiosk() {
     setCustomFieldValues({}); setPhotoData(null); setCameraError(false);
     setCurrentDocIndex(0); setAcknowledgedDocs([]);
     setSubmitError(null); setIsSubmitting(false);
+    setSignOutEmail("");
+    setSignOutMatches([]);
+    setSignOutSelectedId(null);
+    setSignOutLookingUp(false);
+    setSignOutSubmitting(false);
+    setSignOutError(null);
   }, []);
 
   const startWarningCountdown = useCallback(() => {
@@ -405,6 +436,88 @@ export default function Kiosk() {
     setStep("form");
     setFormStage("email");
     sendHeartbeat(deviceId.current, "active");
+  };
+
+  const startSignOutFlow = () => {
+    setSignOutEmail("");
+    setSignOutMatches([]);
+    setSignOutSelectedId(null);
+    setSignOutError(null);
+    setStep("signOutEmail");
+    sendHeartbeat(deviceId.current, "active");
+  };
+
+  const lookupSignOutVisits = async () => {
+    const trimmed = signOutEmail.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes("@")) {
+      setSignOutError("Please enter a valid email address.");
+      return;
+    }
+    setSignOutLookingUp(true);
+    setSignOutError(null);
+    try {
+      const loc = deviceDefaultLocation.current || location || "";
+      const res = await fetch("/api/kiosk/sign-out/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed, location: loc || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Lookup failed");
+      }
+      const matches = (await res.json()) as OpenVisitMatch[];
+      if (!matches.length) {
+        setSignOutError("No open visit found for this email. You may already be signed out.");
+        setSignOutMatches([]);
+        return;
+      }
+      setSignOutMatches(matches);
+      setSignOutSelectedId(matches.length === 1 ? matches[0].id : null);
+      setStep("signOutConfirm");
+    } catch (err) {
+      setSignOutError(err instanceof Error ? err.message : "Lookup failed");
+    } finally {
+      setSignOutLookingUp(false);
+    }
+  };
+
+  const confirmSignOut = async (opts?: { all?: boolean; visitorId?: string }) => {
+    setSignOutSubmitting(true);
+    setSignOutError(null);
+    try {
+      const body: Record<string, unknown> = {
+        email: signOutEmail.trim().toLowerCase(),
+        location: deviceDefaultLocation.current || undefined,
+      };
+      if (opts?.all) body.all = true;
+      else body.visitorId = opts?.visitorId || signOutSelectedId;
+
+      const res = await fetch("/api/kiosk/sign-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && Array.isArray(data.visits)) {
+        setSignOutMatches(data.visits);
+        setSignOutSelectedId(null);
+        setSignOutError("Multiple open visits — select one or sign out all.");
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(data.error || "Sign out failed");
+      }
+      const signedOut = (data.signedOut ?? []) as Array<{ fullName?: string }>;
+      const name = signedOut[0]?.fullName || signOutMatches[0]?.fullName || "";
+      setVisitorName(name);
+      setStep("signOutThanks");
+      setTimeout(() => resetToIdle(), 5000);
+    } catch (err) {
+      setSignOutError(err instanceof Error ? err.message : "Sign out failed");
+    } finally {
+      setSignOutSubmitting(false);
+    }
   };
 
   const determineNextStepAfterForm = () => {
@@ -640,8 +753,7 @@ export default function Kiosk() {
       {/* ── Idle Screen ── */}
       {step === "idle" && (
         <div
-          className="flex-1 flex flex-col items-center justify-center cursor-pointer p-10 bg-[#F8F5F0] overflow-hidden"
-          onClick={startFlow}
+          className="flex-1 flex flex-col items-center justify-center p-10 bg-[#F8F5F0] overflow-hidden"
           data-testid="screen-kiosk-idle"
         >
           {/* Logo */}
@@ -662,21 +774,32 @@ export default function Kiosk() {
           </motion.div>
 
           {/* Welcome text */}
-          <div className="text-center space-y-3 mb-14">
+          <div className="text-center space-y-3 mb-12">
             <p className="text-slate-500 text-sm font-semibold uppercase tracking-widest">Ace Electronics</p>
             <h1 className="text-6xl font-bold text-slate-900 tracking-tight">Welcome</h1>
-            <p className="text-slate-500 text-xl">Please sign in to continue</p>
+            <p className="text-slate-500 text-xl">Sign in when you arrive. Sign out when you leave.</p>
           </div>
 
-          {/* Tap CTA */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping" />
-              <div className="relative h-20 w-20 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <ChevronRight className="h-9 w-9 text-white" />
-              </div>
-            </div>
-            <p className="text-slate-600 text-lg font-medium">Tap anywhere to check in</p>
+          <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full max-w-xl">
+            <Button
+              size="lg"
+              className="h-20 flex-1 text-xl font-semibold rounded-2xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25"
+              onClick={startFlow}
+              data-testid="button-kiosk-sign-in"
+            >
+              <LogIn className="h-6 w-6 mr-3" />
+              Sign In
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-20 flex-1 text-xl font-semibold rounded-2xl border-2 border-slate-300 bg-white hover:bg-slate-50 text-slate-800"
+              onClick={startSignOutFlow}
+              data-testid="button-kiosk-sign-out"
+            >
+              <LogOut className="h-6 w-6 mr-3" />
+              Sign Out
+            </Button>
           </div>
         </div>
       )}
@@ -1094,6 +1217,181 @@ export default function Kiosk() {
             <p className="text-sm">Returning to start in 5 seconds…</p>
           </div>
 
+          <img src={logoIdleSrc} alt="Ace Electronics" className="h-12 w-auto object-contain opacity-40 mt-4" />
+        </div>
+      )}
+
+      {/* ── Sign Out: Email ── */}
+      {step === "signOutEmail" && (
+        <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden" data-testid="screen-kiosk-sign-out-email">
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Ace Electronics</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Visitor Sign-Out</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-sign-out-cancel" className="text-slate-500">
+              <X className="h-4 w-4 mr-1.5" /> Cancel
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+            <div className="max-w-lg mx-auto space-y-6">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Sign Out</h1>
+                <p className="text-slate-500 mt-1">Enter the email you used to sign in.</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-slate-700">Email address</Label>
+                <Input
+                  type="email"
+                  autoComplete="email"
+                  className="h-13 text-base rounded-xl"
+                  value={signOutEmail}
+                  onChange={(e) => setSignOutEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void lookupSignOutVisits();
+                  }}
+                  placeholder="you@company.com"
+                  data-testid="input-kiosk-sign-out-email"
+                />
+              </div>
+              {(signOutError || submitError) && (
+                <p className="text-sm text-red-600" data-testid="text-kiosk-sign-out-error">
+                  {signOutError || submitError}
+                </p>
+              )}
+              <Button
+                size="lg"
+                className="w-full h-14 text-lg font-semibold rounded-xl"
+                disabled={signOutLookingUp}
+                onClick={() => void lookupSignOutVisits()}
+                data-testid="button-kiosk-sign-out-lookup"
+              >
+                {signOutLookingUp ? "Looking up…" : "Continue"}
+                <ArrowRight className="h-5 w-5 ml-2" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sign Out: Confirm ── */}
+      {step === "signOutConfirm" && (
+        <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden" data-testid="screen-kiosk-sign-out-confirm">
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Ace Electronics</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Confirm Sign-Out</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-sign-out-confirm-cancel" className="text-slate-500">
+              <X className="h-4 w-4 mr-1.5" /> Cancel
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+            <div className="max-w-lg mx-auto space-y-6">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Confirm</h1>
+                <p className="text-slate-500 mt-1">
+                  {signOutMatches.length > 1
+                    ? "Select your visit, or sign out of all open visits for this email."
+                    : "Sign out of this visit?"}
+                </p>
+              </div>
+              <div className="space-y-3">
+                {signOutMatches.map((m) => {
+                  const selected = signOutSelectedId === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSignOutSelectedId(m.id)}
+                      className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${
+                        selected
+                          ? "border-blue-600 bg-blue-50"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                      data-testid={`button-kiosk-sign-out-match-${m.id}`}
+                    >
+                      <p className="font-semibold text-slate-900 text-lg">{m.fullName}</p>
+                      {m.company && <p className="text-slate-500 text-sm">{m.company}</p>}
+                      <p className="text-slate-500 text-sm mt-1">
+                        Signed in {new Date(m.signedInAt).toLocaleString()}
+                        {m.location ? ` · ${m.location}` : ""}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+              {signOutError && (
+                <p className="text-sm text-red-600" data-testid="text-kiosk-sign-out-confirm-error">
+                  {signOutError}
+                </p>
+              )}
+              <div className="flex flex-col gap-3">
+                <Button
+                  size="lg"
+                  className="w-full h-14 text-lg font-semibold rounded-xl"
+                  disabled={signOutSubmitting || (!signOutSelectedId && signOutMatches.length > 1)}
+                  onClick={() => void confirmSignOut({ visitorId: signOutSelectedId || signOutMatches[0]?.id })}
+                  data-testid="button-kiosk-sign-out-confirm"
+                >
+                  {signOutSubmitting ? "Signing out…" : "Sign Out"}
+                </Button>
+                {signOutMatches.length > 1 && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full h-14 text-lg font-semibold rounded-xl"
+                    disabled={signOutSubmitting}
+                    onClick={() => void confirmSignOut({ all: true })}
+                    data-testid="button-kiosk-sign-out-all"
+                  >
+                    Sign out all open visits
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setStep("signOutEmail");
+                    setSignOutError(null);
+                  }}
+                  data-testid="button-kiosk-sign-out-back"
+                >
+                  Back
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sign Out: Thanks ── */}
+      {step === "signOutThanks" && (
+        <div
+          className="flex-1 flex flex-col items-center justify-center gap-8 p-10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden"
+          data-testid="screen-kiosk-sign-out-thanks"
+        >
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping" />
+            <div className="relative w-28 h-28 rounded-full bg-blue-500/10 border-2 border-blue-500/40 flex items-center justify-center">
+              <LogOut className="h-14 w-14 text-blue-400" />
+            </div>
+          </div>
+          <div className="text-center space-y-3">
+            <h2 className="text-5xl font-bold text-white">
+              {visitorName ? `Goodbye, ${visitorName.split(" ")[0]}!` : "You're signed out"}
+            </h2>
+            <p className="text-xl text-slate-300">Thanks for visiting Ace Electronics.</p>
+          </div>
+          <div className="flex items-center gap-2 text-slate-500">
+            <div className="h-1.5 w-1.5 rounded-full bg-slate-600 animate-pulse" />
+            <p className="text-sm">Returning to start in 5 seconds…</p>
+          </div>
           <img src={logoIdleSrc} alt="Ace Electronics" className="h-12 w-auto object-contain opacity-40 mt-4" />
         </div>
       )}

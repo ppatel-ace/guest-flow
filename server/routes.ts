@@ -1545,6 +1545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         acePoc: body.acePoc || null,
         signedInAt: new Date(),
         signedOutAt: null,
+        signedOutMethod: null,
         usCitizen: extras.usCitizen,
         purpose,
         location: body.location?.trim() || null,
@@ -1580,6 +1581,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to check in" });
+    }
+  });
+
+  // Kiosk sign-out: lookup open visits by email (no full on-site roster)
+  app.post("/api/kiosk/sign-out/lookup", visitorLookupLimiter, async (req, res) => {
+    try {
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      const location = typeof req.body?.location === "string" ? req.body.location.trim() : "";
+      let open = location
+        ? await storage.getOpenVisitorsByEmail(email, location)
+        : await storage.getOpenVisitorsByEmail(email);
+      // Soft location filter: if device location yielded nothing, show all open for email
+      if (location && open.length === 0) {
+        open = await storage.getOpenVisitorsByEmail(email);
+      }
+      res.json(
+        open.map((v) => ({
+          id: v.id,
+          fullName: v.fullName,
+          email: v.email,
+          company: v.company,
+          signedInAt: v.signedInAt,
+          location: v.location,
+        })),
+      );
+    } catch (error) {
+      console.error("[kiosk/sign-out/lookup]", error);
+      res.status(500).json({ error: "Lookup failed" });
+    }
+  });
+
+  app.post("/api/kiosk/sign-out", kioskCheckinLimiter, async (req, res) => {
+    try {
+      const visitorId = typeof req.body?.visitorId === "string" ? req.body.visitorId.trim() : "";
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      const location =
+        typeof req.body?.location === "string" ? req.body.location.trim() || null : null;
+      const signOutAll = Boolean(req.body?.all);
+
+      if (visitorId) {
+        const visitor = await storage.signOutVisitor(visitorId, "kiosk");
+        if (!visitor) return res.status(404).json({ error: "Visit not found" });
+        return res.json({ signedOut: [visitor] });
+      }
+
+      if (!email || !email.includes("@")) {
+        return res.status(400).json({ error: "visitorId or valid email is required" });
+      }
+
+      if (signOutAll) {
+        // Sign out every open visit for this email (ignore location) so multi-match "all" works
+        const signedOut = await storage.signOutOpenVisitorsForEmail(email, null, "kiosk");
+        if (signedOut.length === 0) {
+          return res.status(404).json({ error: "No open visit found for this email" });
+        }
+        return res.json({ signedOut });
+      }
+
+      const open = await storage.getOpenVisitorsByEmail(email, location);
+      const fallback = open.length > 0 ? open : await storage.getOpenVisitorsByEmail(email);
+      if (fallback.length === 0) {
+        return res.status(404).json({ error: "No open visit found for this email" });
+      }
+      if (fallback.length > 1) {
+        return res.status(409).json({
+          error: "Multiple open visits — confirm which to sign out",
+          visits: fallback.map((v) => ({
+            id: v.id,
+            fullName: v.fullName,
+            email: v.email,
+            company: v.company,
+            signedInAt: v.signedInAt,
+            location: v.location,
+          })),
+        });
+      }
+      const visitor = await storage.signOutVisitor(fallback[0].id, "kiosk");
+      return res.json({ signedOut: visitor ? [visitor] : [] });
+    } catch (error) {
+      console.error("[kiosk/sign-out]", error);
+      res.status(500).json({ error: "Failed to sign out" });
     }
   });
 
@@ -1661,6 +1746,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[visitors GET]", error);
       res.status(500).json({ error: "Failed to fetch visitors" });
+    }
+  });
+
+  // Currently on site (open visits)
+  app.get("/api/visitors/on-site", requireAuth, async (req, res) => {
+    try {
+      const location =
+        typeof req.query.location === "string" ? req.query.location.trim() || null : null;
+      const onSite = await storage.getOnSiteVisitors(location);
+      res.json(onSite);
+    } catch (error) {
+      console.error("[visitors/on-site GET]", error);
+      res.status(500).json({ error: "Failed to fetch on-site visitors" });
     }
   });
 
@@ -1790,6 +1888,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[visitors/:id PATCH]", error);
       res.status(500).json({ error: "Failed to update check-in" });
+    }
+  });
+
+  app.post("/api/visitors/:id/sign-out", requireAuth, async (req, res) => {
+    try {
+      const id = String(req.params.id || "").trim();
+      if (!id) return res.status(400).json({ error: "id is required" });
+      const visitor = await storage.signOutVisitor(id, "staff");
+      if (!visitor) return res.status(404).json({ error: "Visitor not found" });
+      res.json(visitor);
+    } catch (error) {
+      console.error("[visitors/:id/sign-out]", error);
+      res.status(500).json({ error: "Failed to sign out visitor" });
     }
   });
 

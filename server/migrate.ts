@@ -93,6 +93,7 @@ async function applySchemaPatches(pool: InstanceType<typeof PgPool>): Promise<vo
     `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS documents_agreed text`,
     `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS location text`,
     `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS notes text`,
+    `ALTER TABLE gf_visitors ADD COLUMN IF NOT EXISTS signed_out_method text`,
     // Shared Hub email recipient SoT (always-notify + per-office)
     `CREATE TABLE IF NOT EXISTS public.ace_email_recipients (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

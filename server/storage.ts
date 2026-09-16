@@ -36,6 +36,9 @@ export interface MonthlyCheckIn {
 
 export type LocationCountKey = "newJersey" | "maryland" | "michigan";
 
+/** How a visitor visit was closed. */
+export type SignedOutMethod = "kiosk" | "staff" | "auto" | "recheckin";
+
 export interface VisitorAnalyticsPeriod {
   period: string;
   newJersey: number;
@@ -272,6 +275,10 @@ export interface IStorage {
   }): Promise<Visitor | undefined>;
   createVisitor(data: InsertVisitor): Promise<Visitor>;
   autoCheckoutStaleVisitors(hours: number): Promise<number>;
+  getOpenVisitorsByEmail(email: string, location?: string | null): Promise<Visitor[]>;
+  getOnSiteVisitors(location?: string | null): Promise<Visitor[]>;
+  signOutVisitor(id: string, method: SignedOutMethod): Promise<Visitor | undefined>;
+  signOutOpenVisitorsForEmail(email: string, location: string | null | undefined, method: SignedOutMethod): Promise<Visitor[]>;
   getAllVisitors(): Promise<Visitor[]>;
   getAutoCheckoutHours(): Promise<number>;
   setAutoCheckoutHours(hours: number): Promise<number>;
@@ -1193,7 +1200,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVisitor(data: InsertVisitor): Promise<Visitor> {
-    const [visitor] = await db.insert(visitors).values(data).returning();
+    const email = data.email?.trim().toLowerCase() || null;
+    if (email) {
+      await this.signOutOpenVisitorsForEmail(email, data.location ?? null, "recheckin");
+    }
+    const [visitor] = await db.insert(visitors).values({
+      ...data,
+      email,
+      signedOutAt: data.signedOutAt ?? null,
+      signedOutMethod: data.signedOutMethod ?? null,
+    }).returning();
     return visitor;
   }
 
@@ -1205,7 +1221,8 @@ export class DatabaseStorage implements IStorage {
     const safeHours = Math.max(1, Math.min(24 * 7, Math.floor(hours)));
     const result = await db.execute(sql`
       UPDATE gf_visitors
-      SET signed_out_at = signed_in_at + make_interval(hours => ${safeHours})
+      SET signed_out_at = signed_in_at + make_interval(hours => ${safeHours}),
+          signed_out_method = 'auto'
       WHERE signed_out_at IS NULL
         AND signed_in_at <= now() - make_interval(hours => ${safeHours})
       RETURNING id
@@ -1214,6 +1231,145 @@ export class DatabaseStorage implements IStorage {
       ? result
       : (result as { rows?: unknown[] }).rows ?? [];
     return rows.length;
+  }
+
+  /** Open visits for an email (optional location filter). Omits photo blobs. */
+  async getOpenVisitorsByEmail(email: string, location?: string | null): Promise<Visitor[]> {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return [];
+    const conditions = [
+      sql`LOWER(TRIM(${visitors.email})) = ${normalized}`,
+      isNull(visitors.signedOutAt),
+    ];
+    const loc = location?.trim();
+    if (loc) {
+      conditions.push(sql`LOWER(TRIM(COALESCE(${visitors.location}, ''))) = ${loc.toLowerCase()}`);
+    }
+    const rows = await db
+      .select({
+        id: visitors.id,
+        fullName: visitors.fullName,
+        email: visitors.email,
+        phoneNumber: visitors.phoneNumber,
+        company: visitors.company,
+        acePoc: visitors.acePoc,
+        signedInAt: visitors.signedInAt,
+        signedOutAt: visitors.signedOutAt,
+        signedOutMethod: visitors.signedOutMethod,
+        usCitizen: visitors.usCitizen,
+        purpose: visitors.purpose,
+        location: visitors.location,
+        source: visitors.source,
+        notes: visitors.notes,
+        documentsAgreed: visitors.documentsAgreed,
+        createdAt: visitors.createdAt,
+      })
+      .from(visitors)
+      .where(and(...conditions))
+      .orderBy(desc(visitors.signedInAt));
+    return rows.map((r) => ({ ...r, photoData: null }));
+  }
+
+  /** Currently signed-in visitors (optional location filter). Omits photo blobs. */
+  async getOnSiteVisitors(location?: string | null): Promise<Visitor[]> {
+    const conditions = [isNull(visitors.signedOutAt)];
+    const loc = location?.trim();
+    if (loc) {
+      conditions.push(sql`LOWER(TRIM(COALESCE(${visitors.location}, ''))) = ${loc.toLowerCase()}`);
+    }
+    const rows = await db
+      .select({
+        id: visitors.id,
+        fullName: visitors.fullName,
+        email: visitors.email,
+        phoneNumber: visitors.phoneNumber,
+        company: visitors.company,
+        acePoc: visitors.acePoc,
+        signedInAt: visitors.signedInAt,
+        signedOutAt: visitors.signedOutAt,
+        signedOutMethod: visitors.signedOutMethod,
+        usCitizen: visitors.usCitizen,
+        purpose: visitors.purpose,
+        location: visitors.location,
+        source: visitors.source,
+        notes: visitors.notes,
+        documentsAgreed: visitors.documentsAgreed,
+        createdAt: visitors.createdAt,
+      })
+      .from(visitors)
+      .where(and(...conditions))
+      .orderBy(desc(visitors.signedInAt));
+    return rows.map((r) => ({ ...r, photoData: null }));
+  }
+
+  /** Close one open visit. Idempotent if already signed out. */
+  async signOutVisitor(id: string, method: SignedOutMethod): Promise<Visitor | undefined> {
+    const [existing] = await db.select().from(visitors).where(eq(visitors.id, id));
+    if (!existing) return undefined;
+    if (existing.signedOutAt) {
+      return { ...existing, photoData: null };
+    }
+    const [row] = await db
+      .update(visitors)
+      .set({ signedOutAt: new Date(), signedOutMethod: method })
+      .where(and(eq(visitors.id, id), isNull(visitors.signedOutAt)))
+      .returning();
+    if (row) return { ...row, photoData: null };
+    const [again] = await db.select().from(visitors).where(eq(visitors.id, id));
+    return again ? { ...again, photoData: null } : undefined;
+  }
+
+  /** Close all open visits for an email (optional same-location filter). */
+  async signOutOpenVisitorsForEmail(
+    email: string,
+    location: string | null | undefined,
+    method: SignedOutMethod,
+  ): Promise<Visitor[]> {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return [];
+    const loc = location?.trim();
+    const result = loc
+      ? await db.execute(sql`
+          UPDATE gf_visitors
+          SET signed_out_at = now(), signed_out_method = ${method}
+          WHERE signed_out_at IS NULL
+            AND LOWER(TRIM(email)) = ${normalized}
+            AND LOWER(TRIM(COALESCE(location, ''))) = ${loc.toLowerCase()}
+          RETURNING id, full_name, email, phone_number, company, ace_poc,
+            signed_in_at, signed_out_at, signed_out_method, us_citizen, purpose,
+            location, source, notes, documents_agreed, created_at
+        `)
+      : await db.execute(sql`
+          UPDATE gf_visitors
+          SET signed_out_at = now(), signed_out_method = ${method}
+          WHERE signed_out_at IS NULL
+            AND LOWER(TRIM(email)) = ${normalized}
+          RETURNING id, full_name, email, phone_number, company, ace_poc,
+            signed_in_at, signed_out_at, signed_out_method, us_citizen, purpose,
+            location, source, notes, documents_agreed, created_at
+        `);
+    const raw: any[] = Array.isArray(result) ? result : (result as { rows?: any[] }).rows ?? [];
+    return raw.map((row) => ({
+      id: String(row.id),
+      fullName: String(row.full_name ?? row.fullName ?? ""),
+      email: row.email ?? null,
+      phoneNumber: row.phone_number ?? row.phoneNumber ?? null,
+      company: row.company ?? null,
+      acePoc: row.ace_poc ?? row.acePoc ?? null,
+      signedInAt: new Date(row.signed_in_at ?? row.signedInAt),
+      signedOutAt: (row.signed_out_at ?? row.signedOutAt)
+        ? new Date(row.signed_out_at ?? row.signedOutAt)
+        : null,
+      signedOutMethod: row.signed_out_method ?? row.signedOutMethod ?? method,
+      usCitizen: row.us_citizen ?? row.usCitizen ?? null,
+      purpose: row.purpose ?? null,
+      location: row.location ?? null,
+      source: row.source || "kiosk",
+      notes: row.notes ?? null,
+      photoData: null,
+      documentsAgreed: row.documents_agreed ?? row.documentsAgreed ?? null,
+      createdAt: new Date(row.created_at ?? row.createdAt ?? Date.now()),
+    }));
   }
 
   async getAllVisitors(): Promise<Visitor[]> {
@@ -1265,6 +1421,7 @@ export class DatabaseStorage implements IStorage {
       acePoc: visitors.acePoc,
       signedInAt: visitors.signedInAt,
       signedOutAt: visitors.signedOutAt,
+      signedOutMethod: visitors.signedOutMethod,
       usCitizen: visitors.usCitizen,
       purpose: visitors.purpose,
       location: visitors.location,
@@ -1280,9 +1437,37 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(visitors.signedInAt));
       return rows.map((r) => ({ ...r, photoData: null }));
     } catch (err) {
-      console.error("[getAllVisitors] retry without phone_number:", err);
-      const rows = await db.select(base).from(visitors).orderBy(desc(visitors.signedInAt));
-      return rows.map((r) => ({ ...r, phoneNumber: null, photoData: null }));
+      console.error("[getAllVisitors] retry without phone_number / signed_out_method:", err);
+      try {
+        const rows = await db
+          .select({
+            id: visitors.id,
+            fullName: visitors.fullName,
+            email: visitors.email,
+            company: visitors.company,
+            acePoc: visitors.acePoc,
+            signedInAt: visitors.signedInAt,
+            signedOutAt: visitors.signedOutAt,
+            usCitizen: visitors.usCitizen,
+            purpose: visitors.purpose,
+            location: visitors.location,
+            source: visitors.source,
+            notes: visitors.notes,
+            documentsAgreed: visitors.documentsAgreed,
+            createdAt: visitors.createdAt,
+          })
+          .from(visitors)
+          .orderBy(desc(visitors.signedInAt));
+        return rows.map((r) => ({
+          ...r,
+          phoneNumber: null,
+          signedOutMethod: null,
+          photoData: null,
+        }));
+      } catch (err2) {
+        console.error("[getAllVisitors] fallback select failed:", err2);
+        throw err2;
+      }
     }
   }
 
@@ -1304,6 +1489,7 @@ export class DatabaseStorage implements IStorage {
           acePoc: row.ace_poc ?? row.acePoc ?? null,
           signedInAt: new Date(row.signed_in_at ?? row.signedInAt),
           signedOutAt: signedOut ? new Date(signedOut) : null,
+          signedOutMethod: row.signed_out_method ?? row.signedOutMethod ?? null,
           usCitizen: row.us_citizen ?? row.usCitizen ?? null,
           purpose: row.purpose ?? null,
           location: row.location ?? null,

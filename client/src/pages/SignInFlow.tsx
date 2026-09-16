@@ -62,6 +62,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  LogOut,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1520,6 +1521,8 @@ function VisitorLogTab() {
   const [allParsedRows, setAllParsedRows] = useState<Record<string, string>[]>([]);
   const [skipCount, setSkipCount] = useState(0);
   const [autoCheckoutDraft, setAutoCheckoutDraft] = useState("3");
+  const [onSiteOnly, setOnSiteOnly] = useState(false);
+  const [signOutTarget, setSignOutTarget] = useState<Visitor | null>(null);
   const [visitEdit, setVisitEdit] = useState<Visitor | null>(null);
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -1563,6 +1566,25 @@ function VisitorLogTab() {
       });
     },
     onError: () => toast({ title: "Failed to save auto checkout", variant: "destructive" }),
+  });
+
+  const signOutMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/visitors/${id}/sign-out`);
+      return res.json() as Promise<Visitor>;
+    },
+    onSuccess: (visitor) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors"] });
+      setSignOutTarget(null);
+      if (selected?.id === visitor.id) {
+        setSelected({ ...selected, signedOutAt: visitor.signedOutAt, signedOutMethod: visitor.signedOutMethod });
+      }
+      toast({
+        title: "Signed out",
+        description: `${visitor.fullName} has been signed out.`,
+      });
+    },
+    onError: () => toast({ title: "Failed to sign out", variant: "destructive" }),
   });
 
   const { data: missingUsCitizenData } = useQuery<{ count: number }>({
@@ -1679,6 +1701,7 @@ function VisitorLogTab() {
   }, [allVisitors]);
 
   const filtered = allVisitors.filter((v) => {
+    if (onSiteOnly && v.signedOutAt) return false;
     const q = search.toLowerCase();
     return (
       v.fullName.toLowerCase().includes(q) ||
@@ -1693,6 +1716,12 @@ function VisitorLogTab() {
   });
 
   const filteredGrouped = groupedVisitors.filter((g) => {
+    if (onSiteOnly) {
+      const hasOpen = allVisitors.some(
+        (v) => visitorLookupKey(v) === g.lookupKey && !v.signedOutAt,
+      );
+      if (!hasOpen) return false;
+    }
     const q = search.toLowerCase();
     return (
       g.fullName.toLowerCase().includes(q) ||
@@ -1726,7 +1755,7 @@ function VisitorLogTab() {
     setExportingCsv(true);
     try {
       const Papa = (await import("papaparse")).default;
-      const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Duration", "US Citizen", "Purpose", "Location", "Source"];
+        const headers = ["Full Name", "Email", "Company", "ACE POC", "Signed In", "Signed Out", "Duration", "Sign-out method", "US Citizen", "Purpose", "Location", "Source"];
       const rows = allVisitors.map((v) => [
         v.fullName,
         v.email ?? "",
@@ -1735,6 +1764,7 @@ function VisitorLogTab() {
         new Date(v.signedInAt).toLocaleString(),
         v.signedOutAt ? new Date(v.signedOutAt).toLocaleString() : "",
         formatDuration(v.signedInAt, v.signedOutAt),
+        v.signedOutMethod ?? "",
         v.usCitizen ?? "",
         v.purpose ?? "",
         v.location ?? "",
@@ -1857,6 +1887,16 @@ function VisitorLogTab() {
             data-testid="input-visitor-search"
           />
         </div>
+        <Button
+          size="sm"
+          variant={onSiteOnly ? "default" : "outline"}
+          onClick={() => setOnSiteOnly((v) => !v)}
+          data-testid="button-filter-on-site"
+          title="Show only visitors still signed in"
+        >
+          <UserCheck className="h-3.5 w-3.5 mr-1.5" />
+          Currently on site
+        </Button>
         {/* View mode toggle */}
         <div className="flex gap-1 rounded-md border p-0.5 bg-muted/30">
           <button
@@ -1939,7 +1979,7 @@ function VisitorLogTab() {
           <div className="py-12 text-center border border-dashed rounded-md space-y-2">
             <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
             <p className="text-sm text-muted-foreground">
-              {search ? "No visitors match your search." : "No visitors yet."}
+              {search || onSiteOnly ? "No visitors match your filters." : "No visitors yet."}
             </p>
           </div>
         ) : (
@@ -1994,14 +2034,16 @@ function VisitorLogTab() {
         <div className="py-12 text-center border border-dashed rounded-md space-y-2">
           <UserCheck className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">
-            {search ? "No visitors match your search." : "No kiosk check-ins yet."}
+            {search || onSiteOnly
+              ? "No visitors match your filters."
+              : "No kiosk check-ins yet."}
           </p>
         </div>
       ) : (
         /* ── By-visit: individual rows ── */
         <div className="rounded-md border overflow-x-auto">
           <div className="min-w-[1100px]">
-          <div className="hidden lg:grid grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px_2.25rem] gap-x-2 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
+          <div className="hidden lg:grid grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px_4.5rem] gap-x-2 px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground items-center">
             <span />
             <span>Name / Email</span>
             <span>Company</span>
@@ -2013,7 +2055,7 @@ function VisitorLogTab() {
             <span>Signed Out</span>
             <span>Duration</span>
             <span>Source</span>
-            <span className="sr-only">Edit</span>
+            <span className="sr-only">Actions</span>
           </div>
           <div className="divide-y">
             {filtered.map((visitor) => (
@@ -2021,7 +2063,7 @@ function VisitorLogTab() {
                 key={visitor.id}
                 role="button"
                 tabIndex={0}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px_2.25rem] lg:gap-x-2 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer"
+                className="w-full text-left px-4 py-3 flex items-center gap-3 lg:grid lg:grid-cols-[2rem_minmax(9rem,1.3fr)_minmax(6rem,1fr)_minmax(6rem,0.9fr)_70px_minmax(5rem,0.8fr)_72px_72px_72px_56px_64px_4.5rem] lg:gap-x-2 lg:items-center hover:bg-muted/30 transition-colors cursor-pointer"
                 onClick={() => setSelected(visitor)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(visitor); } }}
                 data-testid={`row-visitor-${visitor.id}`}
@@ -2058,17 +2100,32 @@ function VisitorLogTab() {
                   {formatDuration(visitor.signedInAt, visitor.signedOutAt)}
                 </div>
                 <div className="shrink-0">{sourceBadge(visitor.source)}</div>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 shrink-0"
-                  title="Edit check-in"
-                  data-testid={`button-edit-visit-${visitor.id}`}
-                  onClick={(e) => openVisitEdit(visitor, e)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex items-center justify-end gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {!visitor.signedOutAt && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      title="Sign out"
+                      data-testid={`button-sign-out-visit-${visitor.id}`}
+                      onClick={() => setSignOutTarget(visitor)}
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    title="Edit check-in"
+                    data-testid={`button-edit-visit-${visitor.id}`}
+                    onClick={(e) => openVisitEdit(visitor, e)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -2084,15 +2141,28 @@ function VisitorLogTab() {
               <SheetHeader className="pb-4">
                 <div className="flex items-start justify-between gap-3 pr-8">
                   <SheetTitle>Visitor Profile</SheetTitle>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openVisitEdit(selected)}
-                    data-testid="button-edit-selected-visit"
-                  >
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                    Edit check-in
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {!selected.signedOutAt && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSignOutTarget(selected)}
+                        data-testid="button-sign-out-selected-visit"
+                      >
+                        <LogOut className="h-3.5 w-3.5 mr-1.5" />
+                        Sign out
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openVisitEdit(selected)}
+                      data-testid="button-edit-selected-visit"
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                      Edit check-in
+                    </Button>
+                  </div>
                 </div>
               </SheetHeader>
 
@@ -2426,6 +2496,34 @@ function VisitorLogTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={signOutTarget !== null} onOpenChange={(open) => !open && setSignOutTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out visitor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {signOutTarget
+                ? `Sign out ${signOutTarget.fullName}? This sets Signed Out to now and updates Duration.`
+                : "Sign out this visitor?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signOutMutation.isPending} data-testid="button-cancel-sign-out">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={signOutMutation.isPending || !signOutTarget}
+              onClick={(e) => {
+                e.preventDefault();
+                if (signOutTarget) signOutMutation.mutate(signOutTarget.id);
+              }}
+              data-testid="button-confirm-sign-out"
+            >
+              {signOutMutation.isPending ? "Signing out…" : "Sign out"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Envoy import dialog */}
       <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) resetImport(); }}>

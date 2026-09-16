@@ -258,6 +258,8 @@ export const visitors = pgTable("gf_visitors", {
   acePoc: text("ace_poc"),
   signedInAt: timestamp("signed_in_at").notNull().default(sql`now()`),
   signedOutAt: timestamp("signed_out_at"),
+  /** How the visit closed: kiosk | staff | auto | recheckin (null if still open or legacy). */
+  signedOutMethod: text("signed_out_method"),
   usCitizen: text("us_citizen"),
   purpose: text("purpose"),
   location: text("location"),
