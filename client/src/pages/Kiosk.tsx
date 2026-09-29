@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight, LogOut, LogIn } from "lucide-react";
+import { CheckCircle, Camera, ChevronRight, Users, X, ArrowRight, LogOut, LogIn, Search, Mail } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { FormField, AcePoc } from "@shared/schema";
@@ -69,6 +69,7 @@ type KioskStep =
   | "documents"
   | "photo"
   | "thanks"
+  | "signOutPick"
   | "signOutEmail"
   | "signOutConfirm"
   | "signOutThanks";
@@ -78,6 +79,14 @@ interface OpenVisitMatch {
   id: string;
   fullName: string;
   email: string | null;
+  company: string | null;
+  signedInAt: string;
+  location: string | null;
+}
+
+interface RosterEntry {
+  id: string;
+  fullName: string;
   company: string | null;
   signedInAt: string;
   location: string | null;
@@ -167,6 +176,10 @@ export default function Kiosk() {
   const [signOutLookingUp, setSignOutLookingUp] = useState(false);
   const [signOutSubmitting, setSignOutSubmitting] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [signingOutId, setSigningOutId] = useState<string | null>(null);
 
   // Two-stage form state
   const [formStage, setFormStage] = useState<FormStage>("email");
@@ -343,6 +356,10 @@ export default function Kiosk() {
     setSignOutLookingUp(false);
     setSignOutSubmitting(false);
     setSignOutError(null);
+    setRoster([]);
+    setRosterLoading(false);
+    setRosterSearch("");
+    setSigningOutId(null);
   }, []);
 
   const startWarningCountdown = useCallback(() => {
@@ -438,14 +455,61 @@ export default function Kiosk() {
     sendHeartbeat(deviceId.current, "active");
   };
 
-  const startSignOutFlow = () => {
+  const startSignOutFlow = async () => {
     setSignOutEmail("");
     setSignOutMatches([]);
     setSignOutSelectedId(null);
     setSignOutError(null);
-    setStep("signOutEmail");
+    setRosterSearch("");
+    setRoster([]);
+    setStep("signOutPick");
     sendHeartbeat(deviceId.current, "active");
+    setRosterLoading(true);
+    try {
+      const loc = deviceDefaultLocation.current || "";
+      const res = await fetch(
+        `/api/kiosk/sign-out/roster${loc ? `?location=${encodeURIComponent(loc)}` : ""}`,
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Could not load signed-in visitors");
+      }
+      setRoster((await res.json()) as RosterEntry[]);
+    } catch (err) {
+      setSignOutError(err instanceof Error ? err.message : "Could not load signed-in visitors");
+    } finally {
+      setRosterLoading(false);
+    }
   };
+
+  const signOutByName = async (entry: RosterEntry) => {
+    if (signingOutId) return;
+    setSigningOutId(entry.id);
+    setSignOutError(null);
+    try {
+      const res = await fetch("/api/kiosk/sign-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId: entry.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Sign out failed");
+      const signedOut = (data.signedOut ?? []) as Array<{ fullName?: string }>;
+      setVisitorName(signedOut[0]?.fullName || entry.fullName);
+      setStep("signOutThanks");
+      setTimeout(() => resetToIdle(), 5000);
+    } catch (err) {
+      setSignOutError(err instanceof Error ? err.message : "Sign out failed");
+    } finally {
+      setSigningOutId(null);
+    }
+  };
+
+  const filteredRoster = rosterSearch.trim()
+    ? roster.filter((r) =>
+        `${r.fullName} ${r.company ?? ""}`.toLowerCase().includes(rosterSearch.trim().toLowerCase()),
+      )
+    : roster;
 
   const lookupSignOutVisits = async () => {
     const trimmed = signOutEmail.trim().toLowerCase();
@@ -794,7 +858,7 @@ export default function Kiosk() {
               size="lg"
               variant="outline"
               className="h-20 flex-1 text-xl font-semibold rounded-2xl border-2 border-slate-300 bg-white hover:bg-slate-50 text-slate-800"
-              onClick={startSignOutFlow}
+              onClick={() => void startSignOutFlow()}
               data-testid="button-kiosk-sign-out"
             >
               <LogOut className="h-6 w-6 mr-3" />
@@ -1218,6 +1282,100 @@ export default function Kiosk() {
           </div>
 
           <img src={logoIdleSrc} alt="Ace Electronics" className="h-12 w-auto object-contain opacity-40 mt-4" />
+        </div>
+      )}
+
+      {/* ── Sign Out: Tap your name ── */}
+      {step === "signOutPick" && (
+        <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden" data-testid="screen-kiosk-sign-out-pick">
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={logoIdleSrc} alt="Ace Electronics" className="h-9 w-auto object-contain" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Ace Electronics</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Visitor Sign-Out</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={resetToIdle} data-testid="button-kiosk-sign-out-pick-cancel" className="text-slate-500">
+              <X className="h-4 w-4 mr-1.5" /> Cancel
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Sign Out</h1>
+                <p className="text-slate-500 mt-1">Tap your name to sign out.</p>
+              </div>
+              {roster.length > 6 && (
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <Input
+                    className="h-13 text-base rounded-xl pl-12"
+                    value={rosterSearch}
+                    onChange={(e) => setRosterSearch(e.target.value)}
+                    placeholder="Search your name"
+                    data-testid="input-kiosk-sign-out-search"
+                  />
+                </div>
+              )}
+              {rosterLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="h-10 w-10 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+                </div>
+              ) : filteredRoster.length === 0 ? (
+                <p className="text-center text-slate-500 py-8" data-testid="text-kiosk-sign-out-empty">
+                  {roster.length === 0 ? "No one is currently signed in." : "No names match your search."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {filteredRoster.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      disabled={!!signingOutId}
+                      onClick={() => void signOutByName(r)}
+                      className="w-full text-left rounded-2xl border-2 border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50 active:bg-blue-100 p-5 transition-colors disabled:opacity-60"
+                      data-testid={`button-kiosk-sign-out-name-${r.id}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 text-xl truncate">{r.fullName}</p>
+                          {r.company && <p className="text-slate-500 text-sm truncate">{r.company}</p>}
+                          <p className="text-slate-400 text-sm mt-1">
+                            Signed in {new Date(r.signedInAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                          </p>
+                        </div>
+                        {signingOutId === r.id ? (
+                          <div className="h-6 w-6 shrink-0 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+                        ) : (
+                          <LogOut className="h-6 w-6 shrink-0 text-slate-400" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {signOutError && (
+                <p className="text-sm text-red-600 text-center" data-testid="text-kiosk-sign-out-pick-error">
+                  {signOutError}
+                </p>
+              )}
+              <div className="text-center pt-2">
+                <Button
+                  variant="ghost"
+                  className="text-slate-500"
+                  onClick={() => {
+                    setSignOutError(null);
+                    setStep("signOutEmail");
+                  }}
+                  data-testid="button-kiosk-sign-out-use-email"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Don't see your name? Sign out with email
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -1584,7 +1584,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Kiosk sign-out: lookup open visits by email (no full on-site roster)
+  // Kiosk sign-out roster: open visits signed in within the auto-checkout window.
+  // Public endpoint — return only what the name tiles need (no email/phone/photo).
+  app.get("/api/kiosk/sign-out/roster", visitorLookupLimiter, async (req, res) => {
+    try {
+      const location = typeof req.query.location === "string" ? req.query.location.trim() : "";
+      const hours = await storage.getAutoCheckoutHours();
+      const cutoff = Date.now() - hours * 60 * 60 * 1000;
+      const open = await storage.getOnSiteVisitors(location || null);
+      res.json(
+        open
+          .filter((v) => new Date(v.signedInAt).getTime() >= cutoff)
+          .map((v) => ({
+            id: v.id,
+            fullName: v.fullName,
+            company: v.company,
+            signedInAt: v.signedInAt,
+            location: v.location,
+          })),
+      );
+    } catch (error) {
+      console.error("[kiosk/sign-out/roster]", error);
+      res.status(500).json({ error: "Failed to load signed-in visitors" });
+    }
+  });
+
+  // Kiosk sign-out: lookup open visits by email (fallback when name isn't listed)
   app.post("/api/kiosk/sign-out/lookup", visitorLookupLimiter, async (req, res) => {
     try {
       const email = String(req.body?.email ?? "").trim().toLowerCase();
