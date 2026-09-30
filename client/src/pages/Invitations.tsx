@@ -12,6 +12,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { trackFeature } from "@/lib/usageBeacon";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCustomerSchema } from "@shared/schema";
@@ -440,6 +441,7 @@ export default function Invitations() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    trackFeature("invitations.download_template", "Download invitation import template");
 
     toast({
       title: "Template Downloaded",
@@ -464,6 +466,7 @@ export default function Invitations() {
 
     const fileName = `invitations-${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(workbook, fileName);
+    trackFeature("invitations.export_excel", "Export invitations Excel", { rows: customers.length });
 
     toast({
       title: "Export Successful",

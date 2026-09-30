@@ -249,7 +249,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (payload) {
       return res.json({
         authenticated: true,
-        user: { email: payload.email, name: payload.name, groups: payload.groups ?? [] },
+        user: {
+          id: payload.sub,
+          email: payload.email,
+          name: payload.name,
+          employeeId: payload.employeeId ?? null,
+          groups: payload.groups ?? [],
+        },
       });
     }
     // 2. Legacy session

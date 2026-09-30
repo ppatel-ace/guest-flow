@@ -24,6 +24,9 @@ services:
       SSO_LOGIN_URL: ${SSO_LOGIN_URL:-https://sso.aceelectronics.com}
       APP_DOMAIN: ${APP_DOMAIN:-aceelectronics.com}
       SSO_ENFORCE_GROUPS: ${SSO_ENFORCE_GROUPS:-false}
+      # Hub session activity audit (ADR-031) — server-side record_change ingest
+      PLATFORM_INGEST_URL: ${PLATFORM_INGEST_URL:-}
+      PLATFORM_AUDIT_INGEST_SECRET: ${PLATFORM_AUDIT_INGEST_SECRET:-}
       # Microsoft Graph API — check-in email notifications (GCC High)
       EMAIL_FROM: ${EMAIL_FROM:-no-reply@aceelectronics.com}
       EMAIL_TENANT_ID: ${EMAIL_TENANT_ID:-}

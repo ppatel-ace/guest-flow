@@ -23,6 +23,7 @@ import {
 import type { Lead, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { trackFeature } from "@/lib/usageBeacon";
 
 const ACE_POC_OPTIONS = [
   "Jerry Parker", "Larry Pomasan", "Nish Patel",
@@ -342,6 +343,7 @@ export default function Export() {
     const date = new Date().toISOString().slice(0, 10);
     const eventSlug = selectedEvent === "all" ? "all-events" : selectedEvent.replace(/\s+/g, "-");
     XLSX.writeFile(wb, `event-data-${eventSlug}-${date}.xlsx`);
+    trackFeature("events.export_excel", "Export event data Excel", { event: selectedEvent });
     setDownloaded(true);
   }
 

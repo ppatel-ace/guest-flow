@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -29,7 +30,19 @@ import { AceAppVersionFooter } from "@/components/AceAppVersionFooter";
 import { AceUsageBeacon } from "@/components/AceUsageBeacon";
 
 function AdminLayout() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const userRef = useRef(user);
+  userRef.current = user;
+  const getUsageIdentity = useCallback(() => {
+    const u = userRef.current;
+    if (!u?.email) return null;
+    return {
+      email: u.email,
+      displayName: u.name ?? null,
+      ssoUserId: u.id ?? null,
+      employeeId: u.employeeId ?? null,
+    };
+  }, []);
 
   const style = {
     "--sidebar-width": "17.5rem",
@@ -39,7 +52,7 @@ function AdminLayout() {
   return (
     <ProtectedRoute>
       <>
-        <AceUsageBeacon appSlug="guestflow" />
+        <AceUsageBeacon appSlug="guestflow" getIdentity={getUsageIdentity} />
         <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
         <div className="flex h-screen w-full bg-background">
           <AppSidebar />

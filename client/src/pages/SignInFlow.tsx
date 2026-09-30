@@ -85,6 +85,7 @@ import type { FormField, Customer, Lead, Visitor, AcePoc } from "@shared/schema"
 import { OFFICE_LOCATIONS, type OfficeLocation } from "@shared/locations";
 import { PURPOSE_OF_VISIT_OPTIONS } from "@shared/visitorFields";
 import { printVisitorLabel } from "@/lib/brotherPrint";
+import { trackFeature } from "@/lib/usageBeacon";
 import {
   Select,
   SelectContent,
@@ -1780,6 +1781,7 @@ function VisitorLogTab() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      trackFeature("visitors.export_csv", "Export visitor log CSV", { rows: allVisitors.length });
       toast({ title: "Exported", description: `${allVisitors.length} visitor log${allVisitors.length !== 1 ? "s" : ""} exported to CSV.` });
     } catch (err: any) {
       toast({ title: "Export failed", description: err?.message ?? "Unknown error", variant: "destructive" });

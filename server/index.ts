@@ -9,6 +9,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
 import { checkConnection } from "./db";
 import { startPrinterSync } from "./printer-sync";
+import { createActivityAudit } from "./activityAudit";
+import type { AceAuthRequest } from "./aceSso";
 
 // Extend Express session
 declare module "express-session" {
@@ -74,6 +76,32 @@ app.use(session({
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
   }
+}));
+
+// Session activity audit (ADR-031). Identity comes only from the verified ACE SSO JWT
+// (req.aceSsoUser, set by requireAuth) so it matches the ace-auth login event; legacy
+// password sessions and anonymous kiosk/visitor traffic carry no identity and are skipped.
+const AUDIT_SKIP = [
+  /^\/api\/kiosk\/(register|heartbeat|checkin|sign-out)/,
+  /^\/api\/guest-(checkin|register)/,
+  /^\/api\/check-in\//,
+  /^\/api\/customers\/[^/]+\/check-in/,
+  /^\/api\/printers\/[^/]+\/print/,
+  /^\/api\/internal\//,
+];
+app.use(createActivityAudit({
+  appSlug: "guestflow",
+  getIdentity: (req) => {
+    const user = req.aceSsoUser as AceAuthRequest["aceSsoUser"];
+    if (!user) return null;
+    return {
+      email: user.email,
+      displayName: user.name,
+      ssoUserId: user.sub,
+      employeeId: user.employeeId ?? null,
+    };
+  },
+  skip: (_req, apiPath) => AUDIT_SKIP.some((re) => re.test(apiPath)),
 }));
 
 app.use((req, res, next) => {

@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface AuthUser {
+  id?: string;
+  employeeId?: string | null;
   email?: string;
   name?: string;
   username?: string;
