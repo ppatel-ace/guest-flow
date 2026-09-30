@@ -9,8 +9,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import { runMigrations } from "./migrate";
 import { checkConnection } from "./db";
 import { startPrinterSync } from "./printer-sync";
-import { createActivityAudit } from "./activityAudit";
-import type { AceAuthRequest } from "./aceSso";
+import { createActivityAudit, createUsageRelay, type UsageRelayOptions } from "./activityAudit";
+import { tryAceSsoFromRequest, type AceAuthRequest } from "./aceSso";
 
 // Extend Express session
 declare module "express-session" {
@@ -89,20 +89,31 @@ const AUDIT_SKIP = [
   /^\/api\/printers\/[^/]+\/print/,
   /^\/api\/internal\//,
 ];
+const ssoAuditIdentity: UsageRelayOptions["getIdentity"] = (req) => {
+  const user = req.aceSsoUser as AceAuthRequest["aceSsoUser"];
+  if (!user) return null;
+  return {
+    email: user.email,
+    displayName: user.name,
+    ssoUserId: user.sub,
+    employeeId: user.employeeId ?? null,
+  };
+};
 app.use(createActivityAudit({
   appSlug: "guestflow",
-  getIdentity: (req) => {
-    const user = req.aceSsoUser as AceAuthRequest["aceSsoUser"];
-    if (!user) return null;
-    return {
-      email: user.email,
-      displayName: user.name,
-      ssoUserId: user.sub,
-      employeeId: user.employeeId ?? null,
-    };
-  },
+  getIdentity: ssoAuditIdentity,
   skip: (_req, apiPath) => AUDIT_SKIP.some((re) => re.test(apiPath)),
 }));
+
+// Browser page views (AceUsageBeacon mode "relay"); identity comes from the verified ace_sso cookie only.
+app.post(
+  "/api/usage-events",
+  (req: Request, res: Response, next: NextFunction) => {
+    tryAceSsoFromRequest(req as AceAuthRequest, res);
+    next();
+  },
+  createUsageRelay({ appSlug: "guestflow", getIdentity: ssoAuditIdentity }),
+);
 
 app.use((req, res, next) => {
   const start = Date.now();
