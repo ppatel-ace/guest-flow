@@ -1,6 +1,7 @@
 import type { Express, RequestHandler } from "express";
 import { checkInRsvpAttendee, listRsvpAttendees } from "./rsvpStorage";
-import { RSVP_EVENT_NAME } from "./rsvpRoster";
+import { RSVP_EVENT_KEY, RSVP_EVENT_NAME } from "./rsvpRoster";
+import { createRsvpAttendanceCsv } from "./rsvpExport";
 
 export function registerRsvpRoutes(app: Express, requireAuth: RequestHandler) {
   // Authentication precedes all roster reads or initialization.
@@ -14,6 +15,24 @@ export function registerRsvpRoutes(app: Express, requireAuth: RequestHandler) {
     } catch (error) {
       console.error("[rsvp] Roster retrieval failed", error);
       res.status(503).json({ error: "Unable to load the RSVP roster. Please try again." });
+    }
+  });
+  app.get("/api/rsvp/attendance.csv", requireAuth, async (req, res) => {
+    const scope = req.query.scope ?? "all";
+    if (scope !== "all" && scope !== "arrivals") {
+      return res.status(400).json({ error: "Choose all attendees or arrivals only for the attendance export." });
+    }
+    try {
+      // Query persisted attendance, never the browser's cached/search-filtered roster.
+      const attendees = await listRsvpAttendees(scope === "arrivals");
+      const csv = createRsvpAttendanceCsv(attendees);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${RSVP_EVENT_KEY}-attendance-${scope}.csv"`);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.send(csv);
+    } catch (error) {
+      console.error("[rsvp] Attendance export failed", error);
+      res.status(503).json({ error: "Unable to download RSVP attendance. Please try again." });
     }
   });
   app.post("/api/rsvp/attendees/:id/check-in", requireAuth, async (req, res) => {

@@ -2,3 +2,4 @@
 - [drizzle.config.ts vs server/db.ts DB mismatch](drizzle-config-db-mismatch.md) — db:push hits Replit local DB; app uses Supabase. Use scripts/add-missing-columns.ts pattern for direct Supabase schema changes.
 - [Microsoft PKCE SSO GCC High](ms-pkce-sso.md) — PKCE public-client flow for Entra ID GCC High; no client_secret; id_token decoded without sig verification (server-side exchange over HTTPS).
 - [RSVP check-in scope](rsvp-check-in-scope.md) — AUSA roster is staff-only and includes all named entries, not just those marked accepted.
+- [Shared database connection budget](shared-db-connection-budget.md) — concurrent tests and running services compete for the Supabase session pool.

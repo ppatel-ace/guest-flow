@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Download,
   Loader2,
   RefreshCw,
   Search,
@@ -67,6 +68,9 @@ export default function RsvpCheckIn() {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [sessionExpired, setSessionExpired] = useState(false);
   const [notice, setNotice] = useState("");
+  const [exportScope, setExportScope] = useState<"all" | "arrivals">("all");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const rosterQuery = useQuery<RsvpResponse>({
@@ -111,6 +115,42 @@ export default function RsvpCheckIn() {
   const checkedInCount = attendees.filter((attendee) => attendee.checkedInAt).length;
   const authorizationExpired =
     sessionExpired || isUnauthorized(rosterQuery.error);
+
+  const downloadAttendance = async () => {
+    if (authorizationExpired || exporting) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const response = await fetch(`/api/rsvp/attendance.csv?scope=${exportScope}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          setSessionExpired(true);
+          throw new Error("Your staff session has expired. Sign in again to download attendance.");
+        }
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.error || "Unable to download RSVP attendance. Please try again.");
+      }
+      if (!response.headers.get("content-type")?.startsWith("text/csv")) {
+        throw new Error("The server did not return an attendance CSV. Please try again.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ausa-2026-attendance-${exportScope}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Unable to download RSVP attendance. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const checkIn = async (attendee: Attendee) => {
     if (authorizationExpired || attendee.checkedInAt || pendingIds.has(attendee.id)) return;
@@ -227,6 +267,32 @@ export default function RsvpCheckIn() {
           </div>
         </div>
       </header>
+
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <label htmlFor="rsvp-export-scope" className="mb-2 block text-sm font-semibold">Download attendance</label>
+            <select
+              id="rsvp-export-scope"
+              value={exportScope}
+              onChange={(event) => setExportScope(event.target.value as "all" | "arrivals")}
+              disabled={exporting || authorizationExpired}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            >
+              <option value="all">All attendees</option>
+              <option value="arrivals">Arrivals only</option>
+            </select>
+          </div>
+          <Button onClick={downloadAttendance} disabled={exporting || authorizationExpired || initialLoading || initialError} variant="outline">
+            {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            {exporting ? "Preparing CSV…" : "Download CSV"}
+          </Button>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Exports saved attendance regardless of name search. First arrivals use UTC. Source plus-one counts are metadata, not checked-in guest counts. Keep the downloaded roster private.
+        </p>
+        {exportError ? <p role="alert" className="mt-2 text-sm text-destructive">{exportError}</p> : null}
+      </div>
 
       {authorizationExpired ? (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">

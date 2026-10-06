@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "./db";
 import { rsvpAttendees } from "@shared/schema";
 import { loadRsvpSeed, RSVP_EVENT_KEY } from "./rsvpRoster";
@@ -33,10 +33,13 @@ export function initializeRsvpRoster(): Promise<void> {
   return initialization;
 }
 
-export async function listRsvpAttendees() {
+export async function listRsvpAttendees(arrivalsOnly = false) {
   await initializeRsvpRoster();
   return db.select().from(rsvpAttendees)
-    .where(eq(rsvpAttendees.eventKey, RSVP_EVENT_KEY))
+    .where(and(
+      eq(rsvpAttendees.eventKey, RSVP_EVENT_KEY),
+      arrivalsOnly ? isNotNull(rsvpAttendees.checkedInAt) : undefined,
+    ))
     .orderBy(sql`lower(${rsvpAttendees.lastName})`, sql`lower(${rsvpAttendees.firstName})`);
 }
 
