@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -29,8 +29,11 @@ import Kiosk from "@/pages/Kiosk";
 import NotFound from "@/pages/not-found";
 import { AceAppVersionFooter } from "@/components/AceAppVersionFooter";
 import { AceUsageBeacon } from "@/components/AceUsageBeacon";
+import { RsvpFullscreenContext, useRsvpFullscreenMode } from "@/components/RsvpFullscreen";
 
 function AdminLayout() {
+  const [location] = useLocation();
+  const fullscreen = useRsvpFullscreenMode(location === "/rsvp-check-in");
   const { logout, user } = useAuth();
   const userRef = useRef(user);
   userRef.current = user;
@@ -52,13 +55,13 @@ function AdminLayout() {
 
   return (
     <ProtectedRoute>
-      <>
+      <RsvpFullscreenContext.Provider value={fullscreen}>
         <AceUsageBeacon appSlug="guestflow" getIdentity={getUsageIdentity} />
         <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
         <div className="flex h-screen w-full bg-background">
-          <AppSidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <header className="flex items-center justify-between gap-4 border-b border-border/80 bg-background/80 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+          {!fullscreen.expanded && <AppSidebar />}
+          <div className="flex min-w-0 flex-col flex-1 overflow-hidden">
+            <header hidden={fullscreen.expanded} className={`${fullscreen.expanded ? "hidden" : "flex"} items-center justify-between gap-4 border-b border-border/80 bg-background/80 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70`}>
               <div className="flex items-center gap-3 min-w-0">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
                 <div className="hidden sm:block h-5 w-px bg-border shrink-0" aria-hidden />
@@ -77,8 +80,8 @@ function AdminLayout() {
                 <ThemeToggle />
               </div>
             </header>
-            <main className="flex-1 overflow-auto p-6 md:p-8">
-              <div className="mx-auto max-w-7xl min-h-full flex flex-col">
+            <main data-testid="admin-main" className={`flex-1 overflow-auto ${fullscreen.expanded ? "p-4 md:p-6" : "p-6 md:p-8"}`}>
+              <div className={`mx-auto min-h-full flex flex-col ${fullscreen.expanded ? "w-full" : "max-w-7xl"}`}>
                 <div className="flex-1">
                   <Switch>
                     <Route path="/" component={Dashboard} />
@@ -95,6 +98,7 @@ function AdminLayout() {
                   </Switch>
                 </div>
                 <footer
+                  hidden={fullscreen.expanded}
                   className="mt-10 pt-4 border-t border-border/60 text-center text-xs text-muted-foreground"
                   data-testid="app-version-footer"
                 >
@@ -109,7 +113,7 @@ function AdminLayout() {
           </div>
         </div>
       </SidebarProvider>
-      </>
+      </RsvpFullscreenContext.Provider>
     </ProtectedRoute>
   );
 }

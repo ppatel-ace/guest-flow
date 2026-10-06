@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useRsvpFullscreen } from "@/components/RsvpFullscreen";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -13,6 +14,8 @@ import {
   ChevronDown,
   Clock3,
   Download,
+  Maximize2,
+  Minimize2,
   Loader2,
   RefreshCw,
   Search,
@@ -64,6 +67,7 @@ function initials(attendee: Attendee) {
 }
 
 export default function RsvpCheckIn() {
+  const { expanded, toggle } = useRsvpFullscreen();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -78,6 +82,8 @@ export default function RsvpCheckIn() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(blurTimer.current), []);
 
   const rosterQuery = useQuery<RsvpResponse>({
     queryKey: rosterQueryKey,
@@ -243,7 +249,12 @@ export default function RsvpCheckIn() {
   const dropdownOpen = focused && !!normalizedSearch && !selectedId;
 
   return (
-    <section className="space-y-6" data-testid="page-rsvp-check-in">
+    <section
+      className={expanded
+        ? "space-y-5 pb-6"
+        : "space-y-6"}
+      data-testid="page-rsvp-check-in"
+    >
       <AlertDialog
         open={!!undoTarget}
         onOpenChange={(open) => {
@@ -276,13 +287,31 @@ export default function RsvpCheckIn() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {expanded ? (
+        <div className="sticky -top-4 z-40 flex min-h-14 items-center justify-between gap-3 border-b border-border/80 bg-background/95 px-2 py-2 backdrop-blur-md md:-top-6">
+          <div className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary sm:text-sm">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+            <span className="truncate">GuestFlow · Staff desk</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={toggle}
+            aria-label="Exit full screen"
+            className="min-h-11 shrink-0 gap-2 px-4"
+          >
+            <Minimize2 className="h-4 w-4" aria-hidden />
+            <span>Exit full screen</span>
+          </Button>
+        </div>
+      ) : null}
       <header className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-6 shadow-sm sm:px-8 sm:py-8">
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 opacity-70 sm:block" aria-hidden>
           <div className="absolute -right-10 -top-24 h-64 w-64 rounded-full border-[36px] border-primary/5" />
           <div className="absolute right-12 top-8 h-28 w-28 rounded-full border border-primary/10" />
           <div className="absolute right-28 top-20 h-2 w-2 rounded-full bg-amber-500/60" />
         </div>
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className={`relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between ${expanded ? "lg:gap-10" : ""}`}>
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -296,16 +325,30 @@ export default function RsvpCheckIn() {
               Find a guest, confirm their arrival.
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-xl border border-border/80 bg-background/75 px-4 py-3">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-              <UsersRound className="h-5 w-5" aria-hidden />
-            </div>
-            <div className="min-w-24">
-              <div className="font-mono text-xl font-semibold leading-none tabular-nums">
-                {checkedInCount}<span className="px-1 text-muted-foreground">/</span>{attendees.length || "—"}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className={`flex items-center gap-3 rounded-xl border border-border/80 bg-background/75 px-4 py-3 ${expanded ? "min-h-[76px]" : ""}`}>
+              <div className={`grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary ${expanded ? "sm:h-12 sm:w-12" : ""}`}>
+                <UsersRound className="h-5 w-5" aria-hidden />
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">arrived so far</div>
+              <div className="min-w-24">
+                <div className={`font-mono text-xl font-semibold leading-none tabular-nums ${expanded ? "sm:text-2xl" : ""}`}>
+                  {checkedInCount}<span className="px-1 text-muted-foreground">/</span>{attendees.length || "—"}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">arrived so far</div>
+              </div>
             </div>
+            {!expanded ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={toggle}
+                aria-label="Full screen"
+                className="min-h-11 gap-2"
+              >
+                <Maximize2 className="h-4 w-4" aria-hidden />
+                <span>Full screen</span>
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -319,13 +362,13 @@ export default function RsvpCheckIn() {
               value={exportScope}
               onChange={(event) => setExportScope(event.target.value as "all" | "arrivals")}
               disabled={exporting || authorizationExpired}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              className={`${expanded ? "h-12" : "h-10"} rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60`}
             >
               <option value="all">All attendees</option>
               <option value="arrivals">Arrivals only</option>
             </select>
           </div>
-          <Button onClick={downloadAttendance} disabled={exporting || authorizationExpired || initialLoading || initialError} variant="outline">
+          <Button className={expanded ? "min-h-12" : ""} onClick={downloadAttendance} disabled={exporting || authorizationExpired || initialLoading || initialError} variant="outline">
             {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
             {exporting ? "Preparing CSV…" : "Download CSV"}
           </Button>
@@ -370,7 +413,7 @@ export default function RsvpCheckIn() {
       ) : null}
 
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="relative z-10 w-full max-w-2xl">
+        <div className={`relative z-10 w-full ${expanded ? "sm:flex-1" : "max-w-2xl"}`}>
           <label htmlFor="rsvp-search" className="mb-2 block text-sm font-semibold">
             Find an attendee
           </label>
@@ -389,8 +432,13 @@ export default function RsvpCheckIn() {
               value={search}
               placeholder="Search first or last name"
               disabled={initialLoading || initialError || authorizationExpired}
-              onFocus={() => setFocused(true)}
-              onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+              onFocus={() => {
+                window.clearTimeout(blurTimer.current);
+                setFocused(true);
+              }}
+              onBlur={() => {
+                blurTimer.current = window.setTimeout(() => setFocused(false), 120);
+              }}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setSelectedId(null);
@@ -398,7 +446,7 @@ export default function RsvpCheckIn() {
                 setFocused(true);
               }}
               onKeyDown={handleSearchKeyDown}
-              className="h-12 w-full rounded-lg border border-input bg-background pl-10 pr-11 text-sm outline-none transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`${expanded ? "h-14 text-base" : "h-12 text-sm"} w-full rounded-lg border border-input bg-background pl-10 pr-11 outline-none transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60`}
             />
             {search ? (
               <button
@@ -491,13 +539,13 @@ export default function RsvpCheckIn() {
             </div>
             {!normalizedSearch ? <span className="hidden rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs text-muted-foreground sm:inline">A–Z · {attendees.length} names</span> : null}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`grid gap-3 sm:grid-cols-2 ${expanded ? "xl:grid-cols-3 2xl:grid-cols-4 2xl:gap-4" : "xl:grid-cols-3"}`}>
             {visibleAttendees.map((attendee) => {
               const isSaving = pendingIds.has(attendee.id);
               return (
                 <article
                   key={attendee.id}
-                  className={`rounded-xl border bg-card p-4 shadow-sm transition-colors ${attendee.checkedInAt ? "border-emerald-700/20 bg-emerald-700/[0.025]" : "border-border"}`}
+                  className={`rounded-xl border bg-card p-4 shadow-sm transition-colors ${expanded ? "sm:p-5" : ""} ${attendee.checkedInAt ? "border-emerald-700/20 bg-emerald-700/[0.025]" : "border-border"}`}
                   data-testid={`attendee-${attendee.id}`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -537,6 +585,7 @@ export default function RsvpCheckIn() {
                         size="sm"
                         variant="outline"
                         disabled={isSaving || authorizationExpired}
+                        className={expanded ? "min-h-11 px-4" : ""}
                         aria-label={`Undo check-in for ${attendee.fullName}`}
                         data-testid={`button-undo-check-in-${attendee.id}`}
                         onClick={() => {
@@ -553,7 +602,7 @@ export default function RsvpCheckIn() {
                         disabled={isSaving || authorizationExpired}
                         aria-label={`Check in ${attendee.fullName}`}
                         data-testid={`button-check-in-${attendee.id}`}
-                        className="shrink-0"
+                        className={`shrink-0 ${expanded ? "min-h-11 px-4" : ""}`}
                       >
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                         {isSaving ? "Saving…" : "Check In"}

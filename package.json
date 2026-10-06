@@ -8,6 +8,7 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/index.cjs --define:import.meta.dirname=__dirname --external:../vite.config",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
+    "test:rsvp-fullscreen": "playwright test tests/rsvp-fullscreen.spec.cjs --workers=1",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
@@ -94,6 +95,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.4.0",
