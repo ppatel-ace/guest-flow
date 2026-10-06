@@ -1,5 +1,6 @@
 import type { Express, RequestHandler } from "express";
-import { checkInRsvpAttendee, listRsvpAttendees } from "./rsvpStorage";
+import { checkInRsvpAttendee, listRsvpAttendees, undoRsvpCheckIn } from "./rsvpStorage";
+import type { AceAuthRequest } from "./aceSso";
 import { RSVP_EVENT_KEY, RSVP_EVENT_NAME } from "./rsvpRoster";
 import { createRsvpAttendanceCsv } from "./rsvpExport";
 
@@ -46,6 +47,28 @@ export function registerRsvpRoutes(app: Express, requireAuth: RequestHandler) {
     } catch (error) {
       console.error("[rsvp] Check-in failed", error);
       res.status(503).json({ error: "Unable to save check-in. Please try again." });
+    }
+  });
+  app.post("/api/rsvp/attendees/:id/undo-check-in", requireAuth, async (req, res) => {
+    const staffId = (req as AceAuthRequest).user?.id;
+    if (!staffId) return res.status(403).json({ error: "A staff identity is required to correct attendance." });
+    if (!/^[a-f0-9]{64}$/.test(req.params.id)) {
+      return res.status(400).json({ error: "Invalid attendee identifier" });
+    }
+    const revision = req.body?.expectedRevision;
+    if (req.body?.confirmed !== true || !Number.isSafeInteger(revision) || revision < 0) {
+      return res.status(400).json({ error: "Confirm the correction and provide the current attendance revision." });
+    }
+    try {
+      const result = await undoRsvpCheckIn(req.params.id, revision, staffId);
+      if (result.status === "not-found") return res.status(404).json({ error: "Attendee not found" });
+      if (result.status === "conflict") {
+        return res.status(409).json({ error: "Attendance has changed. Refresh the roster and confirm again." });
+      }
+      res.json(result.attendee);
+    } catch (error) {
+      console.error("[rsvp] Check-in correction failed", error);
+      res.status(503).json({ error: "Unable to undo check-in. Please try again." });
     }
   });
 }

@@ -7,6 +7,7 @@ import XLSX from "xlsx";
 import Papa from "papaparse";
 import { eq } from "drizzle-orm";
 import { parseRsvpWorkbook, RSVP_WORKBOOK, loadRsvpSeed, RSVP_EVENT_KEY } from "./rsvpRoster";
+import type { AceAuthRequest } from "./aceSso";
 
 after(async () => {
   const { db } = await import("./db");
@@ -39,7 +40,7 @@ test("malformed workbooks fail explicitly rather than seeding a partial roster",
 
 test("authenticated API, persistent storage, concurrency and safe reimport", async () => {
   const { db } = await import("./db");
-  const { rsvpAttendees } = await import("@shared/schema");
+  const { rsvpAttendees, rsvpCheckInCorrections } = await import("@shared/schema");
   const { initializeRsvpRoster, listRsvpAttendees } = await import("./rsvpStorage");
   const { registerRsvpRoutes } = await import("./rsvpRoutes");
   await initializeRsvpRoster();
@@ -51,9 +52,15 @@ test("authenticated API, persistent storage, concurrency and safe reimport", asy
   };
   await db.insert(rsvpAttendees).values(fixture);
   const app = express();
+  app.use(express.json());
   registerRsvpRoutes(app, (req, res, next) => {
     // Test-only middleware on a separate in-process server. Never used by the app.
-    if (req.get("x-test-staff") === "yes") next();
+    if (req.get("x-test-staff") === "yes") {
+      if (!req.get("x-test-no-identity")) {
+        (req as AceAuthRequest).user = { id: "test-staff", email: "test@example.invalid", name: "Test Staff" };
+      }
+      next();
+    }
     else res.status(401).json({ error: "Unauthorized" });
   });
   const server = app.listen(0, "127.0.0.1");
@@ -62,6 +69,7 @@ test("authenticated API, persistent storage, concurrency and safe reimport", asy
   const base = `http://127.0.0.1:${address.port}`;
   const headers = { "x-test-staff": "yes" };
   const checkInUrl = `${base}/api/rsvp/attendees/${id}/check-in`;
+  const undoUrl = `${base}/api/rsvp/attendees/${id}/undo-check-in`;
   const exportUrl = `${base}/api/rsvp/attendance.csv`;
   const parseExport = async (response: Response) =>
     Papa.parse<Record<string, string>>(await response.text(), { header: true, skipEmptyLines: true }).data;
@@ -136,8 +144,71 @@ test("authenticated API, persistent storage, concurrency and safe reimport", asy
     assert.equal((await repeated.json() as { checkedInAt: string }).checkedInAt, timestamp);
     assert.equal((await fetch(`${base}/api/rsvp/attendees/${"f".repeat(64)}/check-in`, { method: "POST", headers })).status, 404);
     assert.equal((await fetch(`${base}/api/rsvp/attendees/invalid/check-in`, { method: "POST", headers })).status, 400);
+    const undo = (body: unknown, extraHeaders = {}) => fetch(undoUrl, {
+      method: "POST", headers: { ...headers, "Content-Type": "application/json", ...extraHeaders },
+      body: JSON.stringify(body),
+    });
+    const revision = persisted.attendanceRevision;
+    const undoBody = { confirmed: true, expectedRevision: revision, correctedBy: "spoofed-staff" };
+    assert.equal((await fetch(undoUrl, { method: "POST" })).status, 401);
+    assert.equal((await undo(undoBody, { "x-test-no-identity": "yes" })).status, 403);
+    for (const body of [
+      {}, { expectedRevision: revision }, { confirmed: false, expectedRevision: revision },
+      { confirmed: true, expectedRevision: -1 }, { confirmed: true, expectedRevision: "1" },
+      { confirmed: true, expectedRevision: 1.5 },
+    ]) assert.equal((await undo(body)).status, 400);
+    assert.equal((await undo({ confirmed: true, expectedRevision: revision + 1 })).status, 409);
+    // Fail after the audit insert but before the attendance update; both must roll back.
+    const originalTransaction = db.transaction;
+    try {
+      db.transaction = ((callback: any) => originalTransaction.call(db, async (tx) => {
+        tx.update = () => { throw new Error("Simulated correction update failure"); };
+        return callback(tx);
+      })) as typeof db.transaction;
+      assert.equal((await undo(undoBody)).status, 503);
+    } finally {
+      db.transaction = originalTransaction;
+    }
+    assert.equal((await db.select().from(rsvpCheckInCorrections)
+      .where(eq(rsvpCheckInCorrections.attendeeId, id))).length, 0);
+    const [unchanged] = await db.select().from(rsvpAttendees).where(eq(rsvpAttendees.id, id));
+    assert.equal(unchanged.checkedInAt?.toISOString(), timestamp);
+    assert.equal(unchanged.attendanceRevision, revision);
+    const otherAttendance = (await listRsvpAttendees()).filter((item) => item.id !== id);
+    const corrections = await Promise.all([undo(undoBody), undo(undoBody)]);
+    assert.deepEqual(corrections.map((response) => response.status).sort(), [200, 409]);
+    const corrected = await corrections.find((response) => response.status === 200)!.json();
+    assert.equal(corrected.checkedInAt, null);
+    assert.equal(corrected.attendanceRevision, revision + 1);
+    const audits = await db.select().from(rsvpCheckInCorrections)
+      .where(eq(rsvpCheckInCorrections.attendeeId, id));
+    assert.equal(audits.length, 1);
+    assert.equal(audits[0].priorArrivalAt.toISOString(), timestamp);
+    assert.equal(audits[0].priorRevision, revision);
+    assert.equal(audits[0].correctedBy, "test-staff");
+    assert.ok(audits[0].correctedAt.getTime() >= persisted.checkedInAt!.getTime());
+    assert.deepEqual((await listRsvpAttendees()).filter((item) => item.id !== id), otherAttendance);
+    assert.equal((await undo(undoBody)).status, 409);
+    const refreshedRoster = await (await fetch(`${base}/api/rsvp/attendees`, { headers })).json();
+    assert.equal(refreshedRoster.attendees.find((item: { id: string }) => item.id === id).checkedInAt, null);
+    assert.ok(!(await parseExport(await fetch(`${exportUrl}?scope=arrivals`, { headers })))
+      .some((row) => row["Full name"] === fixture.fullName));
+    // A stale undo must not erase a new arrival after an undo/re-check-in cycle.
+    const newArrival = await (await fetch(checkInUrl, { method: "POST", headers })).json();
+    assert.equal(newArrival.attendanceRevision, revision + 2);
+    assert.equal((await undo(undoBody)).status, 409);
+    assert.equal((await undo({ confirmed: true, expectedRevision: newArrival.attendanceRevision })).status, 200);
+    assert.equal((await db.select().from(rsvpCheckInCorrections)
+      .where(eq(rsvpCheckInCorrections.attendeeId, id))).length, 2);
+    for (const [attendeeId, status] of [["f".repeat(64), 404], ["invalid", 400]] as const) {
+      assert.equal((await fetch(`${base}/api/rsvp/attendees/${attendeeId}/undo-check-in`, {
+        method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(undoBody),
+      })).status, status);
+    }
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await db.delete(rsvpCheckInCorrections).where(eq(rsvpCheckInCorrections.attendeeId, id));
     await db.delete(rsvpAttendees).where(eq(rsvpAttendees.id, id));
   }
   assert.equal((await listRsvpAttendees()).length, 233);

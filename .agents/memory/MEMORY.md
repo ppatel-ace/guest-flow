@@ -3,3 +3,4 @@
 - [Microsoft PKCE SSO GCC High](ms-pkce-sso.md) — PKCE public-client flow for Entra ID GCC High; no client_secret; id_token decoded without sig verification (server-side exchange over HTTPS).
 - [RSVP check-in scope](rsvp-check-in-scope.md) — AUSA roster is staff-only and includes all named entries, not just those marked accepted.
 - [Shared database connection budget](shared-db-connection-budget.md) — concurrent tests and running services compete for the Supabase session pool.
+- [Attendance correction safety](attendance-correction-safety.md) — stale confirmations must not clear a later arrival; audit timestamps must retain database precision.

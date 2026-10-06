@@ -37,10 +37,21 @@ export const rsvpAttendees = pgTable("gf_rsvp_attendees", {
   sourceCategory: text("source_category").notNull().default(""),
   plusOneCount: integer("plus_one_count").notNull().default(0),
   checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+  attendanceRevision: integer("attendance_revision").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type RsvpAttendee = typeof rsvpAttendees.$inferSelect;
+
+// Append-only corrections, separate from current attendance and other visitor records.
+export const rsvpCheckInCorrections = pgTable("gf_rsvp_check_in_corrections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  attendeeId: varchar("attendee_id").notNull().references(() => rsvpAttendees.id),
+  priorArrivalAt: timestamp("prior_arrival_at", { withTimezone: true }).notNull(),
+  priorRevision: integer("prior_revision").notNull(),
+  correctedBy: text("corrected_by").notNull(),
+  correctedAt: timestamp("corrected_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const pageSettings = pgTable("gf_page_settings", {
   key: varchar("key").primaryKey(),

@@ -3,6 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   AlertCircle,
   Check,
   CheckCircle2,
@@ -25,6 +29,7 @@ type Attendee = {
   sourceCategory: string;
   plusOneCount: number;
   checkedInAt: string | null;
+  attendanceRevision: number;
 };
 
 type RsvpResponse = {
@@ -68,6 +73,7 @@ export default function RsvpCheckIn() {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [sessionExpired, setSessionExpired] = useState(false);
   const [notice, setNotice] = useState("");
+  const [undoTarget, setUndoTarget] = useState<Attendee | null>(null);
   const [exportScope, setExportScope] = useState<"all" | "arrivals">("all");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -152,8 +158,8 @@ export default function RsvpCheckIn() {
     }
   };
 
-  const checkIn = async (attendee: Attendee) => {
-    if (authorizationExpired || attendee.checkedInAt || pendingIds.has(attendee.id)) return;
+  const saveAttendance = async (attendee: Attendee, undo = false) => {
+    if (authorizationExpired || (!undo && attendee.checkedInAt) || pendingIds.has(attendee.id)) return;
     setPendingIds((current) => new Set(current).add(attendee.id));
     setRowErrors((current) => {
       const next = { ...current };
@@ -165,7 +171,8 @@ export default function RsvpCheckIn() {
       await queryClient.cancelQueries({ queryKey: rosterQueryKey });
       const response = await apiRequest(
         "POST",
-        `/api/rsvp/attendees/${encodeURIComponent(attendee.id)}/check-in`,
+        `/api/rsvp/attendees/${encodeURIComponent(attendee.id)}/${undo ? "undo-check-in" : "check-in"}`,
+        undo ? { confirmed: true, expectedRevision: attendee.attendanceRevision } : undefined,
       );
       const updated = (await response.json()) as Attendee;
       queryClient.setQueryData<RsvpResponse>(rosterQueryKey, (current) =>
@@ -173,24 +180,27 @@ export default function RsvpCheckIn() {
           ? {
               ...current,
               attendees: current.attendees.map((item) =>
-                item.id === updated.id ? updated : item,
+                item.id === updated.id && item.attendanceRevision <= updated.attendanceRevision ? updated : item,
               ),
             }
           : current,
       );
-      setNotice(`${updated.fullName} checked in.`);
+      setNotice(undo ? `Check-in undone for ${updated.fullName}. Original arrival retained in the audit history.` : `${updated.fullName} checked in.`);
+      if (undo) setUndoTarget(null);
     } catch (error) {
       if (isUnauthorized(error)) setSessionExpired(true);
       setRowErrors((current) => ({
         ...current,
         [attendee.id]: errorMessage(error),
       }));
+      if (error instanceof Error && /^409:/.test(error.message)) setUndoTarget(null);
     } finally {
       setPendingIds((current) => {
         const next = new Set(current);
         next.delete(attendee.id);
         return next;
       });
+      void queryClient.invalidateQueries({ queryKey: rosterQueryKey });
     }
   };
 
@@ -234,6 +244,38 @@ export default function RsvpCheckIn() {
 
   return (
     <section className="space-y-6" data-testid="page-rsvp-check-in">
+      <AlertDialog
+        open={!!undoTarget}
+        onOpenChange={(open) => {
+          if (!open && undoTarget && !pendingIds.has(undoTarget.id)) setUndoTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Undo this check-in?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {undoTarget?.fullName} will return to “Not checked in”.
+              {undoTarget?.checkedInAt ? ` The arrival at ${arrivalTime(undoTarget.checkedInAt)} will remain in the audit history, along with your staff identity and the correction time.` : ""}
+              {" "}This will not change any other visit records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {undoTarget && rowErrors[undoTarget.id] ? (
+            <p role="alert" className="text-sm text-destructive">{rowErrors[undoTarget.id]}</p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!undoTarget && pendingIds.has(undoTarget.id)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!undoTarget || authorizationExpired || pendingIds.has(undoTarget.id)}
+              onClick={(event) => {
+                event.preventDefault();
+                if (undoTarget) void saveAttendance(undoTarget, true);
+              }}
+            >
+              {undoTarget && pendingIds.has(undoTarget.id) ? "Undoing…" : "Confirm undo"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <header className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-6 shadow-sm sm:px-8 sm:py-8">
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 opacity-70 sm:block" aria-hidden>
           <div className="absolute -right-10 -top-24 h-64 w-64 rounded-full border-[36px] border-primary/5" />
@@ -491,11 +533,23 @@ export default function RsvpCheckIn() {
                       ) : null}
                     </div>
                     {attendee.checkedInAt ? (
-                      <span className="text-xs font-medium text-emerald-800 dark:text-emerald-300">Arrived</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isSaving || authorizationExpired}
+                        aria-label={`Undo check-in for ${attendee.fullName}`}
+                        data-testid={`button-undo-check-in-${attendee.id}`}
+                        onClick={() => {
+                          setRowErrors((current) => ({ ...current, [attendee.id]: "" }));
+                          setUndoTarget(attendee);
+                        }}
+                      >
+                        Undo check-in
+                      </Button>
                     ) : (
                       <Button
                         size="sm"
-                        onClick={() => checkIn(attendee)}
+                        onClick={() => saveAttendance(attendee)}
                         disabled={isSaving || authorizationExpired}
                         aria-label={`Check in ${attendee.fullName}`}
                         data-testid={`button-check-in-${attendee.id}`}
