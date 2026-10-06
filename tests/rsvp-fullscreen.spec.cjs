@@ -206,3 +206,56 @@ test("late native requests cannot re-enter expanded mode after exit or navigatio
   await page.evaluate(() => window.finishFullscreen());
   expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
 });
+
+for (const width of [320, 768, 1440]) {
+  for (const theme of ["light", "dark"]) {
+    test(`Ace branding fits normal and expanded ${width}px ${theme} layout`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await setup(page);
+      await page.evaluate(theme => {
+        document.documentElement.classList.toggle("dark", theme === "dark");
+        document.documentElement.classList.toggle("light", theme === "light");
+      }, theme);
+      const logos = page.getByRole("img", { name: "Ace Electronics Defense Systems", exact: true });
+      await expect(logos).toHaveCount(1);
+      async function assertLogos() {
+        for (const logo of await logos.all()) {
+          await expect(logo).toBeVisible();
+          await expect(logo).toHaveAttribute("src", "/logos/ace-defense-systems-rsvp.jpg");
+          await expect(logo).toHaveAttribute("width", "1519");
+          await expect(logo).toHaveAttribute("height", "486");
+          const geometry = await logo.evaluate(img => {
+            const bounds = img.getBoundingClientRect();
+            const parent = img.parentElement.getBoundingClientRect();
+            return {
+              loaded: img.complete && img.naturalWidth === 1519 && img.naturalHeight === 486,
+              ratio: bounds.width / bounds.height,
+              white: getComputedStyle(img.parentElement).backgroundColor,
+              inside: bounds.x >= parent.x && bounds.right <= parent.right + 1,
+              inViewport: bounds.x >= 0 && bounds.right <= innerWidth,
+            };
+          });
+          expect(geometry.loaded).toBe(true);
+          expect(geometry.ratio).toBeCloseTo(1519 / 486, 2);
+          expect(geometry.white).toBe("rgb(255, 255, 255)");
+          expect(geometry.inside).toBe(true);
+          expect(geometry.inViewport).toBe(true);
+        }
+        expect(await page.getByTestId("admin-main").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      }
+      await assertLogos();
+      await expect(page.getByRole("heading", { name: "RSVP check-in", exact: true })).toBeVisible();
+      await fallback(page);
+      await enter(page);
+      await expect(logos).toHaveCount(2);
+      await assertLogos();
+      const exitBox = await page.getByRole("button", { name: "Exit full screen", exact: true }).boundingBox();
+      const compactBox = await logos.first().boundingBox();
+      expect(compactBox.x + compactBox.width).toBeLessThanOrEqual(exitBox.x);
+      expect(exitBox.x + exitBox.width).toBeLessThanOrEqual(width);
+      await expect(page.getByRole("button", { name: "Download CSV" })).toBeVisible();
+      await exit(page);
+      await expect(logos).toHaveCount(1);
+    });
+  }
+}

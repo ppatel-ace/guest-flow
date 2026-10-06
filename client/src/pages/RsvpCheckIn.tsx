@@ -288,10 +288,26 @@ export default function RsvpCheckIn() {
         </AlertDialogContent>
       </AlertDialog>
       {expanded ? (
-        <div className="sticky -top-4 z-40 flex min-h-14 items-center justify-between gap-3 border-b border-border/80 bg-background/95 px-2 py-2 backdrop-blur-md md:-top-6">
-          <div className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary sm:text-sm">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-            <span className="truncate">GuestFlow · Staff desk</span>
+        <div className="sticky -top-4 z-40 flex min-h-[4.5rem] items-center justify-between gap-3 border-b border-border/80 bg-background/95 px-2 py-2 backdrop-blur-md md:-top-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 rounded-md bg-white px-2 py-1 shadow-sm ring-1 ring-slate-200/80">
+              <img
+                src="/logos/ace-defense-systems-rsvp.jpg"
+                alt="Ace Electronics Defense Systems"
+                width={1519}
+                height={486}
+                className="h-auto w-20 sm:w-[132px]"
+              />
+            </div>
+            <div className="hidden min-w-0 sm:block">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary sm:text-sm">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                <span className="truncate">GuestFlow · Staff desk</span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
+                {rosterQuery.data?.eventName ?? "AUSA 2026"} · RSVP check-in
+              </p>
+            </div>
           </div>
           <Button
             type="button"
@@ -306,26 +322,38 @@ export default function RsvpCheckIn() {
         </div>
       ) : null}
       <header className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-6 shadow-sm sm:px-8 sm:py-8">
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 opacity-70 sm:block" aria-hidden>
-          <div className="absolute -right-10 -top-24 h-64 w-64 rounded-full border-[36px] border-primary/5" />
-          <div className="absolute right-12 top-8 h-28 w-28 rounded-full border border-primary/10" />
-          <div className="absolute right-28 top-20 h-2 w-2 rounded-full bg-amber-500/60" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 sm:block" aria-hidden>
+          <div className="absolute -right-16 -top-28 h-72 w-72 rounded-full border-[40px] border-primary/[0.035]" />
+          <div className="absolute right-12 top-8 h-32 w-32 rounded-full border border-primary/[0.08]" />
+          <div className="absolute right-28 top-20 h-2 w-2 rounded-full bg-amber-500/50" />
         </div>
-        <div className={`relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between ${expanded ? "lg:gap-10" : ""}`}>
-          <div>
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              GuestFlow · Staff desk
+        <div className={`relative ${expanded ? "lg:flex lg:items-end lg:justify-between lg:gap-10" : ""}`}>
+          <div className="flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-7">
+            <div className="w-full max-w-[254px] shrink-0 rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-slate-200/80 sm:max-w-[274px] sm:p-3 lg:max-w-[294px]">
+              <img
+                src="/logos/ace-defense-systems-rsvp.jpg"
+                alt="Ace Electronics Defense Systems"
+                width={1519}
+                height={486}
+                className="h-auto w-full"
+              />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              RSVP check-in
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-              {rosterQuery.data?.eventName ?? "AUSA 2026"} <span className="px-1.5 text-border">/</span>
-              Find a guest, confirm their arrival.
-            </p>
+            <div className="min-w-0 sm:flex-1 sm:basis-64">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.17em] text-primary sm:text-xs">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                GuestFlow · Staff desk
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                RSVP check-in
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                <span className="font-medium text-foreground">{rosterQuery.data?.eventName ?? "AUSA 2026"}</span>
+                <span className="px-2 text-border">/</span>
+                Find a guest, confirm their arrival.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className={`mt-5 flex flex-wrap items-center gap-3 sm:mt-6 ${expanded ? "lg:mt-0" : ""}`}>
             <div className={`flex items-center gap-3 rounded-xl border border-border/80 bg-background/75 px-4 py-3 ${expanded ? "min-h-[76px]" : ""}`}>
               <div className={`grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary ${expanded ? "sm:h-12 sm:w-12" : ""}`}>
                 <UsersRound className="h-5 w-5" aria-hidden />
