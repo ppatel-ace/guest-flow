@@ -20,3 +20,9 @@ Guests should scan an event QR, select a name from the supplied RSVP roster, and
 **Why:** The user requested this QR-based conditional check-in workflow on 2026-10-06, explicitly replacing the earlier staff-only interaction as the way guests arrive.
 
 **How to apply:** Preserve a distinction between roster membership and actual arrival, and retain the form branch for guests not found in the reference list. Do not treat the entire reference list as already checked in.
+
+Use a reusable event QR, not an expiring or rotating QR.
+
+**Why:** The user explicitly selected a reusable event QR on 2026-10-06.
+
+**How to apply:** Support one printable/displayable QR entry link. Do not promise that it proves an on-site scan or identity: the link can be reopened or shared.
