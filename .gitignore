@@ -3,4 +3,6 @@ dist
 .DS_Store
 server/public
 vite.config.ts.*
+test-results/
+playwright-report/
 *.tar.gz
