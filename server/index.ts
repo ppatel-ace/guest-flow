@@ -11,6 +11,7 @@ import { checkConnection } from "./db";
 import { startPrinterSync } from "./printer-sync";
 import { createActivityAudit, createUsageRelay, type UsageRelayOptions } from "./activityAudit";
 import { tryAceSsoFromRequest, type AceAuthRequest } from "./aceSso";
+import { initializeRsvpRoster } from "./rsvpStorage";
 
 // Extend Express session
 declare module "express-session" {
@@ -130,7 +131,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (capturedJsonResponse && !path.startsWith("/api/rsvp/")) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
@@ -207,6 +208,11 @@ app.use((req, res, next) => {
 
   await checkConnection();
   await runMigrations();
+
+  await initializeRsvpRoster().catch((error) => {
+    // Fail explicitly in RSVP APIs, without disrupting other GuestFlow pages.
+    console.error("[rsvp] Initialization failed; staff requests will retry", error);
+  });
 
   const server = await registerRoutes(app);
 

@@ -27,6 +27,21 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 
+// Event roster intentionally separate from customers (no invented email addresses).
+export const rsvpAttendees = pgTable("gf_rsvp_attendees", {
+  id: varchar("id").primaryKey(),
+  eventKey: text("event_key").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  fullName: text("full_name").notNull(),
+  sourceCategory: text("source_category").notNull().default(""),
+  plusOneCount: integer("plus_one_count").notNull().default(0),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type RsvpAttendee = typeof rsvpAttendees.$inferSelect;
+
 export const pageSettings = pgTable("gf_page_settings", {
   key: varchar("key").primaryKey(),
   title: text("title").notNull(),

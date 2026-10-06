@@ -92,7 +92,10 @@ export function refreshSsoTokenIfNeeded(
   }
 }
 
-export type AceAuthRequest = Request & { aceSsoUser?: AceSsoJwtPayload & { id: string } };
+export type AceAuthRequest = Request & {
+  aceSsoUser?: AceSsoJwtPayload & { id: string };
+  user?: { id: string; email: string; name: string };
+};
 
 export function tryAceSsoFromRequest(req: AceAuthRequest, res: Response): AceSsoJwtPayload | null {
   const token = (req as Request & { cookies?: Record<string, string> }).cookies?.ace_sso;

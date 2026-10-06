@@ -1,4 +1,4 @@
-import { Home, Users, QrCode, Mail, FileSpreadsheet, LogOut, Globe, FileDown, Workflow, BarChart2, Pin, PinOff } from "lucide-react";
+import { Home, Users, QrCode, ClipboardCheck, Mail, FileSpreadsheet, LogOut, Globe, FileDown, Workflow, BarChart2, Pin, PinOff } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const mainMenuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Invites", url: "/customers", icon: Users },
   { title: "Check-In", url: "/check-in", icon: QrCode },
+  { title: "RSVP Check-In", url: "/rsvp-check-in", icon: ClipboardCheck },
   { title: "Invitations", url: "/invitations", icon: Mail },
   { title: "Import", url: "/import", icon: FileSpreadsheet },
   { title: "Public Pages", url: "/public-pages", icon: Globe },

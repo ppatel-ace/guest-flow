@@ -36,6 +36,7 @@ import {
 import { startAutoCheckoutLoop } from "./autoCheckout";
 import { db } from "./db";
 import { asc } from "drizzle-orm";
+import { registerRsvpRoutes } from "./rsvpRoutes";
 
 function parseCustomFieldValues(body: any): CustomFieldValue[] {
   const raw = body?.customFields ?? body?.customFieldValues;
@@ -229,13 +230,14 @@ const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
     return next();
   }
   if (req.session?.authenticated) {
-    req.user = { email: "admin", name: "Admin" };
+    req.user = { id: "admin", email: "admin", name: "Admin" };
     return next();
   }
   res.status(401).json({ error: "Unauthorized" });
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerRsvpRoutes(app, requireAuth);
   registerAceSsoRoutes(app, "guestflow");
   registerAceCrmSyncOnStartup(app);
   logEmailConfigStatus();

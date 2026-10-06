@@ -16,6 +16,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import CheckIn from "@/pages/CheckIn";
+import RsvpCheckIn from "@/pages/RsvpCheckIn";
 import Invitations from "@/pages/Invitations";
 import Import from "@/pages/Import";
 import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
@@ -83,6 +84,7 @@ function AdminLayout() {
                     <Route path="/" component={Dashboard} />
                     <Route path="/customers" component={Customers} />
                     <Route path="/check-in" component={CheckIn} />
+                    <Route path="/rsvp-check-in" component={RsvpCheckIn} />
                     <Route path="/invitations" component={Invitations} />
                     <Route path="/import" component={Import} />
                     <Route path="/public-pages" component={PublicPages} />

@@ -22,6 +22,7 @@ export async function setupVite(app: Express, server: Server) {
   const viteLogger = createLogger();
 
   const serverOptions = {
+    ...viteConfig.server,
     middlewareMode: true,
     hmr: { server },
     allowedHosts: true as const,
@@ -34,7 +35,8 @@ export async function setupVite(app: Express, server: Server) {
       ...viteLogger,
       error: (msg, options) => {
         viteLogger.error(msg, options);
-        process.exit(1);
+        // A denied private-file request is also logged as an error by Vite.
+        // Logging it must not let an unauthenticated request terminate the app.
       },
     },
     server: serverOptions,

@@ -35,7 +35,7 @@ export default defineConfig({
   server: {
     fs: {
       strict: true,
-      deny: ["**/.*"],
+      deny: ["**/.*", "**/server/data/**", "**/AUSA2026AcceptedAttendees*.xlsx"],
     },
   },
 });
