@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useRsvpFullscreen } from "@/components/RsvpFullscreen";
+import RsvpQrPanel from "@/components/RsvpQrPanel";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -380,6 +381,8 @@ export default function RsvpCheckIn() {
           </div>
         </div>
       </header>
+
+      <RsvpQrPanel />
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

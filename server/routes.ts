@@ -37,6 +37,9 @@ import { startAutoCheckoutLoop } from "./autoCheckout";
 import { db } from "./db";
 import { asc } from "drizzle-orm";
 import { registerRsvpRoutes } from "./rsvpRoutes";
+import { registerRsvpGuestRoutes, sendGuestError } from "./rsvpGuestRoutes";
+import { completeRsvpForm } from "./rsvpGuestStorage";
+import { dispatchRsvpArrival } from "./rsvpGuestEffects";
 
 function parseCustomFieldValues(body: any): CustomFieldValue[] {
   const raw = body?.customFields ?? body?.customFieldValues;
@@ -238,6 +241,29 @@ const requireAuth = async (req: AceAuthRequest, res: any, next: any) => {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerRsvpRoutes(app, requireAuth);
+  registerRsvpGuestRoutes(app, requireAuth, async (req, res, next) => {
+    try {
+      if (req.body?._hp) {
+        recordBlock("honeypot", req.ip);
+        return res.status(403).json({ error: "Verification failed. Please refresh and try again." });
+      }
+      if (isHeadlessUA(req.headers["user-agent"])) {
+        recordBlock("ua", req.ip);
+        return res.status(403).json({ error: "Request blocked. Please use your phone browser." });
+      }
+      if (process.env.FINGERPRINT_HMAC_SECRET && (typeof req.body?._ft !== "string" || !validateTimingToken(req.body._ft).ok)) {
+        recordBlock("timing", req.ip);
+        return res.status(403).json({ error: "Verification expired or not ready. Please wait a moment and try again." });
+      }
+      if (process.env.TURNSTILE_SECRET_KEY && process.env.VITE_TURNSTILE_SITE_KEY &&
+          !(typeof req.body?.["cf-turnstile-response"] === "string" &&
+            await verifyTurnstile(req.body["cf-turnstile-response"], req.ip ?? "unknown"))) {
+        recordBlock("turnstile", req.ip);
+        return res.status(403).json({ error: "Security verification failed. Please try again." });
+      }
+      next();
+    } catch (error) { sendGuestError(res, error); }
+  });
   registerAceSsoRoutes(app, "guestflow");
   registerAceCrmSyncOnStartup(app);
   logEmailConfigStatus();
@@ -869,6 +895,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 1. Honeypot — fake success, zero DB work
       if (_hp) {
         recordBlock("honeypot", req.ip);
+        if (body.rsvpTicket !== undefined) return res.status(403).json({ error: "Verification failed. Please refresh and try again." });
         return res.status(201).json({ id: "ok" });
       }
       // 2. Headless UA
@@ -905,6 +932,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // ── DB writes (only reached by legitimate users) ─────────────────────────
+      if (body.rsvpTicket !== undefined) {
+        try {
+          const ticket = z.string().regex(/^[a-f0-9]{64}$/).parse(body.rsvpTicket);
+          const input = z.object({
+            title: z.string().max(30).nullable().optional(),
+            firstName: z.string().trim().min(1).max(100),
+            lastName: z.string().trim().min(1).max(150),
+            email: z.string().trim().toLowerCase().email().max(254),
+            phoneNumber: z.string().trim().min(1).max(50),
+            company: z.string().trim().max(200).nullable().optional(),
+            acePoc: z.string().trim().max(150).nullable().optional(),
+          }).parse(body);
+          const result = await completeRsvpForm(ticket, input);
+          if (result.status === "checked-in") {
+            // Notification is dispatched only for a newly committed arrival, not a retry.
+            void (async () => {
+              const { getRsvpFormContext } = await import("./rsvpGuestStorage");
+              const context = await getRsvpFormContext(ticket);
+              dispatchRsvpArrival({
+                fullName: result.fullName, email: input.email, company: input.company ?? null,
+                location: context.location, acePoc: input.acePoc,
+              });
+            })().catch(() => console.error("[rsvp-guest] Arrival effects dispatch failed"));
+          }
+          return res.status(201).json({ ...result, name: "fullName" in result ? result.fullName : undefined });
+        } catch (error) { return sendGuestError(res, error); }
+      }
       // 1. Lead record
       const leadData = insertLeadSchema.parse({
         title: body.title ?? null,

@@ -31,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Turnstile } from "@marsidev/react-turnstile";
 import type { AcePoc, PageSettings } from "@shared/schema";
 import { OFFICE_LOCATIONS } from "@shared/locations";
+import type { RsvpFormContext } from "@shared/rsvpGuest";
 
 const TITLE_OPTIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Other"];
 
@@ -47,10 +48,12 @@ function EmailInput({
   value,
   onChange,
   onPickVisitor,
+  allowVisitorLookup = true,
 }: {
   value: string;
   onChange: (v: string) => void;
   onPickVisitor?: (match: EmailVisitorMatch) => void;
+  allowVisitorLookup?: boolean;
 }) {
   const [domainSuggestions, setDomainSuggestions] = useState<string[]>([]);
   const [visitorMatches, setVisitorMatches] = useState<EmailVisitorMatch[]>([]);
@@ -70,7 +73,7 @@ function EmailInput({
 
   useEffect(() => {
     const q = value.trim();
-    if (q.length < 3) {
+    if (!allowVisitorLookup || q.length < 3) {
       setVisitorMatches([]);
       return;
     }
@@ -89,7 +92,7 @@ function EmailInput({
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [value]);
+  }, [value, allowVisitorLookup]);
 
   const updateDomainHints = (val: string) => {
     const atIdx = val.indexOf("@");
@@ -249,6 +252,8 @@ function PocCombobox({
 }
 
 export default function GuestCheckIn() {
+  const [rsvpTicket] = useState(() => new URLSearchParams(window.location.search).get("rsvp"));
+  const [rsvpAlreadyRecorded, setRsvpAlreadyRecorded] = useState(false);
   const [step, setStep] = useState<"form" | "success">("form");
   const [customerName, setCustomerName] = useState("");
   const { toast } = useToast();
@@ -267,6 +272,33 @@ export default function GuestCheckIn() {
   const [captchaMode, setCaptchaMode] = useState<"invisible" | "visible" | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const rsvpQuery = useQuery<RsvpFormContext>({
+    queryKey: ["rsvp-form-context", rsvpTicket],
+    enabled: rsvpTicket !== null,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch("/api/rsvp-guest/form-context", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketId: rsvpTicket }), cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load your event form.");
+      return data;
+    },
+  });
+  const rsvpContext = rsvpQuery.data;
+  const backToRsvp = `/rsvp-arrival${window.location.hash}`;
+  useEffect(() => {
+    if (!rsvpContext) return;
+    setFirstName(rsvpContext.firstName);
+    setLastName(rsvpContext.lastName);
+    setLocation(rsvpContext.location);
+    if (rsvpContext.completed) {
+      setRsvpAlreadyRecorded(true);
+      setCustomerName(rsvpContext.fullName);
+      setStep("success");
+    }
+  }, [rsvpContext]);
 
   const { data: settings, isLoading: settingsLoading } = useQuery<PageSettings>({
     queryKey: ["/api/page-settings/guest_checkin_page"],
@@ -304,16 +336,17 @@ export default function GuestCheckIn() {
       });
   }, []);
 
-  const pageTitle = settings?.title ?? "Guest Check-In";
-  const successTitle = settings?.successTitle ?? "You're checked in.";
-  const successMessage = settings?.successMessage ?? "Your host has been notified of your arrival.";
-  const eventName = settings?.eventName;
+  const pageTitle = rsvpTicket ? "Complete your RSVP check-in" : settings?.title ?? "Guest Check-In";
+  const successTitle = rsvpTicket ? (rsvpAlreadyRecorded ? "Arrival already recorded." : "You're checked in.") : settings?.successTitle ?? "You're checked in.";
+  const successMessage = rsvpTicket ? "Your RSVP arrival is saved. Thank you for joining us." : settings?.successMessage ?? "Your host has been notified of your arrival.";
+  const eventName = rsvpContext?.eventName ?? settings?.eventName;
 
   const turnstileReady = !TURNSTILE_SITE_KEY || !!turnstileToken;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+    if (rsvpTicket !== null && !rsvpContext) return;
 
     if (!location) {
       toast({ title: "Location required", description: "Please select a location before submitting.", variant: "destructive" });
@@ -347,6 +380,7 @@ export default function GuestCheckIn() {
           _hp: honeypot,
           _ft: timingToken,
           "cf-turnstile-response": turnstileToken,
+          ...(rsvpTicket !== null ? { rsvpTicket } : {}),
         }),
       });
 
@@ -368,7 +402,8 @@ export default function GuestCheckIn() {
         return;
       }
 
-      const data: { name?: string } = await res.json();
+      const data: { name?: string; status?: string } = await res.json();
+      setRsvpAlreadyRecorded(data.status === "already-checked-in");
       setCustomerName(data.name ?? fullName);
       setStep("success");
     } catch (error) {
@@ -377,6 +412,22 @@ export default function GuestCheckIn() {
       setSubmitting(false);
     }
   };
+
+  if (rsvpTicket !== null && !rsvpContext) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-5 py-12 flex items-center justify-center">
+        <div className="w-full max-w-xl rounded-2xl bg-white p-8 space-y-5 text-slate-900">
+          <img src="/logos/ace-defense-systems-rsvp.jpg" alt="Ace Electronics Defense Systems" className="w-64 max-w-full h-auto" />
+          <h1 className="text-2xl font-bold">RSVP check-in</h1>
+          {rsvpQuery.isPending ? <p role="status">Loading your event form…</p> : <>
+            <p role="alert">{rsvpQuery.error instanceof Error ? rsvpQuery.error.message : "Unable to load your event form."}</p>
+            <Button onClick={() => rsvpQuery.refetch()}>Try again</Button>
+            <a className="block text-blue-800 underline" href={backToRsvp}>Return to event name search</a>
+          </>}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div
@@ -400,12 +451,14 @@ export default function GuestCheckIn() {
           data-testid="link-logo"
           className="flex flex-col items-center gap-4 no-underline"
         >
-          <div className="bg-slate-800/50 p-3 rounded-2xl backdrop-blur-sm border border-slate-700/50">
+          {rsvpTicket ? <div className="rounded-xl bg-white p-4 w-72 max-w-full">
+            <img src="/logos/ace-defense-systems-rsvp.jpg" alt="Ace Electronics Defense Systems" className="w-full h-auto" />
+          </div> : <><div className="bg-slate-800/50 p-3 rounded-2xl backdrop-blur-sm border border-slate-700/50">
             <Shield className="w-8 h-8 text-blue-400" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight" data-testid="text-brand">
             Ace Electronics Defense Systems
-          </h1>
+          </h1></>}
         </a>
         {settingsLoading ? (
           <Skeleton className="h-5 w-48 mt-2 bg-slate-700" />
@@ -447,6 +500,10 @@ export default function GuestCheckIn() {
             ) : (
               <div className="space-y-0.5">
                 <h2 className="text-xl font-bold text-slate-900">{pageTitle}</h2>
+                {rsvpContext && <div className="pt-2 text-sm text-slate-600">
+                  <p>Your RSVP: <strong>{rsvpContext.fullName}</strong>. Please complete your details to record your arrival.</p>
+                  <a className="mt-2 inline-block text-blue-800 underline" href={backToRsvp}>Not your name? Return to search</a>
+                </div>}
                 {settings?.description && (
                   <p className="text-sm text-slate-500">{settings.description}</p>
                 )}
@@ -485,6 +542,7 @@ export default function GuestCheckIn() {
                   <Input
                     id="first-name"
                     value={firstName}
+                    readOnly={!!rsvpContext?.firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="John"
                     required
@@ -500,6 +558,7 @@ export default function GuestCheckIn() {
                   <Input
                     id="last-name"
                     value={lastName}
+                    readOnly={!!rsvpContext?.firstName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Doe"
                     required
@@ -517,6 +576,7 @@ export default function GuestCheckIn() {
                   </Label>
                   <EmailInput
                     value={email}
+                    allowVisitorLookup={rsvpTicket === null}
                     onChange={setEmail}
                     onPickVisitor={(match) => {
                       const parts = (match.name || "").trim().split(/\s+/);
@@ -566,6 +626,7 @@ export default function GuestCheckIn() {
                   </Label>
                   <Select
                     value={location}
+                    disabled={!!rsvpContext}
                     onValueChange={(v) => {
                       setLocation(v);
                       setAcePoc("");
@@ -575,6 +636,8 @@ export default function GuestCheckIn() {
                       <SelectValue placeholder="Select your location" />
                     </SelectTrigger>
                     <SelectContent>
+                      {rsvpContext && !(OFFICE_LOCATIONS as readonly string[]).includes(rsvpContext.location) &&
+                        <SelectItem value={rsvpContext.location}>{rsvpContext.location}</SelectItem>}
                       {OFFICE_LOCATIONS.map((loc) => (
                         <SelectItem key={loc} value={loc}>{loc}</SelectItem>
                       ))}

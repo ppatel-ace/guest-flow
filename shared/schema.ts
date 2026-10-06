@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, boolean, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, boolean, integer, jsonb, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -345,3 +345,41 @@ export const insertAcePocSchema = createInsertSchema(acePocs).omit({
 
 export type InsertAcePoc = z.infer<typeof insertAcePocSchema>;
 export type AcePoc = typeof acePocs.$inferSelect;
+
+// Private event access and one-use guest handoffs. Never expose these tables as a roster API.
+export const rsvpGuestEvents = pgTable("gf_rsvp_guest_events", {
+  eventKey: text("event_key").primaryKey(),
+  token: text("token").notNull().unique(),
+  location: text("location").notNull(),
+  guestBaseUrl: text("guest_base_url").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+});
+
+export const rsvpGuestRequests = pgTable("gf_rsvp_guest_requests", {
+  requestId: varchar("request_id").primaryKey(),
+  eventKey: text("event_key").notNull(),
+  attendeeId: varchar("attendee_id").notNull().references(() => rsvpAttendees.id),
+  result: jsonb("result").$type<import("./rsvpGuest").RsvpGuestResult>().notNull(),
+});
+
+export const rsvpGuestTickets = pgTable("gf_rsvp_guest_tickets", {
+  id: varchar("id").primaryKey(),
+  eventKey: text("event_key").notNull(),
+  attendeeId: varchar("attendee_id").notNull().references(() => rsvpAttendees.id),
+  expectedRevision: integer("expected_revision").notNull(),
+  location: text("location").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  completedResult: jsonb("completed_result").$type<import("./rsvpGuest").RsvpGuestResult>(),
+});
+
+export const rsvpReferenceSets = pgTable("gf_rsvp_reference_sets", {
+  eventKey: text("event_key").primaryKey(),
+  visits: integer("visits").notNull(),
+  names: integer("names").notNull(),
+});
+export const rsvpReferenceIdentities = pgTable("gf_rsvp_reference_identities", {
+  eventKey: text("event_key").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  email: text("email").notNull(),
+  company: text("company"),
+}, (table) => [primaryKey({ columns: [table.eventKey, table.normalizedName] })]);

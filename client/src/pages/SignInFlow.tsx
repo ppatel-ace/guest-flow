@@ -1434,6 +1434,8 @@ function getInitials(name: string): string {
 }
 
 function sourceBadge(source: string) {
+  if (source === "rsvp-qr")
+    return <Badge variant="secondary" className="text-xs">RSVP QR</Badge>;
   if (source === "envoy")
     return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">Envoy</Badge>;
   return <Badge variant="outline" className="text-xs">Kiosk</Badge>;

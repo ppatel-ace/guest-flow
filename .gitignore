@@ -6,3 +6,6 @@ vite.config.ts.*
 test-results/
 playwright-report/
 *.tar.gz
+# Private source uploads must never be committed or packaged as runtime assets.
+attached_assets/visitor-log-*.csv
+server/data/ausa-2026-existing-visitors.csv

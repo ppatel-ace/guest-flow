@@ -21,6 +21,7 @@ import Invitations from "@/pages/Invitations";
 import Import from "@/pages/Import";
 import StandaloneCheckIn from "@/pages/StandaloneCheckIn";
 import GuestCheckIn from "@/pages/GuestCheckIn";
+import RsvpGuest from "@/pages/RsvpGuest";
 import PublicPages from "@/pages/PublicPages";
 import Export from "@/pages/Export";
 import SignInFlow from "@/pages/SignInFlow";
@@ -127,6 +128,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Switch>
+            <Route path="/rsvp-arrival" component={RsvpGuest} />
             <Route path="/guest-check-in" component={GuestCheckIn} />
             <Route>
               {() => {
@@ -149,6 +151,7 @@ function App() {
           <Route path="/dashboard" component={Login} />
           <Route path="/scan" component={StandaloneCheckIn} />
           <Route path="/guest-check-in" component={GuestCheckIn} />
+          <Route path="/rsvp-arrival" component={RsvpGuest} />
           <Route path="/kiosk" component={Kiosk} />
           <Route path="/" component={AdminLayout} />
           <Route component={AdminLayout} />

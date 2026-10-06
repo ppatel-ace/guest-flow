@@ -83,6 +83,7 @@ app.use(session({
 // (req.aceSsoUser, set by requireAuth) so it matches the ace-auth login event; legacy
 // password sessions and anonymous kiosk/visitor traffic carry no identity and are skipped.
 const AUDIT_SKIP = [
+  /^\/api\/rsvp-guest\//,
   /^\/api\/kiosk\/(register|heartbeat|checkin|sign-out)/,
   /^\/api\/guest-(checkin|register)/,
   /^\/api\/check-in\//,
@@ -131,7 +132,8 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse && !path.startsWith("/api/rsvp/")) {
+      if (capturedJsonResponse && !path.startsWith("/api/rsvp") &&
+          !(path === "/api/guest-checkin" && req.body?.rsvpTicket !== undefined)) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
@@ -176,7 +178,7 @@ app.use((req, res, next) => {
   // (admin API endpoints are already protected by requireAuth).
   // The admin login form lives at /ace-admin (not /login).
   if (process.env.NODE_ENV === "production") {
-    const PUBLIC_PAGES = ["/guest-check-in", "/scan", "/kiosk"];
+    const PUBLIC_PAGES = ["/guest-check-in", "/scan", "/kiosk", "/rsvp-arrival"];
     app.use((req: Request, res: Response, next: NextFunction) => {
       // guestflow.aceelectronics.com is an internal-only admin domain — skip the guard entirely
       const host = req.hostname || "";

@@ -17,12 +17,18 @@ Event-desk enhancements belong in the existing GuestFlow staff workflow, not a s
 
 Guests should scan an event QR, select a name from the supplied RSVP roster, and be compared with a second user-supplied list of people already in the system. Matching people should be checked in from that guest flow without completing the form; nonmatching people must complete the check-in form. Importing a list must not itself mark arrivals.
 
-**Why:** The user requested this QR-based conditional check-in workflow on 2026-10-06, explicitly replacing the earlier staff-only interaction as the way guests arrive.
+**Why:** The user requested this QR-based conditional check-in workflow on 2026-10-06, explicitly replacing the earlier staff-only interaction as the way guests arrive. They reiterated that scanning directly into the ordinary form is not the requested experience.
 
-**How to apply:** Preserve a distinction between roster membership and actual arrival, and retain the form branch for guests not found in the reference list. Do not treat the entire reference list as already checked in.
+**How to apply:** The designated RSVP QR must open name selection first; it is not interchangeable with the ordinary registration QR. Preserve a distinction between roster membership and actual arrival, and retain the form branch for guests not found in the reference list. Do not treat the entire reference list as already checked in.
 
 Use a reusable event QR, not an expiring or rotating QR.
 
 **Why:** The user explicitly selected a reusable event QR on 2026-10-06.
 
 **How to apply:** Support one printable/displayable QR entry link. Do not promise that it proves an on-site scan or identity: the link can be reopened or shared.
+
+Keep historical visitor-log uploads unversioned and retain only the matching information needed for this event in restricted storage.
+
+**Why:** Visitor logs include personal and compliance information about past visits that is unrelated to deciding whether a guest can skip the form. Copying whole logs into application source exposes that information unnecessarily.
+
+**How to apply:** Future reference-list updates should use private storage, not committed datasets or publicly served files.
