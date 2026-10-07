@@ -5,3 +5,4 @@
 - [Shared database connection budget](shared-db-connection-budget.md) — concurrent tests and running services compete for the Supabase session pool.
 - [Attendance correction safety](attendance-correction-safety.md) — stale confirmations must not clear a later arrival; audit timestamps must retain database precision.
 - [QR print proxy](qr-print-proxy.md) — use embedded logo and QR images in dedicated print windows; proxied external image loading can stall.
+- [External deployment context](external-deployment-context.md) — user also builds through Portainer; verify the affected hosting target rather than assuming Replit publishing.

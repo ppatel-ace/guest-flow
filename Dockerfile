@@ -4,14 +4,17 @@ WORKDIR /app
 
 COPY package.json package-lock.json .npmrc ./
 
-# Replit rewrites lockfile tarball URLs to an internal host that does not resolve in Docker.
-RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g; s|https://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
+# External Docker hosts cannot resolve either Replit package-firewall hostname.
+# Normalize only the image's copy; keep versions and integrity hashes unchanged.
+RUN sed -E -i 's#https?://package-firewall\.replit\.(local|internal)/npm/#https://registry.npmjs.org/#g' package-lock.json \
     && npm install -g npm@11 \
     && npm ci --ignore-scripts
 
 COPY . .
 
-RUN npm run build
+# COPY restores the workspace lockfile, so normalize again before build/prune.
+RUN sed -E -i 's#https?://package-firewall\.replit\.(local|internal)/npm/#https://registry.npmjs.org/#g' package-lock.json \
+    && npm run build
 
 # Prune dev/optional deps in-place — no install scripts run, just directory removal
 RUN npm prune --omit=dev --omit=optional
