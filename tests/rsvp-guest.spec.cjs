@@ -30,7 +30,7 @@ async function guestFixtures(page, options = {}) {
   await page.route("**/api/rsvp-guest/form-context", (route) => route.fulfill({ json: {
     ...responseData, ticketId, fullName: "Test Guest", firstName: "Test", lastName: "Guest", completed: false,
   } }));
-  await page.goto(`/rsvp-arrival#event=${eventToken}`);
+  await page.goto(options.entryUrl || `/rsvp-arrival#event=${eventToken}`);
   return writes;
 }
 
@@ -121,9 +121,13 @@ test("staff can save venue, download and print the reusable QR without any arriv
   });
   await page.route("**/api/rsvp-guest/select", (route) => { arrived++; return route.fulfill({ json: arrival }); });
   await page.goto("/rsvp-check-in");
+  await expect(page.getByRole("heading", { name: "RSVP event QR", exact: true })).toBeVisible();
+  await expect(page.getByText("QR enabled", { exact: true })).toBeVisible();
+  await expect(page.getByText("Live QR", { exact: true })).toHaveCount(0);
   await expect(page.getByAltText("Guest RSVP arrival QR code")).toBeVisible();
   await page.getByRole("button", { name: /Save.*QR|Save settings/i }).click();
   expect(configs).toBe(1);
+  await expect(page.getByText(/This does not publish the app; test the guest page/)).toBeVisible();
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "PNG", exact: true }).click();
   expect((await downloaded).suggestedFilename()).toMatch(/\.png$/);
@@ -144,4 +148,55 @@ test("staff can save venue, download and print the reusable QR without any arriv
   await expect(printPage.getByText("Test event venue", { exact: true })).toBeVisible();
   await expect.poll(() => printPage.evaluate(() => !!window.__printCalled)).toBe(true);
   expect(arrived).toBe(0);
+});
+
+async function previewAssetsOnGuestHosts(page) {
+  // Exercise actual client hostname routing with preview assets, not the stale published bundle.
+  const preview = process.env.RSVP_TEST_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  await page.route(/^https:\/\/(?:aceregistration\.replit\.app|guestflow\.aceelectronics\.com)\//, async (route) => {
+    const url = new URL(route.request().url());
+    const response = await route.fetch({
+      url: `${preview}${url.pathname}${url.search}`,
+      headers: { ...route.request().headers(), host: new URL(preview).host, "x-forwarded-host": new URL(preview).host },
+    });
+    await route.fulfill({ response });
+  });
+}
+
+test("public guest hostname shows RSVP selection before any form and preserves the event fragment", async ({ page }) => {
+  await previewAssetsOnGuestHosts(page);
+  const entryUrl = `https://aceregistration.replit.app/rsvp-arrival#event=${eventToken}`;
+  const writes = await guestFixtures(page, { entryUrl });
+  await expect(page.getByRole("heading", { name: "Search your name" })).toBeVisible();
+  await expect(page.getByTestId("input-guest-email")).toHaveCount(0);
+  expect(new URL(page.url()).hash).toBe(`#event=${eventToken}`);
+  await page.getByLabel("First or last name").fill("Test");
+  await page.getByRole("button", { name: /Confirm arrival/ }).click();
+  await expect(page.getByText("Arrival confirmed", { exact: true })).toBeVisible();
+  expect(writes).toHaveLength(1);
+  await page.goto("https://aceregistration.replit.app/rsvp-arrival");
+  await expect(page.getByRole("heading", { name: /Open the event QR/i })).toBeVisible();
+  await expect(page.getByTestId("input-guest-email")).toHaveCount(0);
+  await page.route("**/api/rsvp-guest/context", (route) =>
+    route.fulfill({ status: 403, json: { error: "This event QR is not active." } }));
+  await page.evaluate((url) => { window.location.href = url; }, entryUrl);
+  await expect(page.getByRole("alert")).toHaveText("This event QR is not active.");
+  await expect(page.getByTestId("input-guest-email")).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+});
+
+test("HTTP hostname redirect preserves the QR grant and opens RSVP name selection", async ({ page }) => {
+  // The exact canonical Location is checked by the server test. Use a reachable
+  // destination here: redirected top-level navigation does not use our asset proxy.
+  const preview = process.env.RSVP_TEST_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  await page.route("https://arrival.aceelectronics.com/**", (route) => {
+    const url = new URL(route.request().url());
+    return route.fulfill({ status: 301, headers: { location: `${preview}${url.pathname}${url.search}` } });
+  });
+  const writes = await guestFixtures(page, { entryUrl: `https://arrival.aceelectronics.com/rsvp-arrival?entry=desk#event=${eventToken}` });
+  await expect(page.getByRole("heading", { name: "Search your name" })).toBeVisible();
+  expect(new URL(page.url()).hostname).toBe(new URL(preview).hostname);
+  expect(new URL(page.url()).hash).toBe(`#event=${eventToken}`);
+  expect(new URL(page.url()).search).toBe("?entry=desk");
+  expect(writes).toHaveLength(0);
 });

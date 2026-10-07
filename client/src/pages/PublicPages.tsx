@@ -1005,7 +1005,10 @@ export default function PublicPages() {
             <CardHeader>
               <CardTitle>QR Code Display Page</CardTitle>
               <CardDescription>
-                Shown on your reception screen — guests scan this to check in
+                Standard registration QR — opens the normal check-in form.
+                {" "}For event RSVP name selection, use the{" "}
+                <a href="/rsvp-check-in" className="underline underline-offset-2">RSVP event QR</a>
+                {" "}in the RSVP check-in tab.
               </CardDescription>
             </CardHeader>
             <CardContent>

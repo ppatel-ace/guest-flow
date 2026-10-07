@@ -32,3 +32,9 @@ Keep historical visitor-log uploads unversioned and retain only the matching inf
 **Why:** Visitor logs include personal and compliance information about past visits that is unrelated to deciding whether a guest can skip the form. Copying whole logs into application source exposes that information unnecessarily.
 
 **How to apply:** Future reference-list updates should use private storage, not committed datasets or publicly served files.
+
+Do not label a configured QR as live or published without checking the guest-facing deployment.
+
+**Why:** The RSVP settings were saved while an older public build still redirected the RSVP entry to the normal form and did not contain the name-selector UI. Calling the saved code “Live QR” hid the remaining publishing requirement.
+
+**How to apply:** Distinguish saved event settings from deployment readiness, and verify the public entry before claiming a guest scan works.

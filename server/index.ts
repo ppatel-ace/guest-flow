@@ -12,6 +12,7 @@ import { startPrinterSync } from "./printer-sync";
 import { createActivityAudit, createUsageRelay, type UsageRelayOptions } from "./activityAudit";
 import { tryAceSsoFromRequest, type AceAuthRequest } from "./aceSso";
 import { initializeRsvpRoster } from "./rsvpStorage";
+import { normalizeAceHostname, guardProductionPublicPages } from "./publicPageRouting";
 
 // Extend Express session
 declare module "express-session" {
@@ -153,15 +154,7 @@ app.use((req, res, next) => {
   // guestflow.aceelectronics.com gets a permanent 301 to the same path/query on
   // guestflow.aceelectronics.com.  localhost and Replit dev domains are unaffected
   // because they don't match the aceelectronics.com suffix check.
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const host = req.hostname; // strips port, lower-cased by Express
-    const isAceHost = host === "aceelectronics.com" || host.endsWith(".aceelectronics.com");
-    const isCanonical = host === "guestflow.aceelectronics.com";
-    if (isAceHost && !isCanonical) {
-      return res.redirect(301, `https://guestflow.aceelectronics.com${req.originalUrl}`);
-    }
-    return next();
-  });
+  app.use(normalizeAceHostname);
 
   // Unconditional guard: /login is permanently retired — redirect to guest check-in
   // in all environments so the URL is never exposed even in development.
@@ -178,24 +171,7 @@ app.use((req, res, next) => {
   // (admin API endpoints are already protected by requireAuth).
   // The admin login form lives at /ace-admin (not /login).
   if (process.env.NODE_ENV === "production") {
-    const PUBLIC_PAGES = ["/guest-check-in", "/scan", "/kiosk", "/rsvp-arrival"];
-    app.use((req: Request, res: Response, next: NextFunction) => {
-      // guestflow.aceelectronics.com is an internal-only admin domain — skip the guard entirely
-      const host = req.hostname || "";
-      if (host === "guestflow.aceelectronics.com") {
-        return next();
-      }
-      // Always pass through API calls and static assets (files with extensions)
-      if (req.path.startsWith("/api/") || /\.\w+$/.test(req.path)) {
-        return next();
-      }
-      // Allow the two public pages (guest check-in and scan)
-      if (PUBLIC_PAGES.some(p => req.path === p || req.path.startsWith(p + "/"))) {
-        return next();
-      }
-      // Everything else (/, /customers, /export, etc.) → guest check-in
-      return res.redirect(302, "/guest-check-in");
-    });
+    app.use(guardProductionPublicPages);
   }
 
   // Warn in production when bot-protection secrets are absent — checks silently degrade without them

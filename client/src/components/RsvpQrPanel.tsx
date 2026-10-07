@@ -144,7 +144,7 @@ export default function RsvpQrPanel() {
       setLocation(saved.location || "");
       setGuestBaseUrl(saved.guestBaseUrl || currentOrigin());
       setEnabled(saved.enabled);
-      setNotice(saved.enabled ? "Guest arrival QR is ready. Configuration saved." : "Guest arrival QR has been disabled.");
+      setNotice(saved.enabled ? "RSVP QR settings saved. This does not publish the app; test the guest page before sharing." : "Guest arrival QR has been disabled.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the guest QR configuration.");
     } finally {
@@ -186,16 +186,17 @@ export default function RsvpQrPanel() {
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#a47535]">Guest arrival · AUSA</p>
-            <h2 id="rsvp-qr-heading" className="mt-1 text-xl font-semibold tracking-tight text-[#172b57]">Publish the guest QR</h2>
+            <h2 id="rsvp-qr-heading" className="mt-1 text-xl font-semibold tracking-tight text-[#172b57]">RSVP event QR</h2>
             <p className="mt-1 max-w-2xl text-sm text-[#5e6c82]">Guests scan, find their own name, then choose to confirm arrival.</p>
+            <p className="mt-2 max-w-2xl text-xs text-[#5e6c82]">Use this code for RSVP name selection. The standard QR Code Display opens the normal registration form.</p>
           </div>
         </div>
         {config?.enabled && config.qrCode ? (
           <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /> Live QR
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /> QR enabled
           </span>
         ) : (
-          <span className="inline-flex w-fit items-center rounded-full border border-[#d7deea] bg-white px-3 py-1.5 text-xs font-medium text-[#68768b]">Not published</span>
+          <span className="inline-flex w-fit items-center rounded-full border border-[#d7deea] bg-white px-3 py-1.5 text-xs font-medium text-[#68768b]">QR not enabled</span>
         )}
       </div>
 
@@ -219,7 +220,7 @@ export default function RsvpQrPanel() {
                 <label htmlFor="rsvp-guest-base-url" className="mb-1.5 block text-sm font-semibold text-[#24395f]">Published guest page base URL</label>
                 <input id="rsvp-guest-base-url" inputMode="url" autoCapitalize="none" value={guestBaseUrl} onChange={(event) => setGuestBaseUrl(event.target.value)} aria-invalid={!!baseUrlError} placeholder="https://registration.example.com" className="h-11 w-full rounded-lg border border-[#ccd5e2] bg-white px-3.5 text-sm text-[#1c2e50] outline-none transition focus-visible:border-[#183574] focus-visible:ring-2 focus-visible:ring-[#183574]/20 aria-[invalid=true]:border-rose-500" />
                 <p className="mt-2 rounded-lg border border-[#ead8b8] bg-[#fff9ee] px-3 py-2.5 text-xs leading-relaxed text-[#70562d]">
-                  Current address: <span className="font-mono">{currentOrigin()}</span>. A preview or internal-domain QR only reaches that server. Before event day, set the public guest URL and republish.
+                  Saving settings does not publish the app. After app updates, publish the latest version to the public guest address, then use “Open / test guest page” below. It must show “Search your name”—not the normal form. Current staff address: <span className="font-mono">{currentOrigin()}</span>.
                 </p>
                 {baseUrlError ? <p className="mt-1 text-xs text-rose-700">{baseUrlError}</p> : null}
               </div>
@@ -231,7 +232,7 @@ export default function RsvpQrPanel() {
               {notice ? <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm font-medium text-emerald-800"><Check className="h-4 w-4" />{notice}</p> : null}
               <Button type="submit" disabled={saving || loading || !!baseUrlError || !location.trim()} className="min-h-11 bg-[#193878] px-5 text-white hover:bg-[#11295f]">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : config ? <RefreshCw className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
-                {saving ? "Saving configuration…" : "Save and generate QR"}
+                 {saving ? "Saving configuration…" : "Save RSVP QR settings"}
               </Button>
               <p className="text-xs leading-relaxed text-[#68768b]">Generating this code saves event settings only. It does not look up or check in any guest.</p>
             </>
@@ -239,7 +240,7 @@ export default function RsvpQrPanel() {
         </form>
 
         <aside className="rounded-xl border border-[#e0e5ed] bg-[#f8f9fb] p-4 sm:p-5">
-          <h3 className="text-sm font-semibold text-[#25395f]">Arrival code</h3>
+           <h3 className="text-sm font-semibold text-[#25395f]">RSVP name-selection code</h3>
           {config?.enabled && config.qrCode ? (
             <>
               <div className="mt-4 grid aspect-square place-items-center rounded-lg border border-[#e1e5eb] bg-white p-4">
@@ -266,7 +267,7 @@ export default function RsvpQrPanel() {
             <div className="mt-4 flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed border-[#cbd4e1] bg-white px-5 text-center">
               <QrCode className="h-8 w-8 text-[#8290a5]" aria-hidden />
               <p className="mt-3 text-sm font-medium text-[#40516b]">{loading ? "Loading saved configuration" : enabled ? "QR appears after saving" : "Guest QR is disabled"}</p>
-              <p className="mt-1 text-xs leading-relaxed text-[#718096]">{loading ? "Retrieving the current event settings." : "Set the event venue and public guest URL, then save to publish."}</p>
+               <p className="mt-1 text-xs leading-relaxed text-[#718096]">{loading ? "Retrieving the current event settings." : "Set the event venue and public guest URL, enable the QR, then save settings."}</p>
             </div>
           )}
         </aside>

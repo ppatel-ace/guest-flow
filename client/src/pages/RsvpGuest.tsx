@@ -40,6 +40,17 @@ export default function RsvpGuest() {
   const [result, setResult] = useState<ArrivalResult | null>(null);
   const [submitError, setSubmitError] = useState("");
 
+  useEffect(() => {
+    // Scanning another QR into the same tab can change only the fragment.
+    // Reload the entry context rather than reuse the previous event grant or result.
+    const onGrantChange = () => {
+      const nextToken = new URLSearchParams(window.location.hash.slice(1)).get("event") || "";
+      if (nextToken !== token.current) window.location.reload();
+    };
+    window.addEventListener("hashchange", onGrantChange);
+    return () => window.removeEventListener("hashchange", onGrantChange);
+  }, []);
+
   const refreshCaptcha = async () => {
     setCaptchaError("");
     setTurnstileToken("");
